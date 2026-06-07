@@ -125,6 +125,7 @@ async function runCode(code) {
 
         const escapedBody = dedented.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
         const wrappedCode = `
+from turtle import *
 import turtle as _t
 
 ${setupCode}
@@ -152,7 +153,7 @@ def __game_step():
     
     self.postMessage({ type: 'running' });
     try {
-        await pyodide.runPythonAsync(code);
+        await pyodide.runPythonAsync('from turtle import *\nimport turtle as _t\n' + code);
     } catch (err) {
         if (err.message !== 'Execution stopped') {
             self.postMessage({ type: 'error', message: err.message, traceback: err.stack || '' });

@@ -220,13 +220,17 @@ def _anim_step():
     t = _get_default_turtle()
     cmd = _anim_queue.pop(0)
     if cmd[0] == 'line':
-        _, from_x, from_y, to_x, to_y, pen_down, pen_color = cmd
+        if len(cmd) == 8:
+            _, from_x, from_y, to_x, to_y, pen_down, pen_color, pen_size = cmd
+        else:
+            _, from_x, from_y, to_x, to_y, pen_down, pen_color = cmd
+            pen_size = t._pen_size
         if pen_down and _ctx:
             _ctx.beginPath()
             _ctx.moveTo(_tcx(from_x), _tcy(from_y))
             _ctx.lineTo(_tcx(to_x), _tcy(to_y))
             _ctx.strokeStyle = _normalize_color(pen_color)
-            _ctx.lineWidth = 1
+            _ctx.lineWidth = pen_size
             _ctx.stroke()
         t._x = to_x
         t._y = to_y
@@ -317,6 +321,7 @@ class Turtle:
         self._y = 0.0
         self._heading = 0.0
         self._pen_down = True
+        self._pen_size = 1
         self._pen_color = "black"
         self._fill_color = "black"
         self._filling = False
@@ -325,16 +330,19 @@ class Turtle:
         self._speed = 3
         self._shape = "classic"
 
+    def _animating(self):
+        return _anim_mode and self._speed > 0 and _tracer_mode
+
     def penup(self):
         self._pen_down = False
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('penup',))
         elif _tracer_mode:
             _flush()
 
     def pendown(self):
         self._pen_down = True
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('pendown',))
         elif _tracer_mode:
             _flush()
@@ -345,20 +353,20 @@ class Turtle:
     def goto(self, x, y=None):
         if y is None:
             x, y = x
-        if _anim_mode:
+        if self._animating():
             old_x, old_y = self._x, self._y
             self._x = float(x)
             self._y = float(y)
             if self._filling:
                 self._fill_points.append((self._x, self._y))
-            _anim_queue.append(('line', old_x, old_y, self._x, self._y, self._pen_down, self._pen_color))
+            _anim_queue.append(('line', old_x, old_y, self._x, self._y, self._pen_down, self._pen_color, self._pen_size))
         else:
             if _ctx and self._pen_down:
                 _ctx.beginPath()
                 _ctx.moveTo(_tcx(self._x), _tcy(self._y))
                 _ctx.lineTo(_tcx(float(x)), _tcy(float(y)))
                 _ctx.strokeStyle = _normalize_color(self._pen_color)
-                _ctx.lineWidth = 1
+                _ctx.lineWidth = self._pen_size
                 _ctx.stroke()
             self._x = float(x)
             self._y = float(y)
@@ -374,7 +382,7 @@ class Turtle:
         self.goto(x, y)
 
     def forward(self, d):
-        if _anim_mode and self._speed > 0 and _tracer_mode:
+        if self._animating():
             rad = math.radians(self._heading)
             start_x, start_y = self._x, self._y
             self._x += d * math.cos(rad)
@@ -390,7 +398,7 @@ class Turtle:
                 from_y = start_y + dy * i
                 to_x = start_x + dx * (i + 1)
                 to_y = start_y + dy * (i + 1)
-                _anim_queue.append(('line', from_x, from_y, to_x, to_y, self._pen_down, self._pen_color))
+                _anim_queue.append(('line', from_x, from_y, to_x, to_y, self._pen_down, self._pen_color, self._pen_size))
         else:
             rad = math.radians(self._heading)
             target_x = self._x + d * math.cos(rad)
@@ -407,7 +415,7 @@ class Turtle:
         self.forward(-d)
 
     def right(self, angle):
-        if _anim_mode and self._speed > 0 and _tracer_mode:
+        if self._animating():
             start_heading = self._heading
             self._heading = (self._heading - angle) % 360
             step = max(2, _SPEED_TABLE.get(self._speed, 5) * 2)
@@ -425,7 +433,7 @@ class Turtle:
         self.right(angle)
 
     def left(self, angle):
-        if _anim_mode and self._speed > 0 and _tracer_mode:
+        if self._animating():
             start_heading = self._heading
             self._heading = (self._heading + angle) % 360
             step = max(2, _SPEED_TABLE.get(self._speed, 5) * 2)
@@ -443,7 +451,7 @@ class Turtle:
         self.left(angle)
 
     def setheading(self, angle):
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('setheading', angle % 360))
         self._heading = angle % 360
         if not _anim_mode and _tracer_mode:
@@ -452,6 +460,14 @@ class Turtle:
     def seth(self, angle):
         self.setheading(angle)
 
+    def pensize(self, width=None):
+        if width is not None:
+            self._pen_size = width
+        return self._pen_size
+
+    def width(self, width=None):
+        return self.pensize(width)
+
     def color(self, *args):
         if len(args) == 1:
             self._pen_color = args[0]
@@ -459,7 +475,7 @@ class Turtle:
         elif len(args) >= 2:
             self._pen_color = args[0]
             self._fill_color = args[1]
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('pencolor', self._pen_color))
             _anim_queue.append(('fillcolor', self._fill_color))
         return self._pen_color
@@ -467,25 +483,25 @@ class Turtle:
     def pencolor(self, c=None):
         if c is not None:
             self._pen_color = c
-            if _anim_mode:
+            if self._animating():
                 _anim_queue.append(('pencolor', c))
         return self._pen_color
 
     def fillcolor(self, c=None):
         if c is not None:
             self._fill_color = c
-            if _anim_mode:
+            if self._animating():
                 _anim_queue.append(('fillcolor', c))
         return self._fill_color
 
     def begin_fill(self):
         self._filling = True
         self._fill_points = [(self._x, self._y)]
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('begin_fill',))
 
     def end_fill(self):
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('end_fill',))
             self._filling = False
             self._fill_points = []
@@ -504,7 +520,7 @@ class Turtle:
             self._fill_points = []
 
     def circle(self, radius, extent=None, steps=None):
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('circle', radius, self._pen_down, self._pen_color, self._filling, self._fill_color))
         else:
             if not _ctx:
@@ -524,7 +540,7 @@ class Turtle:
                 _flush()
 
     def dot(self, size=None, color=None):
-        if _anim_mode:
+        if self._animating():
             r = size / 2 if size else 2
             c = color if color else self._pen_color
             _anim_queue.append(('dot', self._x, self._y, r, c))
@@ -540,7 +556,7 @@ class Turtle:
                 _flush()
 
     def write(self, text, move=False, align="left", font=("Arial", 12, "normal")):
-        if _anim_mode:
+        if self._animating():
             family = font[0] if len(font) > 0 else "Arial"
             size = font[1] if len(font) > 1 else 12
             _anim_queue.append(('write', self._x, self._y, text, self._pen_color, family, size, align))
@@ -562,7 +578,7 @@ class Turtle:
 
     def hideturtle(self):
         self._visible = False
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('hideturtle',))
         elif _tracer_mode:
             _flush()
@@ -572,7 +588,7 @@ class Turtle:
 
     def showturtle(self):
         self._visible = True
-        if _anim_mode:
+        if self._animating():
             _anim_queue.append(('showturtle',))
         elif _tracer_mode:
             _flush()
@@ -628,6 +644,7 @@ class Turtle:
         t._y = self._y
         t._heading = self._heading
         t._pen_down = self._pen_down
+        t._pen_size = self._pen_size
         t._pen_color = self._pen_color
         t._fill_color = self._fill_color
         t._visible = self._visible
@@ -718,8 +735,14 @@ def done():
     pass
 
 
-def mainloop():
-    pass
+def clear():
+    _clear_screen()
+
+
+def bgcolor(color):
+    global _bgcolor
+    _bgcolor = color
+    _clear_screen()
 
 
 def bye():
@@ -728,15 +751,6 @@ def bye():
 
 def exitonclick():
     pass
-
-
-def clear():
-    _clear_screen()
-
-
-def bgcolor(color):
-    global _bgcolor
-    _bgcolor = color
 
 
 _default_turtle = None
@@ -864,6 +878,14 @@ def seth(h):
     setheading(h)
 
 
+def pensize(width=None):
+    return _get_default_turtle().pensize(width)
+
+
+def width(width=None):
+    return _get_default_turtle().width(width)
+
+
 def circle(r, extent=None):
     _get_default_turtle().circle(r, extent)
 
@@ -942,3 +964,62 @@ def mainloop():
 
 def done():
     pass
+
+
+__all__ = [
+    "Turtle",
+    "Screen",
+    "done",
+    "mainloop",
+    "bye",
+    "exitonclick",
+    "clear",
+    "bgcolor",
+    "speed",
+    "forward",
+    "fd",
+    "backward",
+    "bk",
+    "right",
+    "rt",
+    "left",
+    "lt",
+    "penup",
+    "pu",
+    "pendown",
+    "pd",
+    "isdown",
+    "isvisible",
+    "heading",
+    "position",
+    "pos",
+    "xcor",
+    "ycor",
+    "distance",
+    "towards",
+    "shape",
+    "clone",
+    "goto",
+    "setposition",
+    "setpos",
+    "setheading",
+    "seth",
+    "pensize",
+    "width",
+    "circle",
+    "pencolor",
+    "fillcolor",
+    "color",
+    "begin_fill",
+    "end_fill",
+    "dot",
+    "write",
+    "hideturtle",
+    "ht",
+    "showturtle",
+    "st",
+    "tracer",
+    "update",
+    "delay",
+    "sleep",
+]

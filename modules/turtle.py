@@ -86,6 +86,7 @@ class Turtle:
         self._y = 0.0
         self._heading = 0.0
         self._pen_down = True
+        self._pen_size = 1
         self._pen_color = "black"
         self._fill_color = "black"
         self._filling = False
@@ -109,7 +110,7 @@ class Turtle:
             _ctx.moveTo(_tcx(self._x), _tcy(self._y))
             _ctx.lineTo(_tcx(x), _tcy(y))
             _ctx.strokeStyle = _normalize_color(self._pen_color)
-            _ctx.lineWidth = 1
+            _ctx.lineWidth = self._pen_size
             _ctx.stroke()
         self._x = float(x)
         self._y = float(y)
@@ -154,6 +155,14 @@ class Turtle:
 
     def seth(self, angle):
         self.setheading(angle)
+
+    def pensize(self, width=None):
+        if width is not None:
+            self._pen_size = width
+        return self._pen_size
+
+    def width(self, width=None):
+        return self.pensize(width)
 
     def color(self, *args):
         if len(args) == 1:
@@ -285,6 +294,7 @@ class Turtle:
         t._y = self._y
         t._heading = self._heading
         t._pen_down = self._pen_down
+        t._pen_size = self._pen_size
         t._pen_color = self._pen_color
         t._fill_color = self._fill_color
         t._visible = self._visible
