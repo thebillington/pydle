@@ -84,21 +84,69 @@ def _tcy(y):
 def _draw_cursor(t):
     if not t._visible or not _ctx:
         return
-    size = 8
+    cx = _tcx(t._x)
+    cy = _tcy(t._y)
     rad = math.radians(t._heading)
-    x1 = _tcx(t._x + size * math.cos(rad))
-    y1 = _tcy(t._y + size * math.sin(rad))
-    x2 = _tcx(t._x + size * math.cos(rad + 2.5))
-    y2 = _tcy(t._y + size * math.sin(rad + 2.5))
-    x3 = _tcx(t._x + size * math.cos(rad - 2.5))
-    y3 = _tcy(t._y + size * math.sin(rad - 2.5))
-    _ctx.beginPath()
-    _ctx.moveTo(x1, y1)
-    _ctx.lineTo(x2, y2)
-    _ctx.lineTo(x3, y3)
-    _ctx.closePath()
-    _ctx.fillStyle = _normalize_color(t._pen_color)
-    _ctx.fill()
+    cos_r = math.cos(rad)
+    sin_r = math.sin(rad)
+    color = _normalize_color(t._pen_color)
+    if t._shape == "turtle":
+        pts = [(0, -12), (-7, -4), (-7, 2), (-4, 4), (0, 2), (4, 4), (7, 2), (7, -4)]
+        _ctx.beginPath()
+        for px, py in pts:
+            rx = px * cos_r - py * sin_r
+            ry = px * sin_r + py * cos_r
+            _ctx.lineTo(cx + rx, cy - ry)
+        _ctx.closePath()
+        _ctx.fillStyle = color
+        _ctx.fill()
+    elif t._shape == "arrow":
+        pts = [(0, -10), (-5, 5), (-2, 3), (-2, 10), (2, 10), (2, 3), (5, 5)]
+        _ctx.beginPath()
+        for px, py in pts:
+            rx = px * cos_r - py * sin_r
+            ry = px * sin_r + py * cos_r
+            _ctx.lineTo(cx + rx, cy - ry)
+        _ctx.closePath()
+        _ctx.fillStyle = color
+        _ctx.fill()
+    elif t._shape == "circle":
+        _ctx.beginPath()
+        _ctx.arc(cx, cy, 5, 0, 2 * math.pi)
+        _ctx.fillStyle = color
+        _ctx.fill()
+    elif t._shape == "square":
+        _ctx.save()
+        _ctx.translate(cx, cy)
+        _ctx.rotate(-rad)
+        _ctx.fillStyle = color
+        _ctx.fillRect(-5, -5, 10, 10)
+        _ctx.restore()
+    elif t._shape == "triangle":
+        pts = [(0, -10), (-6, 5), (6, 5)]
+        _ctx.beginPath()
+        for px, py in pts:
+            rx = px * cos_r - py * sin_r
+            ry = px * sin_r + py * cos_r
+            _ctx.lineTo(cx + rx, cy - ry)
+        _ctx.closePath()
+        _ctx.fillStyle = color
+        _ctx.fill()
+    else:
+        size = 8
+        x1 = _tcx(t._x + size * cos_r)
+        y1 = _tcy(t._y + size * sin_r)
+        x2 = _tcx(t._x + size * math.cos(rad + 2.5))
+        y2 = _tcy(t._y + size * math.sin(rad + 2.5))
+        x3 = _tcx(t._x + size * math.cos(rad - 2.5))
+        y3 = _tcy(t._y + size * math.sin(rad - 2.5))
+        _ctx.beginPath()
+        _ctx.moveTo(x1, y1)
+        _ctx.lineTo(x2, y2)
+        _ctx.lineTo(x3, y3)
+        _ctx.closePath()
+        _ctx.fillStyle = color
+        _ctx.fill()
 
 
 def _handle_keydown(key):
@@ -275,6 +323,7 @@ class Turtle:
         self._fill_points = []
         self._visible = True
         self._speed = 3
+        self._shape = "classic"
 
     def penup(self):
         self._pen_down = False
@@ -325,7 +374,7 @@ class Turtle:
         self.goto(x, y)
 
     def forward(self, d):
-        if _anim_mode and self._speed > 0:
+        if _anim_mode and self._speed > 0 and _tracer_mode:
             rad = math.radians(self._heading)
             start_x, start_y = self._x, self._y
             self._x += d * math.cos(rad)
@@ -358,7 +407,7 @@ class Turtle:
         self.forward(-d)
 
     def right(self, angle):
-        if _anim_mode and self._speed > 0:
+        if _anim_mode and self._speed > 0 and _tracer_mode:
             start_heading = self._heading
             self._heading = (self._heading - angle) % 360
             step = max(2, _SPEED_TABLE.get(self._speed, 5) * 2)
@@ -376,7 +425,7 @@ class Turtle:
         self.right(angle)
 
     def left(self, angle):
-        if _anim_mode and self._speed > 0:
+        if _anim_mode and self._speed > 0 and _tracer_mode:
             start_heading = self._heading
             self._heading = (self._heading + angle) % 360
             step = max(2, _SPEED_TABLE.get(self._speed, 5) * 2)
@@ -535,7 +584,11 @@ class Turtle:
         return self._visible
 
     def shape(self, name=None):
-        return "classic"
+        if name is not None:
+            self._shape = name
+            if _tracer_mode:
+                _flush()
+        return self._shape
 
     def speed(self, s=None):
         if s is None:
@@ -587,7 +640,7 @@ class Turtle:
         return _screen_instance
 
 
-class Screen:
+class _ScreenClass:
     def __init__(self):
         global _screen_instance
         _screen_instance = self
@@ -747,6 +800,50 @@ def pd():
     pendown()
 
 
+def isdown():
+    return _get_default_turtle().isdown()
+
+
+def isvisible():
+    return _get_default_turtle().isvisible()
+
+
+def heading():
+    return _get_default_turtle().heading()
+
+
+def position():
+    return _get_default_turtle().position()
+
+
+def pos():
+    return _get_default_turtle().pos()
+
+
+def xcor():
+    return _get_default_turtle().xcor
+
+
+def ycor():
+    return _get_default_turtle().ycor
+
+
+def distance(x, y=None):
+    return _get_default_turtle().distance(x, y)
+
+
+def towards(x, y=None):
+    return _get_default_turtle().towards(x, y)
+
+
+def shape(name=None):
+    return _get_default_turtle().shape(name)
+
+
+def clone():
+    return _get_default_turtle().clone()
+
+
 def goto(x, y=None):
     _get_default_turtle().goto(x, y)
 
@@ -827,7 +924,7 @@ def update():
 def Screen():
     global _screen_instance
     if _screen_instance is None:
-        _screen_instance = Screen()
+        _screen_instance = _ScreenClass()
     return _screen_instance
 
 

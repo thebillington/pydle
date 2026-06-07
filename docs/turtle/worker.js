@@ -41,10 +41,9 @@ _time.sleep = _browser_sleep
     } else {
         pyodide.runPython(`
 import time as _time
-_original_sleep = _time.sleep
 
 def _browser_sleep(seconds):
-    _original_sleep(seconds)
+    pass
 
 _time.sleep = _browser_sleep
 `);
@@ -114,10 +113,15 @@ async function runCode(code) {
         let setupCode = loopMatch[1].trimEnd();
         let loopBody = loopMatch[2];
         
-        const indentMatch = loopBody.match(/^(\s+)/);
-        const indent = indentMatch ? indentMatch[1].length : 0;
+        const lines = loopBody.split('\n');
+        let minIndent = Infinity;
+        for (const line of lines) {
+            if (line.trim().length === 0) continue;
+            const leading = line.match(/^(\s*)/)[1].length;
+            if (leading < minIndent) minIndent = leading;
+        }
         
-        const dedented = loopBody.split('\n').map(l => l.substring(indent)).join('\n');
+        const dedented = lines.map(l => l.length >= minIndent ? l.substring(minIndent) : l.trim()).join('\n');
 
         const escapedBody = dedented.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
         const wrappedCode = `
