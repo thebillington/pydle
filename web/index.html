@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pydle</title>
+
+    <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css">
+    <link rel="stylesheet" href="vendor/codemirror/dracula.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>pydle <span class="subtitle">python in your browser</span></h1>
+        <div class="controls">
+            <button id="instructions-btn" class="btn btn-instr">Help</button>
+        </div>
+    </header>
+
+    <main>
+        <section class="editor-panel">
+            <div class="editor-toolbar">
+                <span class="panel-label-inline">editor</span>
+                <div class="editor-toolbar-right">
+                    <span id="file-indicator" class="file-indicator" title="Saved in browser only">untitled</span>
+                    <button id="save-btn" class="toolbar-btn" title="Save to browser (Ctrl+S)">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    </button>
+                    <button id="load-btn" class="toolbar-btn" title="Load saved file">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </button>
+                    <button id="download-btn" class="toolbar-btn" title="Download as .py file">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </button>
+                    <button id="copy-btn" class="toolbar-btn" title="Copy to clipboard">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                </div>
+            </div>
+            <textarea id="code-editor"># Welcome to pydle!
+# Write Python code here and click Run (or press Ctrl+Enter)
+
+print("Hello, World!")</textarea>
+        </section>
+
+        <div id="resize-handle" class="resize-handle"></div>
+
+        <section class="console-panel">
+            <div class="console-controls">
+                <button id="run-btn" class="btn btn-run" disabled>Run</button>
+                <button id="stop-btn" class="btn btn-stop" disabled>Stop</button>
+                <span id="status" class="status">Loading...</span>
+            </div>
+            <div class="console-wrapper">
+                <pre id="console"></pre>
+            </div>
+        </section>
+    </main>
+
+    <div id="help-overlay" class="overlay hidden">
+        <div class="overlay-backdrop"></div>
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <h2>Quick Help</h2>
+                <button id="close-help" class="btn btn-close">&times;</button>
+            </div>
+            <div id="help-body" class="help-content">
+                <h3>Getting Started</h3>
+                <p>Write Python code in the editor on the left. Click <strong>Run</strong> or press <strong>Ctrl+Enter</strong> to execute your code.</p>
+                
+                <h3>Keyboard Shortcuts</h3>
+                <ul>
+                    <li><strong>Ctrl+Enter</strong> - Run code</li>
+                    <li><strong>Ctrl+S</strong> - Save to browser</li>
+                    <li><strong>Ctrl+/</strong> - Toggle comment</li>
+                    <li><strong>Escape</strong> - Close this dialog</li>
+                </ul>
+
+                <h3>Printing Output</h3>
+                <pre>print("Hello!")</pre>
+                
+                <h3>Variables</h3>
+                <pre>x = 10
+print(x * 2)</pre>
+
+                <h3>Loops</h3>
+                <pre>for i in range(5):
+    print(i)</pre>
+
+                <h3>Functions</h3>
+                <pre>def greet(name):
+    return "Hello, " + name
+
+print(greet("World"))</pre>
+
+                <h3>Saving Your Work</h3>
+                <p>Files are saved in your browser's local storage. Use <strong>Download</strong> to save a .py file to your computer.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="load-overlay" class="overlay hidden">
+        <div class="overlay-backdrop"></div>
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <h2>Load File <span class="file-note">(browser storage only)</span></h2>
+                <button id="close-load" class="btn btn-close">&times;</button>
+            </div>
+            <div id="load-body" class="file-list"></div>
+        </div>
+    </div>
+
+    <script src="vendor/codemirror/codemirror.min.js"></script>
+    <script src="vendor/codemirror/python.min.js"></script>
+    <script src="vendor/codemirror/comment.min.js"></script>
+
+    <script>
+        const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+            mode: 'python',
+            theme: 'dracula',
+            lineNumbers: true,
+            indentUnit: 4,
+            tabSize: 4,
+            indentWithTabs: false,
+            extraKeys: {
+                'Ctrl-/': 'toggleComment',
+                'Cmd-/': 'toggleComment',
+                'Ctrl-Enter': 'false',
+            },
+            viewportMargin: Infinity,
+        });
+
+        const runBtn = document.getElementById('run-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const statusEl = document.getElementById('status');
+        const consoleEl = document.getElementById('console');
+        const fileIndicator = document.getElementById('file-indicator');
+        const saveBtn = document.getElementById('save-btn');
+        const loadBtn = document.getElementById('load-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const copyBtn = document.getElementById('copy-btn');
+        const resizeHandle = document.getElementById('resize-handle');
+        const consolePanel = document.querySelector('.console-panel');
+
+        let worker = null;
+        let workerReady = false;
+        let currentFileName = null;
+        let lastSavedCode = editor.getValue();
+        let dirty = false;
+        const STORAGE_PREFIX = 'pydle_file_';
+
+        let isResizing = false;
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            resizeHandle.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const mainRect = document.querySelector('main').getBoundingClientRect();
+            const newWidth = mainRect.right - e.clientX;
+            consolePanel.style.width = Math.max(250, Math.min(800, newWidth)) + 'px';
+        });
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                resizeHandle.classList.remove('active');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+
+        function updateFileIndicator() {
+            const name = currentFileName || 'untitled';
+            fileIndicator.textContent = dirty ? name + ' •' : name;
+        }
+
+        function markDirty() {
+            const code = editor.getValue();
+            dirty = code !== lastSavedCode;
+            updateFileIndicator();
+        }
+
+        editor.on('change', markDirty);
+
+        function checkUnsaved() {
+            if (dirty) {
+                return confirm('You have unsaved changes. Discard them?');
+            }
+            return true;
+        }
+
+        function saveFile() {
+            const code = editor.getValue();
+            if (currentFileName === null) {
+                currentFileName = prompt('Save as (name):', 'my_program');
+                if (currentFileName === null) return;
+                currentFileName = currentFileName.trim().replace(/\.py$/, '');
+                if (!currentFileName) { currentFileName = null; return; }
+            }
+            const key = STORAGE_PREFIX + currentFileName;
+            try {
+                localStorage.setItem(key, code);
+            } catch (e) {
+                alert('Save failed: ' + e.message);
+                return;
+            }
+            lastSavedCode = code;
+            dirty = false;
+            updateFileIndicator();
+            showStatus('Saved: ' + currentFileName, 'ready');
+        }
+
+        function loadFile(name) {
+            const key = STORAGE_PREFIX + name;
+            const code = localStorage.getItem(key);
+            if (code === null) return;
+            if (!checkUnsaved()) return;
+            editor.setValue(code);
+            currentFileName = name;
+            lastSavedCode = code;
+            dirty = false;
+            clearConsole();
+            showStatus('Loaded: ' + name, 'ready');
+            updateFileIndicator();
+            closeLoadOverlay();
+        }
+
+        function deleteFile(name) {
+            if (!confirm('Delete "' + name + '"?')) return;
+            localStorage.removeItem(STORAGE_PREFIX + name);
+            refreshLoadList();
+        }
+
+        function getSavedFiles() {
+            const files = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith(STORAGE_PREFIX)) {
+                    files.push(key.slice(STORAGE_PREFIX.length));
+                }
+            }
+            files.sort();
+            return files;
+        }
+
+        const loadOverlay = document.getElementById('load-overlay');
+        const closeLoadBtn = document.getElementById('close-load');
+        const loadBody = document.getElementById('load-body');
+
+        function refreshLoadList() {
+            loadBody.innerHTML = '';
+            const files = getSavedFiles();
+            if (files.length === 0) {
+                loadBody.textContent = 'No saved files yet. Use Save to store your code in your browser.';
+                return;
+            }
+            for (const name of files) {
+                const row = document.createElement('div');
+                row.className = 'file-item';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'file-item-name';
+                nameSpan.textContent = name;
+                nameSpan.addEventListener('click', () => loadFile(name));
+                const delBtn = document.createElement('button');
+                delBtn.className = 'btn btn-file-delete';
+                delBtn.textContent = '✕';
+                delBtn.title = 'Delete';
+                delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteFile(name); });
+                row.appendChild(nameSpan);
+                row.appendChild(delBtn);
+                loadBody.appendChild(row);
+            }
+        }
+
+        function openLoadOverlay() {
+            refreshLoadList();
+            loadOverlay.classList.remove('hidden');
+        }
+
+        function closeLoadOverlay() {
+            loadOverlay.classList.add('hidden');
+        }
+
+        loadBtn.addEventListener('click', openLoadOverlay);
+        closeLoadBtn.addEventListener('click', closeLoadOverlay);
+        loadOverlay.addEventListener('click', (e) => {
+            if (e.target === loadOverlay || e.target.classList.contains('overlay-backdrop')) {
+                closeLoadOverlay();
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !loadOverlay.classList.contains('hidden')) {
+                closeLoadOverlay();
+            }
+        });
+
+        saveBtn.addEventListener('click', saveFile);
+
+        downloadBtn.addEventListener('click', () => {
+            const code = editor.getValue();
+            const name = (currentFileName || 'untitled') + '.py';
+            const blob = new Blob([code], { type: 'text/x-python' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(editor.getValue()).then(() => {
+                showStatus('Copied to clipboard', 'ready');
+            });
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                saveFile();
+            }
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                runCode();
+            }
+        });
+
+        function log(msg) {
+            consoleEl.textContent += msg + '\n';
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function clearConsole() {
+            consoleEl.textContent = '';
+        }
+
+        function showStatus(text, type) {
+            statusEl.textContent = text;
+            statusEl.className = 'status' + (type ? ' status-' + type : '');
+        }
+
+        async function initWorker() {
+            worker = new Worker('worker.js?t=' + Date.now());
+
+            worker.onmessage = function (e) {
+                const { type, message, traceback } = e.data;
+
+                switch (type) {
+                    case 'status':
+                        showStatus(e.data.text);
+                        break;
+
+                    case 'ready':
+                        workerReady = true;
+                        showStatus('Ready', 'ready');
+                        runBtn.disabled = false;
+                        break;
+
+                    case 'running':
+                        showStatus('Running...', 'running');
+                        runBtn.disabled = true;
+                        stopBtn.disabled = false;
+                        clearConsole();
+                        break;
+
+                    case 'done':
+                        showStatus('Finished', 'ready');
+                        runBtn.disabled = false;
+                        stopBtn.disabled = true;
+                        break;
+
+                    case 'error':
+                        log('Error: ' + message);
+                        if (traceback) log(traceback);
+                        showStatus('Error', 'error');
+                        runBtn.disabled = false;
+                        stopBtn.disabled = true;
+                        break;
+
+                    case 'stdout':
+                        log(e.data.text);
+                        break;
+                }
+            };
+
+            worker.onerror = function (err) {
+                log('Worker error: ' + err.message);
+                showStatus('Worker error', 'error');
+            };
+
+            showStatus('Loading Python...');
+            worker.postMessage({ type: 'init' });
+        }
+
+        function runCode() {
+            if (!workerReady) return;
+            const code = editor.getValue();
+            worker.postMessage({ type: 'run', code });
+        }
+
+        function stopCode() {
+            worker.postMessage({ type: 'stop' });
+            showStatus('Stopping...', 'error');
+        }
+
+        runBtn.addEventListener('click', runCode);
+        stopBtn.addEventListener('click', stopCode);
+
+        const helpBtn = document.getElementById('instructions-btn');
+        const helpOverlay = document.getElementById('help-overlay');
+        const closeHelp = document.getElementById('close-help');
+
+        helpBtn.addEventListener('click', () => {
+            helpOverlay.classList.remove('hidden');
+        });
+
+        closeHelp.addEventListener('click', () => {
+            helpOverlay.classList.add('hidden');
+        });
+
+        helpOverlay.addEventListener('click', (e) => {
+            if (e.target === helpOverlay || e.target.classList.contains('overlay-backdrop')) {
+                helpOverlay.classList.add('hidden');
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !helpOverlay.classList.contains('hidden')) {
+                helpOverlay.classList.add('hidden');
+            }
+        });
+
+        initWorker();
+    </script>
+</body>
+</html>
