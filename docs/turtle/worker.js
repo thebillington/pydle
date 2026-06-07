@@ -5,6 +5,51 @@ importScripts(PYODIDE_URL + 'pyodide.js');
 let pyodide = null;
 let running = false;
 let __gameStep = null;
+let __sleepInterrupt = null;
+let animMode = false;
+
+function setupSleep() {
+    let useAsyncSleep = false;
+
+    if (typeof SharedArrayBuffer !== 'undefined') {
+        const sleepBuffer = new SharedArrayBuffer(4);
+        const sleepInterrupt = new Int32Array(sleepBuffer);
+        Atomics.store(sleepInterrupt, 0, 0);
+        self.__sleepInterrupt = sleepInterrupt;
+        self.__sleep_js = function (ms) {
+            Atomics.wait(self.__sleepInterrupt, 0, 0, ms);
+        };
+        useAsyncSleep = true;
+    }
+
+    if (useAsyncSleep) {
+        pyodide.runPython(`
+import time as _time
+import js
+
+_stop_requested = False
+
+def _browser_sleep(seconds):
+    ms = int(seconds * 1000)
+    if ms > 0:
+        js.__sleep_js(ms)
+    if _stop_requested:
+        raise KeyboardInterrupt("Execution stopped")
+
+_time.sleep = _browser_sleep
+`);
+    } else {
+        pyodide.runPython(`
+import time as _time
+_original_sleep = _time.sleep
+
+def _browser_sleep(seconds):
+    _original_sleep(seconds)
+
+_time.sleep = _browser_sleep
+`);
+    }
+}
 
 async function init() {
     try {
@@ -39,6 +84,8 @@ import turtle as _t
 _t._init(800, 700)
 `);
 
+        setupSleep();
+
         self.postMessage({ type: 'ready' });
     } catch (err) {
         self.postMessage({ type: 'error', message: 'Init failed: ' + err.message, traceback: err.stack });
@@ -52,6 +99,14 @@ self.sendFrame = function (imageData) {
 async function runCode(code) {
     if (running) return;
     running = true;
+    animMode = false;
+
+    pyodide.runPython(`_stop_requested = False`);
+    if (self.__sleepInterrupt) {
+        Atomics.store(self.__sleepInterrupt, 0, 0);
+    }
+
+    pyodide.runPython(`_t._reset()`);
 
     const loopMatch = code.match(/([\s\S]*?)while\s+True\s*:\s*\n((?:[ \t]+\S[\s\S]*?))(?=\n\S|\n*$)/);
     
@@ -63,9 +118,8 @@ async function runCode(code) {
         const indent = indentMatch ? indentMatch[1].length : 0;
         
         const dedented = loopBody.split('\n').map(l => l.substring(indent)).join('\n');
-        const cleanedBody = dedented.split('\n').filter(l => !l.trim().match(/^sleep\s*\(/)).join('\n');
 
-        const escapedBody = cleanedBody.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
+        const escapedBody = dedented.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${');
         const wrappedCode = `
 import turtle as _t
 
@@ -90,6 +144,8 @@ def __game_step():
         return;
     }
     
+    pyodide.runPython(`_t._start_anim()`);
+    
     self.postMessage({ type: 'running' });
     try {
         await pyodide.runPythonAsync(code);
@@ -97,7 +153,21 @@ def __game_step():
         if (err.message !== 'Execution stopped') {
             self.postMessage({ type: 'error', message: err.message, traceback: err.stack || '' });
         }
-    } finally {
+        pyodide.runPython(`_t._stop_anim()`);
+        running = false;
+        self.postMessage({ type: 'done' });
+        return;
+    }
+
+    const hasAnim = pyodide.runPython(`_t._has_anim()`);
+    if (hasAnim) {
+        animMode = true;
+        pyodide.runPython(`__anim_step_fn = _t._anim_step`);
+        __gameStep = pyodide.globals.get('__anim_step_fn');
+        self.postMessage({ type: 'tick_start' });
+    } else {
+        pyodide.runPython(`_t._stop_anim()`);
+        pyodide.runPython(`_t._flush()`);
         running = false;
         self.postMessage({ type: 'done' });
     }
@@ -105,6 +175,13 @@ def __game_step():
 
 function stopCode() {
     __gameStep = null;
+    animMode = false;
+    if (self.__sleepInterrupt) {
+        Atomics.store(self.__sleepInterrupt, 0, 1);
+        Atomics.notify(self.__sleepInterrupt, 0);
+    }
+    pyodide.runPython(`_stop_requested = True`);
+    pyodide.runPython(`_t._stop_anim()`);
     if (running) {
         running = false;
         self.postMessage({ type: 'done' });
@@ -127,11 +204,23 @@ self.onmessage = async function (e) {
         case 'tick':
             if (__gameStep) {
                 try {
-                    __gameStep();
+                    const result = __gameStep();
+                    if (animMode) {
+                        const hasMore = result.toJs ? result.toJs() : result;
+                        if (!hasMore) {
+                            animMode = false;
+                            __gameStep = null;
+                            pyodide.runPython(`_t._stop_anim()`);
+                            running = false;
+                            self.postMessage({ type: 'done' });
+                        }
+                    }
                 } catch (err) {
                     self.postMessage({ type: 'error', message: err.message, traceback: err.stack || '' });
                     running = false;
                     __gameStep = null;
+                    animMode = false;
+                    pyodide.runPython(`_t._stop_anim()`);
                     self.postMessage({ type: 'done' });
                 }
             }

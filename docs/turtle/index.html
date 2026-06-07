@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>pydle turtle</title>
+    <title>pydle: Turtle</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23282a36' width='100' height='100' rx='12' stroke='%236272a4' stroke-width='4'/%3E%3Ctext y='65' x='50' text-anchor='middle' font-size='50' font-family='monospace' font-weight='bold' fill='%23f8f8f2'%3E_%3C/text%3E%3Ctext y='48' x='35' text-anchor='middle' font-size='38' font-family='monospace' font-weight='bold' fill='%2350fa7b'%3E%3E%3C/text%3E%3C/svg%3E">
 
-    <link rel="stylesheet" href="../vendor/codemirror/codemirror.min.css">
-    <link rel="stylesheet" href="../vendor/codemirror/dracula.min.css">
+    <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css">
+    <link rel="stylesheet" href="vendor/codemirror/dracula.min.css">
     <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="turtle.css">
 </head>
 <body>
     <header>
@@ -39,22 +40,16 @@
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </button>
                     <button id="copy-btn" class="toolbar-btn" title="Copy to clipboard">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                 </div>
             </div>
-            <textarea id="code-editor"># Welcome to pydle turtle!
-# Draw with Python code
+            <textarea id="code-editor">from turtle import *
 
-from turtle import *
-
-speed(0)
-penup()
-goto(-100, -100)
-pendown()
+speed(3)
 
 for i in range(4):
-    forward(200)
+    forward(100)
     right(90)</textarea>
         </section>
 
@@ -129,9 +124,9 @@ end_fill()</pre>
         </div>
     </div>
 
-    <script src="../vendor/codemirror/codemirror.min.js"></script>
-    <script src="../vendor/codemirror/python.min.js"></script>
-    <script src="../vendor/codemirror/comment.min.js"></script>
+    <script src="vendor/codemirror/codemirror.min.js"></script>
+    <script src="vendor/codemirror/python.min.js"></script>
+    <script src="vendor/codemirror/comment.min.js"></script>
 
     <script>
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
@@ -165,6 +160,7 @@ end_fill()</pre>
         let worker = null;
         let workerReady = false;
         let tickRunning = false;
+        let tickScheduled = false;
         let currentFileName = null;
         let lastSavedCode = editor.getValue();
         let dirty = false;
@@ -371,7 +367,15 @@ end_fill()</pre>
 
         function sendTick() {
             if (!tickRunning) return;
+            tickScheduled = false;
             worker.postMessage({ type: 'tick' });
+        }
+
+        function scheduleTick() {
+            if (tickRunning && !tickScheduled) {
+                tickScheduled = true;
+                requestAnimationFrame(sendTick);
+            }
         }
 
         async function initWorker() {
@@ -396,7 +400,7 @@ end_fill()</pre>
                         const frameCtx = canvas.getContext('2d');
                         frameCtx.putImageData(imageData, 0, 0);
                         if (tickRunning) {
-                            requestAnimationFrame(sendTick);
+                            scheduleTick();
                         }
                         break;
 
@@ -405,8 +409,9 @@ end_fill()</pre>
                         runBtn.disabled = true;
                         stopBtn.disabled = false;
                         tickRunning = true;
+                        tickScheduled = false;
                         clearCanvas();
-                        requestAnimationFrame(sendTick);
+                        scheduleTick();
                         break;
 
                     case 'running':
