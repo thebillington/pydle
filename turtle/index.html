@@ -210,6 +210,7 @@ t.isvisible()      # Is turtle visible?</pre>
             hResizeHandle.classList.add('active');
             document.body.style.cursor = 'row-resize';
             document.body.style.userSelect = 'none';
+            e.preventDefault();
         });
         document.addEventListener('mousemove', (e) => {
             if (isResizing) {
@@ -218,10 +219,10 @@ t.isvisible()      # Is turtle visible?</pre>
                 canvasPanel.style.width = Math.max(300, Math.min(1000, newWidth)) + 'px';
             }
             if (isHResizing) {
-                const canvasRect = canvasWrapper.getBoundingClientRect();
-                const newConsoleHeight = window.innerHeight - e.clientY - 56 - 10;
+                const panelRect = canvasPanel.getBoundingClientRect();
+                const newConsoleHeight = panelRect.bottom - e.clientY;
                 const minConsoleHeight = 80;
-                const maxConsoleHeight = canvasRect.height - 100;
+                const maxConsoleHeight = panelRect.height - 100;
                 consoleWrapper.style.height = Math.max(minConsoleHeight, Math.min(maxConsoleHeight, newConsoleHeight)) + 'px';
             }
         });

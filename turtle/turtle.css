@@ -6,6 +6,7 @@
     flex-direction: column;
     flex-shrink: 0;
     background: var(--bg-secondary);
+    min-height: 0;
 }
 
 .canvas-controls {
@@ -47,6 +48,8 @@
     cursor: row-resize;
     flex-shrink: 0;
     transition: background 0.15s;
+    z-index: 10;
+    position: relative;
 }
 
 .h-resize-handle:hover,
@@ -55,6 +58,7 @@
 }
 
 .console-wrapper {
+    flex: 0 0 auto;
     height: 140px;
     display: flex;
     flex-direction: column;
