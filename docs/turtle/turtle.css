@@ -25,9 +25,9 @@
     align-items: center;
     justify-content: center;
     background: var(--bg-primary);
-    border-bottom: 1px solid var(--border);
     padding: 10px;
-    min-height: 300px;
+    min-height: 0;
+    overflow: hidden;
 }
 
 #canvas {
@@ -36,14 +36,30 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     max-width: 100%;
     max-height: 100%;
+    object-fit: contain;
+}
+
+.h-resize-handle {
+    height: 6px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    cursor: row-resize;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+.h-resize-handle:hover,
+.h-resize-handle.active {
+    background: var(--accent-green);
 }
 
 .console-wrapper {
-    flex: 1;
+    height: 140px;
     display: flex;
     flex-direction: column;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border);
     overflow: hidden;
-    min-height: 150px;
+    flex-shrink: 0;
 }

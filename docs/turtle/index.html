@@ -61,6 +61,7 @@ for i in range(4):
             <div class="canvas-wrapper">
                 <canvas id="canvas" width="800" height="700" tabindex="0"></canvas>
             </div>
+            <div id="h-resize-handle" class="h-resize-handle"></div>
             <div class="console-wrapper">
                 <div class="panel-label">console</div>
                 <pre id="console"></pre>
@@ -192,6 +193,11 @@ t.isvisible()      # Is turtle visible?</pre>
         const STORAGE_PREFIX = 'pydle_turtle_file_';
 
         let isResizing = false;
+        let isHResizing = false;
+        const hResizeHandle = document.getElementById('h-resize-handle');
+        const canvasWrapper = document.querySelector('.canvas-wrapper');
+        const consoleWrapper = document.querySelector('.console-wrapper');
+
         resizeHandle.addEventListener('mousedown', (e) => {
             isResizing = true;
             resizeHandle.classList.add('active');
@@ -199,16 +205,36 @@ t.isvisible()      # Is turtle visible?</pre>
             document.body.style.userSelect = 'none';
             e.preventDefault();
         });
+        hResizeHandle.addEventListener('mousedown', (e) => {
+            isHResizing = true;
+            hResizeHandle.classList.add('active');
+            document.body.style.cursor = 'row-resize';
+            document.body.style.userSelect = 'none';
+        });
         document.addEventListener('mousemove', (e) => {
-            if (!isResizing) return;
-            const mainRect = document.querySelector('main').getBoundingClientRect();
-            const newWidth = mainRect.right - e.clientX;
-            canvasPanel.style.width = Math.max(300, Math.min(1000, newWidth)) + 'px';
+            if (isResizing) {
+                const mainRect = document.querySelector('main').getBoundingClientRect();
+                const newWidth = mainRect.right - e.clientX;
+                canvasPanel.style.width = Math.max(300, Math.min(1000, newWidth)) + 'px';
+            }
+            if (isHResizing) {
+                const canvasRect = canvasWrapper.getBoundingClientRect();
+                const newConsoleHeight = window.innerHeight - e.clientY - 56 - 10;
+                const minConsoleHeight = 80;
+                const maxConsoleHeight = canvasRect.height - 100;
+                consoleWrapper.style.height = Math.max(minConsoleHeight, Math.min(maxConsoleHeight, newConsoleHeight)) + 'px';
+            }
         });
         document.addEventListener('mouseup', () => {
             if (isResizing) {
                 isResizing = false;
                 resizeHandle.classList.remove('active');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+            if (isHResizing) {
+                isHResizing = false;
+                hResizeHandle.classList.remove('active');
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
             }
