@@ -220,11 +220,17 @@ def _anim_step():
     t = _get_default_turtle()
     cmd = _anim_queue.pop(0)
     if cmd[0] == 'line':
-        if len(cmd) == 8:
+        if len(cmd) == 9:
+            _, from_x, from_y, to_x, to_y, pen_down, pen_color, pen_size, line_heading = cmd
+        elif len(cmd) == 8:
             _, from_x, from_y, to_x, to_y, pen_down, pen_color, pen_size = cmd
+            line_heading = None
         else:
             _, from_x, from_y, to_x, to_y, pen_down, pen_color = cmd
             pen_size = t._pen_size
+            line_heading = None
+        if line_heading is not None:
+            t._heading = line_heading
         if pen_down and _ctx:
             _ctx.beginPath()
             _ctx.moveTo(_tcx(from_x), _tcy(from_y))
@@ -359,7 +365,7 @@ class Turtle:
             self._y = float(y)
             if self._filling:
                 self._fill_points.append((self._x, self._y))
-            _anim_queue.append(('line', old_x, old_y, self._x, self._y, self._pen_down, self._pen_color, self._pen_size))
+            _anim_queue.append(('line', old_x, old_y, self._x, self._y, self._pen_down, self._pen_color, self._pen_size, self._heading))
         else:
             if _ctx and self._pen_down:
                 _ctx.beginPath()
@@ -398,7 +404,7 @@ class Turtle:
                 from_y = start_y + dy * i
                 to_x = start_x + dx * (i + 1)
                 to_y = start_y + dy * (i + 1)
-                _anim_queue.append(('line', from_x, from_y, to_x, to_y, self._pen_down, self._pen_color, self._pen_size))
+                _anim_queue.append(('line', from_x, from_y, to_x, to_y, self._pen_down, self._pen_color, self._pen_size, self._heading))
         else:
             rad = math.radians(self._heading)
             target_x = self._x + d * math.cos(rad)
@@ -421,7 +427,7 @@ class Turtle:
             step = max(2, _SPEED_TABLE.get(self._speed, 5) * 2)
             steps = max(1, int(abs(angle) / step))
             step_angle = angle / steps
-            for i in range(steps):
+            for i in range(steps + 1):
                 h = (start_heading - step_angle * i) % 360
                 _anim_queue.append(('rotate', h))
         else:
@@ -439,7 +445,7 @@ class Turtle:
             step = max(2, _SPEED_TABLE.get(self._speed, 5) * 2)
             steps = max(1, int(abs(angle) / step))
             step_angle = angle / steps
-            for i in range(steps):
+            for i in range(steps + 1):
                 h = (start_heading + step_angle * i) % 360
                 _anim_queue.append(('rotate', h))
         else:
