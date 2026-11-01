@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Python REPL and turtle graphics editor in your browser. Powered by Pyodide. Write and run Python code with zero setup, no server required.">
+    <meta name="description" content="Free Python REPL and turtle graphics editor in your browser. Write and run real Python with zero setup, no account and no server. Powered by Pyodide.">
     <meta name="theme-color" content="#282a36">
-    <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://pydle.uk">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+    <meta name="author" content="Billy Rebecchi">
+    <link rel="canonical" href="https://pydle.uk/">
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="pydle - Python in Your Browser">
@@ -21,7 +22,65 @@
     <meta name="twitter:description" content="Python REPL and turtle graphics editor in your browser. Powered by Pyodide. Write and run Python code with zero setup, no server required.">
     <meta name="twitter:image" content="https://pydle.uk/og-image.png">
 
-    <title>pydle</title>
+    <title>pydle — Free Python REPL &amp; Turtle Graphics in the Browser</title>
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://pydle.uk/#website",
+          "url": "https://pydle.uk/",
+          "name": "pydle",
+          "description": "A free Python REPL and turtle graphics editor that runs entirely in the browser.",
+          "inLanguage": "en-GB",
+          "publisher": { "@id": "https://pydle.uk/#organisation" }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://pydle.uk/#organisation",
+          "name": "pydle",
+          "url": "https://pydle.uk/",
+          "founder": {
+            "@type": "Person",
+            "name": "Billy Rebecchi",
+            "url": "https://thebillington.co.uk"
+          },
+          "sameAs": [
+            "https://github.com/thebillington/pydle",
+            "https://github.com/thebillington"
+          ]
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://pydle.uk/#app",
+          "name": "pydle",
+          "url": "https://pydle.uk/",
+          "description": "A free browser-based Python REPL and turtle graphics editor powered by Pyodide. No account, no server and no install.",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Any",
+          "browserRequirements": "Requires JavaScript and WebAssembly",
+          "isAccessibleForFree": true,
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "GBP" },
+          "featureList": [
+            "Python REPL in the browser",
+            "Turtle graphics editor",
+            "Save programs in browser storage",
+            "Download programs as .py files",
+            "No account or installation"
+          ],
+          "sameAs": [
+            "https://github.com/thebillington/pydle",
+            "https://pydle.uk/turtle/",
+            "https://pydle.uk/python-turtle-online/",
+            "https://pydle.uk/trinket-alternative/"
+          ],
+          "publisher": { "@id": "https://pydle.uk/#organisation" }
+        }
+      ]
+    }
+    </script>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23282a36' width='100' height='100' rx='12' stroke='%236272a4' stroke-width='4'/%3E%3Ctext y='65' x='50' text-anchor='middle' font-size='50' font-family='monospace' font-weight='bold' fill='%23f8f8f2'%3E_%3C/text%3E%3Ctext y='48' x='35' text-anchor='middle' font-size='38' font-family='monospace' font-weight='bold' fill='%2350fa7b'%3E%3E%3C/text%3E%3C/svg%3E">
 
     <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css">
@@ -458,7 +517,7 @@ print(greet("World"))</pre>
         initWorker();
     </script>
     <footer>
-        <a href="https://github.com/thebillington/pydle" target="_blank" rel="noopener noreferrer"><span class="repo">pydle</span></a> is an open source project built and maintained by <a href="https://github.com/thebillington" target="_blank" rel="noopener noreferrer">thebillington</a>
+        <a href="https://github.com/thebillington/pydle" target="_blank" rel="noopener noreferrer"><span class="repo">pydle</span></a> is an open source project built and maintained by <a href="https://github.com/thebillington" target="_blank" rel="noopener noreferrer">thebillington</a> &middot; <a href="/python-turtle-online/">Python turtle guide</a> &middot; <a href="/trinket-alternative/">Trinket alternative</a> &middot; <a href="https://github.com/sponsors/thebillington" target="_blank" rel="noopener noreferrer" class="sponsor">Sponsor this project</a>
     </footer>
 </body>
 </html>

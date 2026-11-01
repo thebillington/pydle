@@ -1,6 +1,13 @@
 # pydle
 
-pydle is a browser-based Python playground built with Pyodide and deployed on GitHub Pages.
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/thebillington)
+
+pydle is a free browser-based Python playground built with Pyodide and deployed
+on GitHub Pages.
+
+- Live site: [https://pydle.uk](https://pydle.uk)
+- Turtle guide: [https://pydle.uk/python-turtle-online/](https://pydle.uk/python-turtle-online/)
+- Trinket alternative: [https://pydle.uk/trinket-alternative/](https://pydle.uk/trinket-alternative/)
 
 It has two main entry points:
 
@@ -86,6 +93,11 @@ Then visit:
 - `turtle/` - turtle-specific app, worker, and styles
 - `vendor/` - vendored CodeMirror, Pyodide, and other static dependencies
 - `CNAME` - custom domain for GitHub Pages
+
+## Support
+
+This project is free and open source. If it saves you time, you can support
+ongoing maintenance through [GitHub Sponsors](https://github.com/sponsors/thebillington).
 
 ## Notes
 

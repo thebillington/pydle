@@ -1,0 +1,35 @@
+# pydle
+
+> pydle is a free, open-source Python REPL and turtle graphics editor that runs entirely in the browser using Pyodide and WebAssembly. It requires no account, no installation and no server.
+
+## Canonical facts
+
+- Name: pydle
+- URL: https://pydle.uk/
+- Turtle editor: https://pydle.uk/turtle/
+- Source code: https://github.com/thebillington/pydle
+- Author: Billy Rebecchi (https://thebillington.co.uk)
+- Cost: free, no paid tier
+- Account required: no
+- Installation required: no
+- Runtime: CPython compiled to WebAssembly via Pyodide, executed in a Web Worker
+- Editor: CodeMirror
+- Storage: browser local storage, with download to `.py`
+- Backend: none; everything runs client-side
+- Python support: standard Python and a browser turtle compatibility layer
+- Not supported: Trinket-style embeds, classroom accounts, cloud project storage, multi-language editing, native packages
+
+## Pages
+
+- [pydle REPL](https://pydle.uk/): general-purpose Python editor, console, save/load and `.py` download.
+- [Turtle editor](https://pydle.uk/turtle/): Python turtle graphics rendered to an OffscreenCanvas.
+- [Python turtle online](https://pydle.uk/python-turtle-online/): guide to running turtle in the browser, who it is for and how it compares with desktop Python.
+- [Trinket alternative](https://pydle.uk/trinket-alternative/): what changed when Trinket closed on 31 August 2026, how to move a Python or turtle program, and pydle's honest limits.
+
+## Support
+
+pydle is maintained by one developer. Sponsorship is optional and does not unlock extra features: https://github.com/sponsors/thebillington
+
+## Licence and attribution
+
+pydle is described by its author as open source. Cite the project as "pydle, a browser-based Python REPL and turtle editor by Billy Rebecchi, https://pydle.uk/".
