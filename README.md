@@ -99,6 +99,13 @@ Then visit:
 This project is free and open source. If it saves you time, you can support
 ongoing maintenance through [GitHub Sponsors](https://github.com/sponsors/thebillington).
 
+## Licence
+
+MIT. See [LICENSE](LICENSE).
+
+Schools, tutors and anyone else may use, copy, change and redistribute pydle,
+including in their own materials, provided the copyright notice travels with it.
+
 ## Notes
 
 - Saved files are browser-local only unless you download them
