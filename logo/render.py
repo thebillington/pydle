@@ -39,17 +39,16 @@ REPO = HERE.parent
 
 # Dracula, matching style.css.
 BACKGROUND = "#282a36"
-BORDER = "#6272a4"
 CHEVRON = "#50fa7b"
 UNDERSCORE = "#f8f8f2"
 
 SIZES = (1024, 512, 200)
 
-# Geometry in a 100x100 viewBox. The square is inset by half the border width so
-# the stroke is not clipped at the edges.
-SQUARE_INSET = 3
+# Full bleed. The square used to be inset so its stroke would not be clipped, which
+# left a transparent ring that a rasteriser fills with white. The border is gone
+# too: GitHub puts its own frame around an app logo, and at logo size a pale
+# hairline reads as a white edge rather than a detail.
 SQUARE_RADIUS = 12
-BORDER_WIDTH = 4
 
 # Stroke is generous because this is read at 16-40 px far more often than large.
 GLYPH_WIDTH = 10
@@ -61,9 +60,6 @@ UNDERSCORE_LINE = [(54, 63), (74, 63)]
 
 def svg(size: int | None = None) -> str:
     """The mark as SVG. `size` sets width/height; the viewBox is always 100."""
-    inset = SQUARE_INSET
-    side = 100 - inset * 2
-
     chevron = " ".join(
         ("M" if index == 0 else "L") + f"{x},{y}" for index, (x, y) in enumerate(CHEVRON_POINTS)
     )
@@ -71,8 +67,7 @@ def svg(size: int | None = None) -> str:
 
     attributes = f'width="{size}" height="{size}" ' if size else ""
     return f"""<svg xmlns="http://www.w3.org/2000/svg" {attributes}viewBox="0 0 100 100" role="img" aria-label="pydle">
-  <rect x="{inset}" y="{inset}" width="{side}" height="{side}" rx="{SQUARE_RADIUS}"
-        fill="{BACKGROUND}" stroke="{BORDER}" stroke-width="{BORDER_WIDTH}"/>
+  <rect width="100" height="100" rx="{SQUARE_RADIUS}" fill="{BACKGROUND}"/>
   <path d="{chevron}" fill="none" stroke="{CHEVRON}" stroke-width="{GLYPH_WIDTH}"
         stroke-linecap="round" stroke-linejoin="round"/>
   <line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{UNDERSCORE}"
@@ -131,7 +126,8 @@ def main() -> int:
 
     for size in SIZES:
         html = (
-            "<!doctype html><html><head><style>html,body{margin:0;padding:0}"
+            "<!doctype html><html><head><style>"
+            f"html,body{{margin:0;padding:0;background:{BACKGROUND}}}"
             "</style></head><body>"
             f"{svg(size)}"
             "</body></html>"
@@ -144,6 +140,16 @@ def main() -> int:
         if image.size != (size, size):
             image = image.resize((size, size), Image.LANCZOS)
             image.save(out, optimize=True)
+
+        # Guard the bug this mark already shipped once: an inset square left a
+        # transparent ring that rasterised to a white frame. No pixel on the
+        # outermost row or column may be white.
+        edge = [image.getpixel((x, 0)) for x in range(size)]
+        edge += [image.getpixel((x, size - 1)) for x in range(size)]
+        edge += [image.getpixel((0, y)) for y in range(size)]
+        edge += [image.getpixel((size - 1, y)) for y in range(size)]
+        if any(pixel == (255, 255, 255) for pixel in edge):
+            raise SystemExit(f"logo: {out} has white pixels on its edge")
 
         print(f"logo: wrote {out} ({size}x{size}, {out.stat().st_size // 1024} KB)")
 

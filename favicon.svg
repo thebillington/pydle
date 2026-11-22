@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="pydle">
-  <rect x="3" y="3" width="94" height="94" rx="12"
-        fill="#282a36" stroke="#6272a4" stroke-width="4"/>
+  <rect width="100" height="100" rx="12" fill="#282a36"/>
   <path d="M31,37 L47,50 L31,63" fill="none" stroke="#50fa7b" stroke-width="10"
         stroke-linecap="round" stroke-linejoin="round"/>
   <line x1="54" y1="63" x2="74" y2="63" stroke="#f8f8f2"
