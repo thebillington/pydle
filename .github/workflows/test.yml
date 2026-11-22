@@ -1,0 +1,22 @@
+name: Test
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # There is no build step. This only runs the unit tests, which is why it is
+      # safe to run on every branch.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Unit tests
+        run: node --test tests/

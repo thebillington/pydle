@@ -1,0 +1,51 @@
+name: Deploy worker
+
+# The worker is the only server pydle has: a stateless CORS shim in front of
+# GitHub's two OAuth endpoints. It stores nothing. Deployed here rather than from a
+# developer machine so no Cloudflare credential ever lives on a laptop.
+#
+# Required repository secrets:
+#   CLOUDFLARE_API_TOKEN   Workers Scripts: Edit, Account Settings: Read
+#   CLOUDFLARE_ACCOUNT_ID
+#
+# After the first deploy, attach the custom domain `auth.pydle.uk` to the worker in
+# the Cloudflare dashboard. DNS for pydle.uk is already on Cloudflare, so the record
+# is created for you. Do not use the workers.dev hostname: school filters block it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail loudly rather than shipping a shim that will reject every request. An
+      # empty CLIENT_ID means the OAuth app has not been created yet, or its id has
+      # not been committed.
+      - name: Check CLIENT_ID is configured
+        run: |
+          if grep -q 'CLIENT_ID *= *""' worker/wrangler.toml; then
+            echo "::error::CLIENT_ID in worker/wrangler.toml is empty."
+            echo "Create a GitHub OAuth App, tick 'Enable Device Flow', and commit its"
+            echo "client id to worker/wrangler.toml and js/config.js."
+            exit 1
+          fi
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
