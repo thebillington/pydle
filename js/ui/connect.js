@@ -3,7 +3,7 @@
  *
  * The views are: not connected, asking for a code, showing the code, waiting to
  * be approved, needing a repository, connected, and an error. Nothing here knows
- * about GitHub internals — it calls the `Sync` object and renders what comes back.
+ * about GitHub internals: it calls the `Sync` object and renders what comes back.
  *
  * Every piece of remote data (the user code, the login, the repository name) is
  * written with `textContent`, never `innerHTML`.
@@ -602,7 +602,7 @@ export function mountConnect(element, sync) {
         );
 
         const codeRow = el('div', 'sync-code-row');
-        const codeNode = el('code', 'sync-code', code.userCode || '—');
+        const codeNode = el('code', 'sync-code', code.userCode || '----');
         codeNode.setAttribute('aria-label', 'Your sign-in code');
         const copyMessage = el('span', 'sync-copy-message');
         copyMessage.setAttribute('aria-live', 'polite');

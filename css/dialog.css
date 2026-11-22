@@ -1,0 +1,214 @@
+/*
+ * In-page dialogs: the overlay used by promptText, confirmAction and notify.
+ *
+ * Same language as css/sync.css and css/commit.css. Colours, radii and fonts
+ * come from style.css only, so the dialogs follow the theme without a second
+ * palette. Spacing is the established 4 / 8 / 12 / 16 / 24px scale and type is
+ * 17 / 13.5 / 12px, with hairlines between the header, body and footer.
+ */
+
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.dialog-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.dialog-panel {
+    position: relative;
+    width: calc(100vw - 32px);
+    max-width: 440px;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+.dialog-panel:focus,
+.dialog-panel:focus-visible {
+    outline: none;
+}
+
+/* Header ------------------------------------------------------------------ */
+
+.dialog-header {
+    flex-shrink: 0;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.dialog-title {
+    font-family: var(--font-sans);
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+/* Body -------------------------------------------------------------------- */
+
+.dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    padding: 20px 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.dialog-message {
+    margin: 0;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.dialog-tone-error .dialog-message {
+    padding-left: 12px;
+    border-left: 2px solid var(--accent-red);
+}
+
+.dialog-tone-info .dialog-message {
+    padding-left: 12px;
+    border-left: 2px solid var(--accent-cyan);
+}
+
+.dialog-label {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+.dialog-input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.4;
+}
+
+.dialog-input:focus {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 1px;
+    border-color: var(--accent-green);
+}
+
+.dialog-hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.dialog-error {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--accent-red);
+}
+
+.dialog-error:empty {
+    display: none;
+}
+
+/* Footer ------------------------------------------------------------------ */
+
+.dialog-footer {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+}
+
+/* Buttons ----------------------------------------------------------------- */
+
+.dialog-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 7px 16px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, filter 0.15s;
+}
+
+.dialog-btn:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 2px;
+}
+
+.dialog-btn-quiet {
+    border-color: var(--border);
+    background: transparent;
+    color: var(--text-primary);
+}
+
+.dialog-btn-quiet:hover {
+    background: var(--bg-tertiary);
+}
+
+.dialog-btn-primary {
+    border-color: var(--accent-green);
+    background: var(--accent-green);
+    color: var(--bg-primary);
+}
+
+.dialog-btn-primary:hover {
+    filter: brightness(1.06);
+}
+
+/* Destructive: filled, so it cannot be mistaken for the everyday action. */
+.dialog-btn-danger {
+    border-color: var(--accent-red);
+    background: var(--accent-red);
+    color: #ffffff;
+}
+
+.dialog-btn-danger:hover {
+    filter: brightness(1.06);
+}
+
+.dialog-btn-danger:focus-visible {
+    outline-color: var(--accent-red);
+}
+
+@media (max-width: 520px) {
+    .dialog-header,
+    .dialog-body,
+    .dialog-footer {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+}

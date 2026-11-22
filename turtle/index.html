@@ -27,7 +27,7 @@
     <meta name="twitter:image" content="https://pydle.uk/og-image.png">
     <meta name="twitter:image:alt" content="pydle, a Python REPL and turtle editor in the browser: a turtle spiral beside the Python that drew it">
 
-    <title>Python Turtle Graphics Online — Free &amp; No Signup | pydle</title>
+    <title>Python Turtle Graphics Online: Free &amp; No Signup | pydle</title>
 
     <script type="application/ld+json">
     {
@@ -123,6 +123,7 @@
     <link rel="stylesheet" href="../style.css">
     <link rel="stylesheet" href="turtle.css">
     <link rel="stylesheet" href="../css/editor-extras.css">
+    <link rel="stylesheet" href="../css/dialog.css">
 </head>
 <body>
     <header>
@@ -278,6 +279,7 @@ t.isvisible()      # Is turtle visible?</pre>
     <script type="module">
         import { getResolvedTheme, mountThemeToggle } from '../js/ui/theme.js';
         import { lineFromTraceback } from '../js/traceback.js';
+        import { confirmAction, notify, promptText } from '../js/ui/dialog.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
@@ -442,26 +444,53 @@ t.isvisible()      # Is turtle visible?</pre>
 
         editor.on('change', markDirty);
 
-        function checkUnsaved() {
-            if (dirty) {
-                return confirm('You have unsaved changes. Discard them?');
+        async function checkUnsaved() {
+            if (!dirty) {
+                return true;
             }
-            return true;
+            return confirmAction({
+                title: 'Discard unsaved changes?',
+                message:
+                    'Your drawing has changes that have not been saved. Loading another drawing will discard them.',
+                confirmLabel: 'Discard changes',
+                danger: true,
+            });
         }
 
-        function saveFile() {
+        async function saveFile() {
             const code = editor.getValue();
             if (currentFileName === null) {
-                currentFileName = prompt('Save as (name):', 'my_drawing');
-                if (currentFileName === null) return;
-                currentFileName = currentFileName.trim().replace(/\.py$/, '');
+                const entered = await promptText({
+                    title: 'Save your drawing',
+                    label: 'Name',
+                    value: 'my_drawing',
+                    confirmLabel: 'Save',
+                    hint: 'A single name, with no slashes. A trailing .py is dropped.',
+                    validate: (value) => {
+                        const name = value.trim().replace(/\.py$/, '');
+                        if (name === '') {
+                            return 'Enter a name for your drawing.';
+                        }
+                        if (name.includes('/') || name.includes('\\')) {
+                            return 'Use a single name, with no slashes.';
+                        }
+                        return null;
+                    },
+                });
+                if (entered === null) return;
+                currentFileName = entered.trim().replace(/\.py$/, '');
                 if (!currentFileName) { currentFileName = null; return; }
             }
             const key = STORAGE_PREFIX + currentFileName;
             try {
                 localStorage.setItem(key, code);
-            } catch (e) {
-                alert('Save failed: ' + e.message);
+            } catch {
+                await notify({
+                    title: 'Could not save to this browser',
+                    message:
+                        'pydle could not save this drawing on this device. Your code is still in the editor, so you can copy it or download it before trying again.',
+                    variant: 'error',
+                });
                 return;
             }
             lastSavedCode = code;
@@ -470,11 +499,11 @@ t.isvisible()      # Is turtle visible?</pre>
             showStatus('Saved: ' + currentFileName, 'ready');
         }
 
-        function loadFile(name) {
+        async function loadFile(name) {
             const key = STORAGE_PREFIX + name;
             const code = localStorage.getItem(key);
             if (code === null) return;
-            if (!checkUnsaved()) return;
+            if (!(await checkUnsaved())) return;
             if (tickRunning) stopCode();
             editor.setValue(code);
             currentFileName = name;
@@ -488,8 +517,14 @@ t.isvisible()      # Is turtle visible?</pre>
             closeLoadOverlay();
         }
 
-        function deleteFile(name) {
-            if (!confirm('Delete "' + name + '?')) return;
+        async function deleteFile(name) {
+            const ok = await confirmAction({
+                title: 'Delete this drawing?',
+                message: `“${name}” will be deleted from this device. This cannot be undone.`,
+                confirmLabel: 'Delete drawing',
+                danger: true,
+            });
+            if (!ok) return;
             localStorage.removeItem(STORAGE_PREFIX + name);
             refreshLoadList();
         }
@@ -523,12 +558,12 @@ t.isvisible()      # Is turtle visible?</pre>
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'file-item-name';
                 nameSpan.textContent = name;
-                nameSpan.addEventListener('click', () => loadFile(name));
+                nameSpan.addEventListener('click', () => { void loadFile(name); });
                 const delBtn = document.createElement('button');
                 delBtn.className = 'btn btn-file-delete';
                 delBtn.textContent = '✕';
                 delBtn.title = 'Delete';
-                delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteFile(name); });
+                delBtn.addEventListener('click', (e) => { e.stopPropagation(); void deleteFile(name); });
                 row.appendChild(nameSpan);
                 row.appendChild(delBtn);
                 loadBody.appendChild(row);
@@ -557,7 +592,7 @@ t.isvisible()      # Is turtle visible?</pre>
             }
         });
 
-        saveBtn.addEventListener('click', saveFile);
+        saveBtn.addEventListener('click', () => { void saveFile(); });
 
         downloadBtn.addEventListener('click', () => {
             const code = editor.getValue();
@@ -580,7 +615,7 @@ t.isvisible()      # Is turtle visible?</pre>
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                saveFile();
+                void saveFile();
             }
             if (e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();

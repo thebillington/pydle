@@ -27,7 +27,7 @@
     <meta name="twitter:image" content="https://pydle.uk/og-image.png">
     <meta name="twitter:image:alt" content="pydle, a Python REPL and turtle editor in the browser: a turtle spiral beside the Python that drew it">
 
-    <title>pydle — Free Python REPL &amp; Turtle Graphics in the Browser</title>
+    <title>pydle: Free Python REPL &amp; Turtle Graphics in the Browser</title>
 
     <script type="application/ld+json">
     {
@@ -144,6 +144,7 @@
     <link rel="stylesheet" href="css/commit.css">
     <link rel="stylesheet" href="css/editor-extras.css">
     <link rel="stylesheet" href="css/editor-files.css">
+    <link rel="stylesheet" href="css/dialog.css">
 </head>
 <body>
     <header>
@@ -313,6 +314,7 @@ print(greet("World"))</pre>
         import { defaultFilePath, mountFileRail, projectSlug } from './js/ui/files.js';
         import { mountCommit } from './js/ui/commit.js';
         import { mountHistory } from './js/ui/history.js';
+        import { confirmAction, notify, promptText } from './js/ui/dialog.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
@@ -582,7 +584,25 @@ print(greet("World"))</pre>
         async function saveFile() {
             const code = editor.getValue();
             if (currentFileName === null) {
-                const entered = prompt('Save as (project name):', 'my_program');
+                const entered = await promptText({
+                    title: 'Save your project',
+                    label: 'Project name',
+                    value: 'my_program',
+                    confirmLabel: 'Save',
+                    hint: 'Letters, numbers, spaces and hyphens. It is stored in lowercase with hyphens.',
+                    validate: (value) => {
+                        let slug = null;
+                        try {
+                            slug = projectSlug(value);
+                        } catch {
+                            slug = null;
+                        }
+                        if (slug === null) {
+                            return 'That name needs at least one letter or number.';
+                        }
+                        return null;
+                    },
+                });
                 if (entered === null) return;
                 const slug = projectSlug(entered);
                 if (slug === null) {
@@ -599,8 +619,13 @@ print(greet("World"))</pre>
             projectFiles[currentPath] = code;
             try {
                 localStorage.setItem(STORAGE_PREFIX + currentFileName, code);
-            } catch (e) {
-                alert('Save failed: ' + e.message);
+            } catch {
+                await notify({
+                    title: 'Could not save to this browser',
+                    message:
+                        'pydle could not save this project on this device. Your code is still in the editor, so you can copy it or download it before trying again.',
+                    variant: 'error',
+                });
                 return;
             }
             lastSavedCode = code;
@@ -804,8 +829,14 @@ print(greet("World"))</pre>
             void refreshCommitState();
         }
 
-        function deleteFile(name) {
-            if (!confirm('Delete "' + name + '"?')) return;
+        async function deleteFile(name) {
+            const ok = await confirmAction({
+                title: 'Delete this project?',
+                message: `“${name}” will be deleted from this device. Its history on GitHub is not removed.`,
+                confirmLabel: 'Delete project',
+                danger: true,
+            });
+            if (!ok) return;
             localStorage.removeItem(STORAGE_PREFIX + name);
             closeProjectIfOpen(name);
             refreshLoadList();
@@ -903,7 +934,7 @@ print(greet("World"))</pre>
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                saveFile();
+                void saveFile();
             }
             if (e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();
@@ -1225,6 +1256,7 @@ print(greet("World"))</pre>
         }
 
         syncBtn.addEventListener('click', openSyncOverlay);
+        document.addEventListener('pydle:open-sync', openSyncOverlay);
         closeSyncBtn.addEventListener('click', closeSyncOverlay);
         syncOverlay.addEventListener('click', (e) => {
             if (e.target === syncOverlay || e.target.classList.contains('overlay-backdrop')) {

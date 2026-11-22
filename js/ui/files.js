@@ -17,6 +17,7 @@
  */
 
 import { isReservedPath, normalizeProjectName, safeJoin } from '../vault/paths.js';
+import { confirmAction, promptText } from './dialog.js';
 
 /** A file name has to stay readable in the rail and on GitHub. */
 const MAX_FILE_NAME = 120;
@@ -437,29 +438,48 @@ export function mountFileRail(root, handlers = {}) {
 
     /* Actions ------------------------------------------------------------ */
 
-    function promptNew() {
-        const raw = window.prompt('New file name', 'helpers.py');
+    async function promptNew() {
+        const raw = await promptText({
+            title: 'New file',
+            label: 'File name',
+            value: 'helpers.py',
+            confirmLabel: 'Create file',
+            hint: 'One file name, no slashes. A name without a dot gets .py.',
+            validate: (value) => {
+                const check = validateFileName(value, state.files);
+                return check.ok ? null : check.error;
+            },
+        });
         if (raw === null) {
             return;
         }
         const result = validateFileName(raw, state.files);
         if (!result.ok) {
-            setNotice(result.error);
+            // The dialog already showed this inline; keep the rail quiet.
             return;
         }
         run(() => handlers.onCreate && handlers.onCreate(result.name));
     }
 
     /** @param {string} path */
-    function promptRename(path) {
-        const raw = window.prompt('Rename file', path);
+    async function promptRename(path) {
+        const others = state.files.filter((file) => file !== path);
+        const raw = await promptText({
+            title: 'Rename file',
+            label: 'File name',
+            value: path,
+            confirmLabel: 'Rename',
+            hint: 'One file name, with no slashes.',
+            validate: (value) => {
+                const check = validateFileName(value, others);
+                return check.ok ? null : check.error;
+            },
+        });
         if (raw === null) {
             return;
         }
-        const others = state.files.filter((file) => file !== path);
         const result = validateFileName(raw, others);
         if (!result.ok) {
-            setNotice(result.error);
             return;
         }
         if (result.name === path) {
@@ -470,12 +490,17 @@ export function mountFileRail(root, handlers = {}) {
     }
 
     /** @param {string} path */
-    function askDelete(path) {
+    async function askDelete(path) {
         if (state.files.length <= 1) {
             setNotice('A project needs at least one file. Delete the project instead.');
             return;
         }
-        const ok = window.confirm(`Delete "${path}" from ${state.project || 'this project'}?`);
+        const ok = await confirmAction({
+            title: 'Delete this file?',
+            message: `“${path}” will be deleted from ${state.project || 'this project'}. This cannot be undone.`,
+            confirmLabel: 'Delete file',
+            danger: true,
+        });
         if (!ok) {
             return;
         }
@@ -563,18 +588,24 @@ export function mountFileRail(root, handlers = {}) {
         }
     });
 
-    newBtn.addEventListener('click', promptNew);
+    newBtn.addEventListener('click', () => { void promptNew(); });
     renameItem.addEventListener('click', () => {
         if (!openMenu) return;
         const path = openMenu.path;
+        const anchor = openMenu.anchor;
         closeMenu();
-        promptRename(path);
+        // The menu is hidden, so return focus to the row's own button first:
+        // that is what the dialog should hand focus back to on close.
+        anchor.focus({ preventScroll: true });
+        void promptRename(path);
     });
     deleteItem.addEventListener('click', () => {
         if (!openMenu) return;
         const path = openMenu.path;
+        const anchor = openMenu.anchor;
         closeMenu();
-        askDelete(path);
+        anchor.focus({ preventScroll: true });
+        void askDelete(path);
     });
 
     render();
