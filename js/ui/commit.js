@@ -267,8 +267,34 @@ export function mountCommit(root, sync, handlers = {}) {
 
     /* Rendering --------------------------------------------------------- */
 
+    /**
+     * The project name as a name: a slug in monospace, so a sentence cannot read as
+     * if the project were a place. "spiral has uncommitted changes", not "changes in
+     * spiral".
+     *
+     * @returns {HTMLElement}
+     */
+    function projectName() {
+        return el('code', 'commit-project-name', state.project || 'this project');
+    }
+
+    /**
+     * Compose a sentence around the project name without interpolating it into a
+     * preposition.
+     *
+     * @param {string} before
+     * @param {string} after
+     * @returns {DocumentFragment}
+     */
+    function aroundProjectName(before, after) {
+        const fragment = document.createDocumentFragment();
+        fragment.append(document.createTextNode(before), projectName(), document.createTextNode(after));
+        return fragment;
+    }
+
     function renderLoading() {
-        const note = el('p', 'commit-loading', `Looking for changes in ${state.project}\u2026`);
+        const note = el('p', 'commit-loading');
+        note.append(aroundProjectName('Checking ', ' for changes\u2026'));
         note.setAttribute('aria-live', 'polite');
         body.append(note);
         footer.append(button('Cancel', 'quiet', () => finish('cancelled')));
@@ -302,11 +328,11 @@ export function mountCommit(root, sync, handlers = {}) {
         const section = el('section', 'commit-section commit-empty');
         section.append(
             el('p', 'sync-lede', 'Nothing to commit.'),
-            el(
-                'p',
-                'sync-text',
-                `${state.project} is already committed. There are no changes since the last commit.`,
-            ),
+            (() => {
+                const line = el('p', 'sync-text');
+                line.append(aroundProjectName('', ' has no uncommitted changes.'));
+                return line;
+            })(),
         );
         body.append(section);
         footer.append(button('Close', 'quiet', () => finish('cancelled')));
@@ -350,11 +376,7 @@ export function mountCommit(root, sync, handlers = {}) {
             // without committing deletes nothing, so it should not be styled as a
             // destructive action.
             const guard = el('p', 'commit-guard');
-            guard.append(
-                document.createTextNode(
-                    `You have uncommitted changes in ${state.project}. Commit them before you go, or `,
-                ),
-            );
+            guard.append(aroundProjectName('', ' has uncommitted changes. Commit them before you go, or '));
             const leave = el('button', 'commit-guard-link', 'leave without committing');
             leave.type = 'button';
             leave.disabled = Boolean(state.busy);

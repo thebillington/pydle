@@ -378,3 +378,12 @@
     outline: 2px solid var(--accent-cyan);
     outline-offset: 2px;
 }
+
+/* A project name inside a sentence. Mono, because project names are slugs, and
+   styled as a name so "spiral has uncommitted changes" reads correctly. */
+.commit-project-name {
+    font-family: var(--font-mono);
+    font-size: 0.94em;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
