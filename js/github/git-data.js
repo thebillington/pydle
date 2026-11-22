@@ -50,6 +50,7 @@ export async function getRepo({ token, owner, repo }) {
     try {
         return await ghFetch(repoPath(owner, repo), { token });
     } catch (error) {
+        // 404 means the repository is not there, or not visible to this token.
         if (error instanceof GitHubError && error.status === 404) {
             return null;
         }
@@ -85,7 +86,10 @@ export async function getRef({ token, owner, repo, branch }) {
         const data = await ghFetch(`${repoPath(owner, repo)}/git/ref/heads/${encodeURIComponent(branch)}`, { token });
         return { sha: data.object.sha };
     } catch (error) {
-        if (error instanceof GitHubError && error.status === 404) {
+        // An empty repository answers 409 "Git Repository is empty" for refs that do
+        // not exist yet, not 404. Both mean the same thing: there is no branch. This
+        // was the bug that made every scaffold attempt fail before it could seed.
+        if (error instanceof GitHubError && (error.status === 404 || error.status === 409)) {
             return null;
         }
         throw error;
