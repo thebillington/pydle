@@ -115,6 +115,9 @@ export async function ghFetch(path, { token, method = 'GET', body, headers } = {
     const parsed = response.status === 204 ? null : parseBody(text);
 
     if (!response.ok) {
+        // Path and status only. Never the body: a token response would be in it.
+        console.warn('[pydle] github', method, path.split('?')[0], response.status);
+
         throw new GitHubError(describeError(response.status, parsed), {
             status: response.status,
             body: parsed,

@@ -402,9 +402,28 @@ export function createSync({ onChange } = {}) {
                     const usable = await withToken((token) =>
                         isWorkspaceRepo(token, user.login, REPO_NAME, repo.default_branch, repo.size),
                     );
-                    workspace = usable
-                        ? { owner: user.login, repo: REPO_NAME, branch: repo.default_branch }
-                        : null;
+
+                    if (!usable) {
+                        workspace = null;
+                    } else {
+                        workspace = {
+                            owner: user.login,
+                            repo: REPO_NAME,
+                            branch: repo.default_branch,
+                        };
+                        // An empty repository is ours but unfinished: finish it here,
+                        // so a half-created workspace heals on the next load.
+                        if (!repo.size) {
+                            await withToken((token) =>
+                                scaffoldWithRetry({
+                                    token,
+                                    owner: workspace.owner,
+                                    repo: workspace.repo,
+                                    branch: workspace.branch,
+                                }),
+                            );
+                        }
+                    }
                 }
             } catch (error) {
                 const syncError = asSyncError(error);
@@ -423,6 +442,40 @@ export function createSync({ onChange } = {}) {
                 throw syncError;
             }
         }
+    }
+
+    /**
+     * Write the scaffold commit, retrying while a fresh repository settles.
+     *
+     * GitHub can answer 409 ("Git Repository is empty") or 422 from the git data
+     * API for a second or two after a repository is created. Without this, creating
+     * a workspace failed intermittently and only worked when tried again later.
+     *
+     * @param {{ token: string, owner: string, repo: string, branch: string }} options
+     * @returns {Promise<void>}
+     */
+    async function scaffoldWithRetry({ token, owner, repo, branch }) {
+        const delays = [0, 500, 1000, 2000, 3000];
+        let lastError = null;
+
+        for (const delay of delays) {
+            if (delay > 0) {
+                await new Promise((resolve) => setTimeout(resolve, delay));
+            }
+            try {
+                await bootstrapRepo({ token, owner, repo, branch, identity: identityFor(user) });
+                return;
+            } catch (error) {
+                lastError = error;
+                const retryable =
+                    error instanceof GitHubError && (error.status === 409 || error.status === 422);
+                if (!retryable) {
+                    throw error;
+                }
+            }
+        }
+
+        throw lastError;
     }
 
     /**
@@ -472,30 +525,39 @@ export function createSync({ onChange } = {}) {
         }
 
         try {
-            let repo;
-            try {
-                repo = await withToken((token) => createRepo({ token, name: REPO_NAME }));
-            } catch (error) {
-                if (error instanceof GitHubError && error.status === 422) {
-                    throw new SyncError(
-                        'config',
-                        `Your GitHub account already has a repository called ${REPO_NAME}, and it is not a pydle workspace. Rename or delete it, then try again.`,
-                        { cause: error },
-                    );
+            let repo = await withToken((token) =>
+                getRepo({ token, owner: user.login, repo: REPO_NAME }),
+            );
+
+            if (!repo) {
+                try {
+                    repo = await withToken((token) => createRepo({ token, name: REPO_NAME }));
+                } catch (error) {
+                    if (error instanceof GitHubError && error.status === 422) {
+                        throw new SyncError(
+                            'config',
+                            `Your GitHub account already has a repository called ${REPO_NAME}, and it is not a pydle workspace. Rename or delete it, then try again.`,
+                            { cause: error },
+                        );
+                    }
+                    throw error;
                 }
-                throw error;
             }
+
             workspace = { owner: user.login, repo: REPO_NAME, branch: repo.default_branch };
 
-            await withToken((token) =>
-                bootstrapRepo({
-                    token,
-                    owner: workspace.owner,
-                    repo: workspace.repo,
-                    branch: workspace.branch,
-                    identity: identityFor(user),
-                }),
-            );
+            // Idempotent: a repository that exists but is still empty gets its
+            // scaffold now rather than leaving the student with a broken workspace.
+            if (!repo.size) {
+                await withToken((token) =>
+                    scaffoldWithRetry({
+                        token,
+                        owner: workspace.owner,
+                        repo: workspace.repo,
+                        branch: workspace.branch,
+                    }),
+                );
+            }
 
             setStatus('connected');
         } catch (error) {
