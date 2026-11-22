@@ -14,7 +14,7 @@
 import { CONFIG } from './config.js';
 import { DeviceFlowError, pollForToken, refreshAccessToken, startDeviceFlow } from './github/device-flow.js';
 import { GitHubError, ghFetch } from './github/http.js';
-import { createRepo, getRepo, getUser } from './github/git-data.js';
+import { createRepo, getRef, getRepo, getUser } from './github/git-data.js';
 import { bootstrapRepo } from './github/scaffold.js';
 import { ConflictError, commitFiles } from './github/commit.js';
 import { clearTokens, loadTokens, saveTokens } from './vault/tokens.js';
