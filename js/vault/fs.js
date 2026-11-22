@@ -25,6 +25,38 @@ const AUTH_STORE = 'auth';
 /** Meta keys holding a project's last committed state. */
 const SNAPSHOT_PREFIX = 'commit:';
 
+/**
+ * Project namespaces.
+ *
+ * `work` deliberately maps to the empty string: it is the original layout, so the
+ * programs already on every device keep working with no migration. `drawings` is a
+ * new sibling directory. Anything added here needs the same treatment in sync.js,
+ * which mirrors it into `work/` and `drawings/` in the repository.
+ */
+const KIND_DIRS = { work: '', drawings: 'drawings' };
+
+/**
+ * @param {string} kind
+ * @returns {string} Directory segment, or '' for the root.
+ */
+function kindDir(kind) {
+    if (!Object.prototype.hasOwnProperty.call(KIND_DIRS, kind)) {
+        throw new TypeError(`vault: unknown kind ${JSON.stringify(kind)}`);
+    }
+    return KIND_DIRS[kind];
+}
+
+/**
+ * Key prefix for the IndexedDB stores, so the two namespaces cannot collide.
+ *
+ * @param {string} kind
+ * @returns {string}
+ */
+function keyPrefix(kind) {
+    const dir = kindDir(kind);
+    return dir === '' ? '' : `${dir}/`;
+}
+
 /** Directory under the OPFS origin root that holds every project. */
 const VAULT_DIR = 'vault';
 
@@ -202,8 +234,8 @@ async function idbDeletePrefix(storeName, prefix) {
  * @param {string} project Normalised project slug.
  * @returns {Promise<void>}
  */
-async function touchProject(project) {
-    await idbPut(META_STORE, { updatedAt: Date.now() }, project);
+async function touchProject(kind, project) {
+    await idbPut(META_STORE, { updatedAt: Date.now() }, keyPrefix(kind) + project);
 }
 
 /**
@@ -212,9 +244,9 @@ async function touchProject(project) {
  * @param {string} project Normalised project slug.
  * @returns {Promise<number>} Milliseconds since the epoch, or 0.
  */
-async function projectUpdatedAt(project) {
+async function projectUpdatedAt(kind, project) {
     try {
-        const record = await idbGet(META_STORE, project);
+        const record = await idbGet(META_STORE, keyPrefix(kind) + project);
         return record && Number.isFinite(record.updatedAt) ? record.updatedAt : 0;
     } catch {
         return 0;
@@ -297,29 +329,35 @@ async function vaultRoot(create = true) {
  * @param {boolean} [create]
  * @returns {Promise<FileSystemDirectoryHandle>}
  */
-async function projectDir(project, create = false) {
+/**
+ * The directory holding one kind: the vault root for `work`, a subdirectory for
+ * everything else.
+ *
+ * @param {string} kind
+ * @param {boolean} [create]
+ * @returns {Promise<FileSystemDirectoryHandle>}
+ */
+async function kindRoot(kind, create = true) {
     const root = await vaultRoot(create);
-    return root.getDirectoryHandle(project, { create });
+    const dir = kindDir(kind);
+    if (dir === '') {
+        return root;
+    }
+    return root.getDirectoryHandle(dir, { create });
 }
 
 /**
- * Walk every file under a directory.
+ * Get a project directory, optionally creating it.
  *
- * @param {FileSystemDirectoryHandle} dir
- * @param {string} [prefix]
- * @yields {{ path: string, handle: FileSystemFileHandle }}
+ * @param {string} kind
+ * @param {string} project Normalised slug.
+ * @param {boolean} [create]
+ * @returns {Promise<FileSystemDirectoryHandle>}
  */
-async function* walkFiles(dir, prefix = '') {
-    for await (const [name, handle] of dir.entries()) {
-        const path = prefix === '' ? name : `${prefix}/${name}`;
-        if (handle.kind === 'file') {
-            yield { path, handle };
-        } else {
-            yield* walkFiles(handle, path);
-        }
-    }
+async function projectDir(kind, project, create = false) {
+    const root = await kindRoot(kind, create);
+    return root.getDirectoryHandle(project, { create });
 }
-
 /**
  * Remove now-empty parent directories after deleting a file, deepest first.
  *
@@ -372,10 +410,6 @@ async function removeTree(dir) {
     }
 }
 
-/* ------------------------------------------------------------------ */
-/* IndexedDB backend                                                   */
-/* ------------------------------------------------------------------ */
-
 /**
  * Read one file from the IndexedDB store.
  *
@@ -383,8 +417,8 @@ async function removeTree(dir) {
  * @param {string} path Normalised relative path.
  * @returns {Promise<string | null>}
  */
-async function idbReadFile(project, path) {
-    const value = await idbGet(FILE_STORE, `${project}/${path}`);
+async function idbReadFile(kind, project, path) {
+    const value = await idbGet(FILE_STORE, `${keyPrefix(kind)}${project}/${path}`);
     return typeof value === 'string' ? value : null;
 }
 
@@ -394,8 +428,8 @@ async function idbReadFile(project, path) {
  * @param {string} project Normalised slug.
  * @returns {Promise<Record<string, string>>}
  */
-async function idbReadProject(project) {
-    const prefix = `${project}/`;
+async function idbReadProject(kind, project) {
+    const prefix = `${keyPrefix(kind)}${project}/`;
     const entries = await idbEntries(FILE_STORE, prefix);
     const files = {};
     for (const [key, value] of entries) {
@@ -406,15 +440,6 @@ async function idbReadProject(project) {
     return files;
 }
 
-/* ------------------------------------------------------------------ */
-/* Public API                                                          */
-/* ------------------------------------------------------------------ */
-
-/**
- * Which storage backend this browser will use.
- *
- * @returns {'opfs' | 'idb'}
- */
 export function isAvailable() {
     return hasOpfs() ? 'opfs' : 'idb';
 }
@@ -424,12 +449,13 @@ export function isAvailable() {
  *
  * @returns {Promise<Array<{ name: string, updatedAt: number }>>}
  */
-export async function listProjects() {
+export async function listProjects(kind = 'work') {
+    const prefix = keyPrefix(kind);
     /** @type {Map<string, number>} */
     const projects = new Map();
 
     if (hasOpfs()) {
-        const root = await vaultRoot();
+        const root = await kindRoot(kind);
         for await (const [name, handle] of root.entries()) {
             if (handle.kind !== 'directory') {
                 continue;
@@ -452,14 +478,14 @@ export async function listProjects() {
         for (const [name, updatedAt] of projects) {
             let resolved = updatedAt;
             try {
-                resolved = await projectUpdatedAt(name);
+                resolved = await projectUpdatedAt(kind, name);
             } catch {
                 resolved = 0;
             }
             if (resolved === 0) {
                 try {
-                    const dir = await projectDir(name);
-                    for await (const { handle } of walkFiles(dir)) {
+                    const directory = await projectDir(kind, name);
+                    for await (const { handle } of walkFiles(directory)) {
                         const file = await handle.getFile();
                         resolved = Math.max(resolved, file.lastModified);
                     }
@@ -472,27 +498,31 @@ export async function listProjects() {
     } else {
         const entries = await idbEntries(FILE_STORE);
         for (const [key] of entries) {
-            if (typeof key !== 'string') {
+            if (typeof key !== 'string' || !key.startsWith(prefix)) {
                 continue;
             }
-            const slash = key.indexOf('/');
+            const rest = key.slice(prefix.length);
+            const slash = rest.indexOf('/');
             if (slash > 0) {
-                projects.set(key.slice(0, slash), 0);
+                projects.set(rest.slice(0, slash), 0);
             }
         }
         for (const name of projects.keys()) {
-            projects.set(name, await projectUpdatedAt(name));
+            projects.set(name, await projectUpdatedAt(kind, name));
         }
+        // Projects with a meta record but no files yet, in this namespace only.
         for (const [key, value] of await idbEntries(META_STORE)) {
-            if (typeof key !== 'string' || projects.has(key)) {
+            if (typeof key !== 'string' || !key.startsWith(prefix)) {
                 continue;
             }
-            // The meta store also holds commit snapshots; those are not projects.
             if (key.startsWith(SNAPSHOT_PREFIX)) {
                 continue;
             }
-            const updatedAt = value && Number.isFinite(value.updatedAt) ? value.updatedAt : 0;
-            projects.set(key, updatedAt);
+            const name = key.slice(prefix.length);
+            if (name === '' || name.includes('/') || projects.has(name)) {
+                continue;
+            }
+            projects.set(name, value && Number.isFinite(value.updatedAt) ? value.updatedAt : 0);
         }
     }
 
@@ -500,16 +530,7 @@ export async function listProjects() {
         .map(([name, updatedAt]) => ({ name, updatedAt }))
         .sort((a, b) => b.updatedAt - a.updatedAt || a.name.localeCompare(b.name));
 }
-
-/**
- * Read every file in a project as `{ relativePath: content }`.
- *
- * A missing (or unusable) project returns `{}`.
- *
- * @param {string} name Project name.
- * @returns {Promise<Record<string, string>>}
- */
-export async function readProject(name) {
+export async function readProject(name, { kind = 'work' } = {}) {
     let project;
     try {
         project = requireProject(name);
@@ -520,7 +541,7 @@ export async function readProject(name) {
     if (hasOpfs()) {
         let dir;
         try {
-            dir = await projectDir(project);
+            dir = await projectDir(kind, project);
         } catch (error) {
             if (isMissing(error)) {
                 return {};
@@ -535,20 +556,9 @@ export async function readProject(name) {
         return files;
     }
 
-    return idbReadProject(project);
+    return idbReadProject(kind, project);
 }
-
-/**
- * Create or overwrite one file.
- *
- * Parent directories are created as needed.
- *
- * @param {string} project Project name.
- * @param {string} path Path relative to the project root.
- * @param {string} content UTF-8 text.
- * @returns {Promise<void>}
- */
-export async function writeFile(project, path, content) {
+export async function writeFile(project, path, content, { kind = 'work' } = {}) {
     const name = requireProject(project);
     const relative = requirePath(path);
     if (typeof content !== 'string') {
@@ -558,7 +568,7 @@ export async function writeFile(project, path, content) {
     }
 
     if (hasOpfs()) {
-        const dir = await projectDir(name, true);
+        const dir = await projectDir(kind, name, true);
         const segments = relative.split('/');
         const filename = segments.pop();
         let parent = dir;
@@ -573,27 +583,19 @@ export async function writeFile(project, path, content) {
             await writable.close();
         }
     } else {
-        await idbPut(FILE_STORE, content, `${name}/${relative}`);
+        await idbPut(FILE_STORE, content, `${keyPrefix(kind)}${name}/${relative}`);
     }
 
-    await touchProject(name);
+    await touchProject(kind, name);
 }
-
-/**
- * Delete one file. Missing files are ignored.
- *
- * @param {string} project Project name.
- * @param {string} path Path relative to the project root.
- * @returns {Promise<boolean>} True when something was removed.
- */
-export async function deleteFile(project, path) {
+export async function deleteFile(project, path, { kind = 'work' } = {}) {
     const name = requireProject(project);
     const relative = requirePath(path);
 
     if (hasOpfs()) {
         let dir;
         try {
-            dir = await projectDir(name);
+            dir = await projectDir(kind, name);
         } catch (error) {
             if (isMissing(error)) {
                 return false;
@@ -624,32 +626,23 @@ export async function deleteFile(project, path) {
             throw error;
         }
         await pruneEmptyDirs(dir, segments);
-        await touchProject(name);
+        await touchProject(kind, name);
         return true;
     }
 
-    const key = `${name}/${relative}`;
+    const key = `${keyPrefix(kind)}${name}/${relative}`;
     const existing = await idbGet(FILE_STORE, key);
     if (existing === undefined) {
         return false;
     }
     await idbDelete(FILE_STORE, key);
-    await touchProject(name);
+    await touchProject(kind, name);
     return true;
 }
-
-/**
- * Record the last committed state of a project: the commit sha, and the hash of
- * every file as it was committed. Kept in the `meta` store so no schema change is
- * needed, which matters because two modules open this database.
- *
- * @param {string} project Normalised project slug.
- * @returns {Promise<{ sha: string, files: Record<string, string> } | null>}
- */
-export async function readCommitSnapshot(project) {
+export async function readCommitSnapshot(project, { kind = 'work' } = {}) {
     try {
         const slug = normalizeProjectName(project);
-        const value = await idbGet(META_STORE, SNAPSHOT_PREFIX + slug);
+        const value = await idbGet(META_STORE, `${SNAPSHOT_PREFIX}${keyPrefix(kind)}${slug}`);
         if (value && typeof value === 'object' && value.files && typeof value.files === 'object') {
             return value;
         }
@@ -658,45 +651,23 @@ export async function readCommitSnapshot(project) {
         return null;
     }
 }
-
-/**
- * Store the last committed state of a project.
- *
- * @param {string} project Project name.
- * @param {{ sha: string, files: Record<string, string> }} snapshot
- * @returns {Promise<void>}
- */
-export async function writeCommitSnapshot(project, snapshot) {
+export async function writeCommitSnapshot(project, snapshot, { kind = 'work' } = {}) {
     const slug = normalizeProjectName(project);
-    await idbPut(META_STORE, snapshot, SNAPSHOT_PREFIX + slug);
+    await idbPut(META_STORE, snapshot, `${SNAPSHOT_PREFIX}${keyPrefix(kind)}${slug}`);
 }
-
-/**
- * Forget a project's committed state, used when the project is deleted.
- *
- * @param {string} project Project name.
- * @returns {Promise<void>}
- */
-export async function clearCommitSnapshot(project) {
+export async function clearCommitSnapshot(project, { kind = 'work' } = {}) {
     try {
         const slug = normalizeProjectName(project);
-        await idbDelete(META_STORE, SNAPSHOT_PREFIX + slug);
+        await idbDelete(META_STORE, `${SNAPSHOT_PREFIX}${keyPrefix(kind)}${slug}`);
     } catch {
         // Nothing recorded: nothing to forget.
     }
 }
-
-/**
- * Delete a project and everything in it. Missing projects are ignored.
- *
- * @param {string} name Project name.
- * @returns {Promise<void>}
- */
-export async function deleteProject(name) {
+export async function deleteProject(name, { kind = 'work' } = {}) {
     const project = requireProject(name);
 
     if (hasOpfs()) {
-        const root = await vaultRoot();
+        const root = await kindRoot(kind);
         try {
             await root.removeEntry(project, { recursive: true });
         } catch (error) {
@@ -705,21 +676,13 @@ export async function deleteProject(name) {
             }
         }
     } else {
-        await idbDeletePrefix(FILE_STORE, `${project}/`);
+        await idbDeletePrefix(FILE_STORE, `${keyPrefix(kind)}${project}/`);
     }
 
-    await idbDelete(META_STORE, project);
-    await clearCommitSnapshot(project);
+    await idbDelete(META_STORE, keyPrefix(kind) + project);
+    await clearCommitSnapshot(project, { kind });
 }
-
-/**
- * Rename a project, keeping every file.
- *
- * @param {string} from Current project name.
- * @param {string} to New project name.
- * @returns {Promise<void>}
- */
-export async function renameProject(from, to) {
+export async function renameProject(from, to, { kind = 'work' } = {}) {
     const source = requireProject(from);
     const target = requireProject(to);
     if (source === target) {
@@ -727,7 +690,7 @@ export async function renameProject(from, to) {
     }
 
     if (hasOpfs()) {
-        const root = await vaultRoot();
+        const root = await kindRoot(kind);
         try {
             await root.getDirectoryHandle(target);
             throw new Error(`vault: project "${target}" already exists`);
@@ -767,20 +730,20 @@ export async function renameProject(from, to) {
         await removeTree(sourceDir);
         await root.removeEntry(source, { recursive: true });
     } else {
-        const files = await idbReadProject(source);
-        const entries = await idbEntries(FILE_STORE, `${source}/`);
+        const files = await idbReadProject(kind, source);
+        const entries = await idbEntries(FILE_STORE, `${keyPrefix(kind)}${source}/`);
         if (entries.length === 0) {
             return;
         }
-        if ((await idbEntries(FILE_STORE, `${target}/`)).length > 0) {
+        if ((await idbEntries(FILE_STORE, `${keyPrefix(kind)}${target}/`)).length > 0) {
             throw new Error(`vault: project "${target}" already exists`);
         }
         for (const [path, content] of Object.entries(files)) {
-            await idbPut(FILE_STORE, content, `${target}/${path}`);
+            await idbPut(FILE_STORE, content, `${keyPrefix(kind)}${target}/${path}`);
         }
-        await idbDeletePrefix(FILE_STORE, `${source}/`);
+        await idbDeletePrefix(FILE_STORE, `${keyPrefix(kind)}${source}/`);
     }
 
-    await touchProject(target);
-    await idbDelete(META_STORE, source);
+    await touchProject(kind, target);
+    await idbDelete(META_STORE, keyPrefix(kind) + source);
 }
