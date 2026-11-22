@@ -231,6 +231,36 @@ export function mountConnect(element, sync) {
         }
     }
 
+    /** @type {ReturnType<typeof setInterval> | null} */
+    let countdownTimer = null;
+
+    /**
+     * Run the countdown from a local timer.
+     *
+     * It must not depend on the polling loop: that only ticks while it is waiting
+     * between requests, so a slow request froze the clock and the student saw a
+     * code apparently never expiring.
+     *
+     * @param {number} seconds
+     */
+    function startCountdown(seconds) {
+        stopCountdown();
+        setRemaining(seconds);
+        countdownTimer = setInterval(() => {
+            setRemaining(Math.max(0, remaining === null ? 0 : remaining - 1));
+            if (remaining === 0) {
+                stopCountdown();
+            }
+        }, 1000);
+    }
+
+    function stopCountdown() {
+        if (countdownTimer !== null) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
+    }
+
     /**
      * Update just the countdown, so ticks never move focus or re-create buttons.
      *
@@ -240,9 +270,14 @@ export function mountConnect(element, sync) {
         if (destroyed) {
             return;
         }
+        // The local timer is authoritative. Trust the server only when it disagrees
+        // by several seconds, which means the clock drifted.
         const left = Number(tick?.remaining);
         if (Number.isFinite(left)) {
-            setRemaining(Math.max(0, Math.round(left)));
+            const rounded = Math.max(0, Math.round(left));
+            if (remaining === null || Math.abs(rounded - remaining) > 3) {
+                remaining = rounded;
+            }
         }
     }
 
@@ -250,6 +285,7 @@ export function mountConnect(element, sync) {
      * Clear the local flow state before a new attempt.
      */
     function resetFlow() {
+        stopCountdown();
         code = null;
         remaining = null;
         localError = null;
@@ -286,8 +322,8 @@ export function mountConnect(element, sync) {
                         verificationUri: verificationHref(payload?.verificationUri),
                         expiresIn: Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 900,
                     };
-                    remaining = code.expiresIn;
                     idleOverride = false;
+                    startCountdown(code.expiresIn);
                     render();
                 },
                 onTick,
@@ -326,6 +362,7 @@ export function mountConnect(element, sync) {
     }
 
     function cancelSignIn() {
+        stopCountdown();
         idleOverride = true;
         code = null;
         remaining = null;
