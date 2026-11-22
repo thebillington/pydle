@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pydle storage smoke test</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+    body { padding: 24px; background: var(--bg-primary); color: var(--text-primary); }
+    pre { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<pre id="out">running</pre>
+<script type="module">
+/*
+ * Checks the vault: write, read back, list, rename, delete, and the commit
+ * snapshot. Everything here is a path that unit tests cannot reach.
+ *
+ * Open this page in a real browser. It reports PASS or FAIL per check.
+ *
+ * It runs against whichever backend the browser gives it, and says which. OPFS
+ * is the one that matters, because the OPFS branch is the one that had a missing
+ * helper nobody noticed for three commits.
+ */
+import * as fs from '../js/vault/fs.js';
+
+const out = document.getElementById('out');
+const lines = [];
+let failures = 0;
+
+function flush() {
+    out.textContent = lines.join('\n');
+}
+
+function check(name, condition, detail) {
+    if (condition) {
+        lines.push('PASS  ' + name);
+    } else {
+        failures += 1;
+        lines.push('FAIL  ' + name + (detail ? '  (' + detail + ')' : ''));
+    }
+    flush();
+}
+
+const project = 'smoke-project';
+const other = 'smoke-renamed';
+
+try {
+    lines.push('backend: ' + fs.isAvailable());
+    lines.push('secure context: ' + window.isSecureContext);
+    lines.push('navigator.storage: ' + (typeof navigator.storage));
+    lines.push('getDirectory: ' + (navigator.storage && typeof navigator.storage.getDirectory));
+    lines.push('user agent: ' + navigator.userAgent);
+    flush();
+
+    // Nothing should exist yet.
+    const before = await fs.readProject(project, { kind: 'drawings' });
+    check('a project that does not exist reads as empty',
+        Object.keys(before).length === 0, JSON.stringify(before));
+
+    // Round trip.
+    await fs.writeFile(project, 'main.py', 'print("hello")\n', { kind: 'drawings' });
+    const after = await fs.readProject(project, { kind: 'drawings' });
+    check('the written file reads back byte for byte',
+        after['main.py'] === 'print("hello")\n', JSON.stringify(after));
+
+    // This is the check that would have caught the missing helper: a nested file
+    // only appears if the directory walk works.
+    await fs.writeFile(project, 'lib/helpers.py', 'x = 1\n', { kind: 'drawings' });
+    const nested = await fs.readProject(project, { kind: 'drawings' });
+    check('a nested file reads back at its own path',
+        nested['lib/helpers.py'] === 'x = 1\n', JSON.stringify(nested));
+    check('the walk found every file', Object.keys(nested).length === 2,
+        JSON.stringify(Object.keys(nested)));
+
+    // Listing.
+    const drawings = await fs.listProjects('drawings');
+    check('the project appears in its own namespace',
+        drawings.some((entry) => entry.name === project),
+        JSON.stringify(drawings.map((entry) => entry.name)));
+
+    const programs = await fs.listProjects('work');
+    check('the namespaces stay separate',
+        !programs.some((entry) => entry.name === project),
+        JSON.stringify(programs.map((entry) => entry.name)));
+
+    // Deleting one file leaves the other.
+    await fs.deleteFile(project, 'lib/helpers.py', { kind: 'drawings' });
+    const afterDelete = await fs.readProject(project, { kind: 'drawings' });
+    check('deleting one file leaves the rest',
+        afterDelete['main.py'] === 'print("hello")\n' && afterDelete['lib/helpers.py'] === undefined,
+        JSON.stringify(afterDelete));
+
+    // Rename keeps the content.
+    await fs.renameProject(project, other, { kind: 'drawings' });
+    const renamed = await fs.readProject(other, { kind: 'drawings' });
+    check('rename keeps the content', renamed['main.py'] === 'print("hello")\n',
+        JSON.stringify(renamed));
+    const gone = await fs.readProject(project, { kind: 'drawings' });
+    check('rename removes the old name', Object.keys(gone).length === 0,
+        JSON.stringify(gone));
+
+    // The commit snapshot, which decides what looks changed.
+    const emptySnapshot = await fs.readCommitSnapshot(other, { kind: 'drawings' });
+    check('a project with no commits has no snapshot', emptySnapshot === null,
+        JSON.stringify(emptySnapshot));
+
+    await fs.writeCommitSnapshot(other, { sha: 'abc123', files: { 'main.py': 'deadbeef' } },
+        { kind: 'drawings' });
+    const snapshot = await fs.readCommitSnapshot(other, { kind: 'drawings' });
+    check('the commit snapshot round trips',
+        snapshot && snapshot.sha === 'abc123' && snapshot.files['main.py'] === 'deadbeef',
+        JSON.stringify(snapshot));
+
+    const workSnapshot = await fs.readCommitSnapshot(other);
+    check('snapshots stay in their namespace', workSnapshot === null,
+        JSON.stringify(workSnapshot));
+
+    // Deleting the project clears it and its snapshot.
+    await fs.deleteProject(other, { kind: 'drawings' });
+    const afterProject = await fs.listProjects('drawings');
+    check('deleting the project removes it from the list',
+        !afterProject.some((entry) => entry.name === other),
+        JSON.stringify(afterProject.map((entry) => entry.name)));
+
+    const clearedSnapshot = await fs.readCommitSnapshot(other, { kind: 'drawings' });
+    check('deleting the project clears its snapshot', clearedSnapshot === null,
+        JSON.stringify(clearedSnapshot));
+} catch (error) {
+    failures += 1;
+    lines.push('FAIL  threw: ' + (error && error.message ? error.message : String(error)));
+}
+
+// Leave nothing behind.
+try {
+    await fs.deleteProject(project, { kind: 'drawings' });
+    await fs.deleteProject(other, { kind: 'drawings' });
+} catch {
+    // Nothing to clean up.
+}
+
+lines.push('');
+lines.push(failures === 0 ? 'ALL PASSED' : failures + ' FAILED');
+flush();
+</script>
+</body>
+</html>
