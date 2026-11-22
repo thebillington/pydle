@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pydle dialog smoke test</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../css/dialog.css">
+<style>
+    body { padding: 24px; background: var(--bg-primary); color: var(--text-primary); }
+    pre { font-family: var(--font-mono); font-size: 13px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<pre id="out">running</pre>
+<script type="module">
+/*
+ * Checks the dialog promises, which unit tests cannot reach.
+ *
+ *   chrome --headless --dump-dom \
+ *     "http://127.0.0.1:8090/tests/dialog-smoke.html"
+ *
+ * Exists because `promptText` once resolved `null` for every answer, which made
+ * naming a project, creating a file and renaming all silently do nothing while
+ * 71 unit tests stayed green.
+ */
+const out = document.getElementById('out');
+const lines = [];
+let failures = 0;
+
+function flush() {
+    out.textContent = lines.join('\n');
+}
+
+function check(name, condition, detail) {
+    if (condition) {
+        lines.push('PASS  ' + name);
+    } else {
+        failures += 1;
+        lines.push('FAIL  ' + name + (detail ? '  (' + detail + ')' : ''));
+    }
+    flush();
+}
+
+function tick(ms = 60) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Await a dialog promise, but never hang the whole run if it does not settle. */
+function settle(promise, ms = 400) {
+    return Promise.race([
+        promise,
+        tick(ms).then(() => Symbol.for('timeout')),
+    ]);
+}
+
+const { promptText, confirmAction, notify } = await import('../js/ui/dialog.js');
+
+// Typing a name and pressing Enter must return the typed text.
+{
+    const pending = promptText({ title: 'Name it', label: 'Project name', value: 'start' });
+    await tick();
+
+    const input = document.querySelector('.dialog-input');
+    check('promptText renders an input', input instanceof HTMLInputElement);
+
+    if (input instanceof HTMLInputElement) {
+        input.value = 'my-project';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    }
+
+    const result = await settle(pending);
+    check('promptText resolves with the typed text', result === 'my-project', String(result));
+}
+
+// Cancelling resolves null, not the initial value.
+{
+    const pending = promptText({ title: 'Name it', label: 'Project name', value: 'start' });
+    await tick();
+    const cancel = document.querySelector('.dialog-btn-quiet');
+    if (cancel instanceof HTMLElement) {
+        cancel.click();
+    }
+    const result = await pending;
+    check('promptText resolves null when cancelled', result === null, String(result));
+}
+
+// A rejected value keeps the dialog open and reports why.
+{
+    let attempts = 0;
+    const pending = promptText({
+        title: 'Name it',
+        label: 'Project name',
+        value: '',
+        validate: (value) => {
+            attempts += 1;
+            return value.trim() === '' ? 'A name is needed.' : null;
+        },
+    });
+    await tick();
+
+    const input = document.querySelector('.dialog-input');
+    const primary = document.querySelector('.dialog-btn-primary');
+
+    if (input instanceof HTMLInputElement && primary instanceof HTMLElement) {
+        input.value = '';
+        primary.click();
+        await tick();
+        const stillOpen = document.querySelector('.dialog-input') instanceof HTMLInputElement;
+        const shown = document.querySelector('.dialog-error');
+        check('an invalid value keeps the dialog open', stillOpen);
+        check('an invalid value explains why', shown instanceof HTMLElement && shown.textContent !== '');
+
+        input.value = '  good-name  ';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        primary.click();
+    }
+
+    const result = await pending;
+    check('a corrected value is accepted', result === '  good-name  ', String(result));
+}
+
+// confirmAction resolves true and false.
+{
+    const pending = confirmAction({ title: 'Delete it?', message: 'This cannot be undone.' });
+    await tick();
+    const primary = document.querySelector('.dialog-btn-primary');
+    if (primary instanceof HTMLElement) {
+        primary.click();
+    }
+    check('confirmAction resolves true when confirmed', (await pending) === true);
+}
+
+{
+    const pending = confirmAction({ title: 'Delete it?', message: 'This cannot be undone.' });
+    await tick();
+    const cancel = document.querySelector('.dialog-btn-quiet');
+    if (cancel instanceof HTMLElement) {
+        cancel.click();
+    }
+    check('confirmAction resolves false when cancelled', (await pending) === false);
+}
+
+// notify resolves and closes.
+{
+    const pending = notify({ title: 'Saved', message: 'Nothing to worry about.' });
+    await tick();
+    const ok = document.querySelector('.dialog-btn-primary');
+    if (ok instanceof HTMLElement) {
+        ok.click();
+    }
+    await pending;
+    check('notify resolves after OK', document.querySelector('.dialog-input') === null);
+}
+
+lines.push('');
+lines.push(failures === 0 ? 'ALL PASSED' : failures + ' FAILED');
+flush();
+</script>
+</body>
+</html>

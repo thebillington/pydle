@@ -118,7 +118,7 @@ function focusables(panel) {
  *     label: string,
  *     variant?: 'primary' | 'quiet' | 'danger',
  *     value: unknown,
- *     onSubmit?: () => boolean,
+ *     onSubmit?: () => unknown,
  *     autofocus?: boolean,
  *   }>,
  *   initialFocus?: () => HTMLElement | null,
@@ -210,8 +210,18 @@ function createShell({
         const button = el('button', `dialog-btn dialog-btn-${variant}`, action.label);
         button.type = 'button';
         button.addEventListener('click', () => {
-            if (typeof action.onSubmit === 'function' && action.onSubmit() === false) {
-                return;
+            if (typeof action.onSubmit === 'function') {
+                const outcome = action.onSubmit();
+                if (outcome === false) {
+                    return;
+                }
+                // An onSubmit that returns a value is the one that knows what the
+                // result should be, which is how a text field hands back what was
+                // typed. Returning undefined keeps the action's own value.
+                if (outcome !== undefined) {
+                    finish(outcome);
+                    return;
+                }
             }
             finish(action.value);
         });
@@ -394,7 +404,9 @@ export function promptText({
             return false;
         }
         error.textContent = '';
-        return true;
+        // The typed value is the result. Returning it here, rather than a bare
+        // `true`, is what makes promptText resolve with the text at all.
+        return raw;
     }
 }
 

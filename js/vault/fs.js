@@ -312,6 +312,24 @@ function hasOpfs() {
 }
 
 /**
+ * Walk every file under a directory.
+ *
+ * @param {FileSystemDirectoryHandle} dir
+ * @param {string} [prefix]
+ * @yields {{ path: string, handle: FileSystemFileHandle }}
+ */
+async function* walkFiles(dir, prefix = '') {
+    for await (const [name, handle] of dir.entries()) {
+        const path = prefix === '' ? name : `${prefix}/${name}`;
+        if (handle.kind === 'file') {
+            yield { path, handle };
+        } else {
+            yield* walkFiles(handle, path);
+        }
+    }
+}
+
+/**
  * Get the top-level vault directory in OPFS.
  *
  * @param {boolean} [create]
