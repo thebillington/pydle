@@ -1,0 +1,488 @@
+/*
+ * History dialog.
+ *
+ * A two-pane viewer: commits on the left, one commit expanded on the right.
+ * Colours and type come from style.css; the spacing scale is the same as
+ * css/sync.css (4 / 8 / 12 / 16 / 24px) so the two dialogs feel like one app.
+ *
+ * The modal loads this file itself (see js/ui/history.js), so it works wherever
+ * mountHistory is called.
+ */
+
+.history-overlay {
+    z-index: 1100;
+}
+
+.history-overlay .overlay-content {
+    width: calc(100vw - 40px);
+    max-width: 860px;
+    height: 84vh;
+    max-height: 820px;
+    min-height: 360px;
+}
+
+.history-overlay .overlay-header {
+    padding: 15px 22px;
+}
+
+.history-overlay .overlay-header h2 {
+    font-size: 18px;
+    letter-spacing: -0.01em;
+}
+
+/* The project name is the variable half of the title: quiet, so "History"
+   stays the heading the eye lands on. */
+.history-title-project {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 2px;
+}
+
+.history-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Left pane --------------------------------------------------------------- */
+
+.history-commits {
+    width: 300px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px;
+    border-right: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.history-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+}
+
+.history-commit {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    /* Reserve the marker space so selecting does not shift the text. */
+    box-shadow: inset 3px 0 0 transparent;
+    transition: background 0.12s, box-shadow 0.12s;
+}
+
+.history-commit:hover {
+    background: var(--bg-tertiary);
+}
+
+.history-commit:focus {
+    outline: none;
+}
+
+.history-commit:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: -2px;
+}
+
+.history-commit-selected,
+.history-commit-selected:hover {
+    background: var(--bg-tertiary);
+    box-shadow: inset 3px 0 0 var(--accent-green);
+}
+
+.history-commit-message {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text-primary);
+}
+
+.history-commit-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+.history-commit-date {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-commit-sep {
+    color: var(--border);
+}
+
+.history-commit-sha {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Right pane -------------------------------------------------------------- */
+
+.history-detail {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 20px 22px 26px;
+    background: var(--bg-secondary);
+}
+
+.history-commit-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.history-commit-full {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.history-commit-byline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.history-byline-sep {
+    color: var(--border);
+}
+
+.history-author {
+    font-weight: 600;
+}
+
+.history-sha {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.history-files-label {
+    margin: 16px 0 10px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.history-files {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* One changed file -------------------------------------------------------- */
+
+.history-file {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.history-file-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    background: var(--bg-tertiary);
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+
+.history-file-head::-webkit-details-marker {
+    display: none;
+}
+
+.history-file-head::before {
+    content: '+';
+    flex-shrink: 0;
+    width: 10px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1;
+    color: var(--text-secondary);
+}
+
+.history-file[open] > .history-file-head::before {
+    content: '\2212';
+}
+
+.history-file-head:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: -2px;
+}
+
+.history-file-path {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.history-stats {
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.history-stat-add {
+    color: var(--accent-green);
+}
+
+.history-stat-del {
+    color: var(--accent-red);
+}
+
+.history-badge {
+    flex-shrink: 0;
+    padding: 1px 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.6;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.history-badge-added {
+    border-color: color-mix(in srgb, var(--accent-green) 45%, var(--border));
+    color: var(--accent-green);
+}
+
+.history-badge-removed,
+.history-badge-deleted {
+    border-color: color-mix(in srgb, var(--accent-red) 45%, var(--border));
+    color: var(--accent-red);
+}
+
+.history-badge-renamed,
+.history-badge-copied {
+    border-color: color-mix(in srgb, var(--accent-cyan) 45%, var(--border));
+    color: var(--accent-cyan);
+}
+
+/* The diff ---------------------------------------------------------------- */
+
+.history-patch {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px 0;
+    background: var(--bg-primary);
+}
+
+.history-line {
+    width: max-content;
+    min-width: 100%;
+    min-height: 1.55em;
+    padding: 0 14px 0 10px;
+    white-space: pre;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text-primary);
+}
+
+.history-line-hunk {
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+}
+
+.history-line-meta {
+    color: var(--text-secondary);
+}
+
+/* Tints are mixed from the theme's own accents, so a light page gets a pale
+   green under dark text rather than the neon green used for dark. */
+.history-line-add {
+    background: color-mix(in srgb, var(--accent-green) 16%, transparent);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent-green) 55%, transparent);
+}
+
+.history-line-del {
+    background: color-mix(in srgb, var(--accent-red) 15%, transparent);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent-red) 55%, transparent);
+}
+
+.history-patch-empty,
+.history-placeholder,
+.history-state,
+.history-empty {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+.history-patch-empty {
+    padding: 8px 12px;
+}
+
+/* Load an earlier version -------------------------------------------------
+ *
+ * A quiet action in the file's summary row. It fetches the content and hands
+ * it to the caller; it never writes to the repository. The note below the row
+ * carries its busy, empty and error answers inside that file's section.
+ */
+
+.history-load-btn,
+.history-retry {
+    flex-shrink: 0;
+    min-height: 26px;
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.history-load-btn:hover:not(:disabled),
+.history-retry:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+
+.history-load-btn:focus-visible,
+.history-retry:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 2px;
+}
+
+.history-load-btn:disabled {
+    opacity: 0.5;
+    cursor: progress;
+}
+
+.history-retry {
+    align-self: flex-start;
+}
+
+.history-file-note {
+    padding: 9px 12px;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+.history-file-note.is-error {
+    color: var(--accent-red);
+}
+
+.history-file-note.is-ok {
+    color: var(--accent-green);
+}
+
+.history-file-note[hidden] {
+    display: none;
+}
+
+.history-placeholder,
+.history-state,
+.history-empty {
+    padding: 4px 2px;
+}
+
+.history-empty {
+    padding: 14px 12px;
+    color: var(--text-primary);
+}
+
+.history-state {
+    padding: 12px;
+}
+
+.history-error {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    border-left: 2px solid var(--accent-red);
+}
+
+.history-error-text {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-primary);
+}
+
+/* Narrow screens ---------------------------------------------------------- */
+
+@media (max-width: 720px) {
+    .history-overlay .overlay-content {
+        width: calc(100vw - 16px);
+        height: 92vh;
+        max-height: none;
+    }
+
+    /* Stack: the list on top, the selected commit under it. */
+    .history-body {
+        flex-direction: column;
+    }
+
+    .history-commits {
+        width: auto;
+        max-height: 36%;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .history-detail {
+        flex: 1;
+        padding: 16px 16px 22px;
+    }
+
+    .history-overlay .overlay-header {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+}

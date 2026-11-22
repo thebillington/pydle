@@ -141,6 +141,7 @@
     <link rel="stylesheet" href="css/codemirror-light.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="css/sync.css">
+    <link rel="stylesheet" href="css/commit.css">
     <link rel="stylesheet" href="css/editor-extras.css">
     <link rel="stylesheet" href="css/editor-files.css">
 </head>
@@ -177,8 +178,15 @@
                     <button id="download-btn" class="toolbar-btn" title="Download as .py file">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </button>
+                    <button id="history-btn" class="toolbar-btn" title="Open a project to see its history" disabled>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
+                    </button>
                     <button id="copy-btn" class="toolbar-btn" title="Copy to clipboard">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                    <button id="commit-btn" class="toolbar-btn commit-btn" title="Nothing to commit" aria-label="Nothing to commit" aria-haspopup="dialog" disabled>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><line x1="1.5" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22.5" y2="12"/></svg>
+                        <span id="commit-count" class="commit-count" hidden>0</span>
                     </button>
                 </div>
             </div>
@@ -260,6 +268,8 @@ print(greet("World"))</pre>
         </div>
     </div>
 
+    <div id="history-overlay" class="overlay history-overlay hidden"></div>
+
     <div id="sync-overlay" class="overlay sync-overlay hidden">
         <div class="overlay-backdrop"></div>
         <div class="overlay-content" role="dialog" aria-modal="true" aria-labelledby="sync-title">
@@ -280,6 +290,8 @@ print(greet("World"))</pre>
         </div>
     </div>
 
+    <div id="commit-root"></div>
+
     <script src="vendor/codemirror/codemirror.min.js"></script>
     <script src="vendor/codemirror/python.min.js"></script>
     <script src="vendor/codemirror/comment.min.js"></script>
@@ -299,6 +311,8 @@ print(greet("World"))</pre>
         import { mountProjects } from './js/ui/projects.js';
         import { getResolvedTheme, mountThemeToggle } from './js/ui/theme.js';
         import { defaultFilePath, mountFileRail, projectSlug } from './js/ui/files.js';
+        import { mountCommit } from './js/ui/commit.js';
+        import { mountHistory } from './js/ui/history.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
@@ -387,7 +401,10 @@ print(greet("World"))</pre>
         const saveBtn = document.getElementById('save-btn');
         const loadBtn = document.getElementById('load-btn');
         const downloadBtn = document.getElementById('download-btn');
+        const historyBtn = document.getElementById('history-btn');
         const copyBtn = document.getElementById('copy-btn');
+        const commitBtn = document.getElementById('commit-btn');
+        const commitCount = document.getElementById('commit-count');
         const resizeHandle = document.getElementById('resize-handle');
         const consolePanel = document.querySelector('.console-panel');
 
@@ -406,6 +423,68 @@ print(greet("World"))</pre>
         // Commits are manual. The lead wires the commit prompt here (or leaves
         // it null, in which case saving only writes the vault copy).
         let onBeforeLeave = null;
+
+        // The sync service is the seam every view subscribes to, so it is
+        // created before the views that hand it work.
+        const sync = createSync();
+
+        // ---- History ------------------------------------------------------
+        //
+        // Read-only view of the project's commits. Loading an earlier version is
+        // a hand-off: the modal fetches the content and this callback puts it in
+        // the editor as an unsaved change. Nothing is written back over history;
+        // the user saves and commits it like any other edit.
+        const history = mountHistory(document.getElementById('history-overlay'), sync, {
+            onLoadVersion: async ({ project, path, content }) => {
+                if (typeof content !== 'string') {
+                    return;
+                }
+
+                if (project !== currentFileName) {
+                    await loadFile(project);
+                }
+                if (project !== currentFileName) {
+                    showStatus('Open ' + project + ' to load that version', 'error');
+                    throw new Error('That project is not open.');
+                }
+
+                if (path !== currentPath) {
+                    if (!(await flushCurrent())) {
+                        throw new Error('Your current edits could not be saved first.');
+                    }
+                    currentPath = path;
+                }
+
+                // Keep the vault copy as the baseline, so the loaded version is
+                // visibly unsaved and can be committed deliberately.
+                const saved = typeof projectFiles[path] === 'string' ? projectFiles[path] : null;
+                projectFiles[path] = content;
+                if (saved !== null) {
+                    lastSavedCode = saved;
+                }
+                editor.setValue(content);
+                dirty = content !== lastSavedCode;
+                clearErrorLine();
+                updateFileIndicator();
+                refreshRail();
+                history.close();
+                showStatus('Loaded an earlier version of ' + path + '. Save and commit it when ready.', 'ready');
+            },
+        });
+
+        historyBtn.addEventListener('click', () => {
+            if (currentFileName !== null) {
+                history.open(currentFileName);
+            }
+        });
+
+        function refreshHistoryButton() {
+            const available = Boolean(CONFIG.clientId) && currentFileName !== null;
+            historyBtn.disabled = !available;
+            historyBtn.title = currentFileName === null
+                ? 'Open a project to see its history'
+                : 'History for ' + currentFileName;
+        }
 
         const fileRail = mountFileRail(document.getElementById('file-rail'), {
             onSelect: (path) => { void selectFile(path); },
@@ -450,6 +529,7 @@ print(greet("World"))</pre>
             fileIndicator.title = currentFileName
                 ? 'Saved in this browser and your repository'
                 : 'Saved in browser only';
+            refreshHistoryButton();
         }
 
         /** Redraw the rail from the project's files and the open path. */
@@ -539,6 +619,9 @@ print(greet("World"))</pre>
             if (!(await flushCurrent())) {
                 return;
             }
+            if (!(await confirmLeaveProject())) {
+                return;
+            }
 
             let content = projectFiles[path];
             if (typeof content !== 'string') {
@@ -564,6 +647,7 @@ print(greet("World"))</pre>
             updateFileIndicator();
             refreshRail();
             showStatus('Loaded: ' + currentFileName + '/' + path, 'ready');
+            void refreshCommitState();
         }
 
         /**
@@ -576,6 +660,9 @@ print(greet("World"))</pre>
          */
         async function loadFile(name) {
             if (!(await flushCurrent())) {
+                return;
+            }
+            if (!(await confirmLeaveProject())) {
                 return;
             }
 
@@ -615,6 +702,7 @@ print(greet("World"))</pre>
             updateFileIndicator();
             refreshRail();
             closeLoadOverlay();
+            void refreshCommitState();
         }
 
         /** Add an empty file to the open project and switch to it. */
@@ -713,6 +801,7 @@ print(greet("World"))</pre>
             dirty = false;
             updateFileIndicator();
             refreshRail();
+            void refreshCommitState();
         }
 
         function deleteFile(name) {
@@ -941,7 +1030,6 @@ print(greet("World"))</pre>
         // The vault (OPFS, IndexedDB fallback) is the source of truth. GitHub is a
         // target: a failed push means "not synced yet", never "not saved", so the
         // editor never waits on the network.
-        const sync = createSync();
         let vaultProjects = [];
 
         const syncOverlay = document.getElementById('sync-overlay');
@@ -949,6 +1037,129 @@ print(greet("World"))</pre>
         const closeSyncBtn = document.getElementById('close-sync');
 
         mountStatus(document.getElementById('sync-status'), sync);
+
+        /* ---- Commit dialog ----------------------------------------------- */
+        //
+        // Commits are manual and deliberate. This button and the guard below are
+        // the only things that open the dialog; nothing here commits on a timer
+        // or in the background.
+
+        let uncommittedNow = false;
+        let commitStateToken = 0;
+
+        /**
+         * Reflect the open project's uncommitted files on the toolbar.
+         *
+         * @param {number} count
+         */
+        function paintCommitState(count) {
+            const safe = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+            uncommittedNow = safe > 0;
+            commitCount.textContent = safe > 99 ? '99+' : String(safe);
+            commitCount.hidden = safe === 0;
+            commitBtn.classList.toggle('has-changes', safe > 0);
+            commitBtn.disabled = safe === 0;
+            const label = safe === 0
+                ? (currentFileName === null
+                    ? 'Nothing to commit'
+                    : 'Nothing to commit in ' + currentFileName)
+                : 'Commit ' + safe + (safe === 1 ? ' uncommitted file' : ' uncommitted files') + ' to GitHub';
+            commitBtn.title = label;
+            commitBtn.setAttribute('aria-label', label);
+        }
+
+        /**
+         * Ask the vault what is uncommitted, then repaint.
+         *
+         * Runs after a project opens or closes and whenever sync changes, so the
+         * count in the toolbar and the beforeunload warning stay honest. A late
+         * answer for a project that is no longer open is dropped.
+         */
+        async function refreshCommitState() {
+            const token = ++commitStateToken;
+            if (currentFileName === null) {
+                paintCommitState(0);
+                return;
+            }
+            const name = currentFileName;
+            let report = null;
+            try {
+                report = await sync.dirty(name);
+            } catch {
+                // Keep the last known state rather than guessing at the count.
+                return;
+            }
+            if (token !== commitStateToken || currentFileName !== name) {
+                return;
+            }
+            paintCommitState(report && Number.isFinite(report.count) ? report.count : 0);
+        }
+
+        const commitDialog = mountCommit(document.getElementById('commit-root'), sync, {
+            onCommitted: (result) => {
+                const count = result.paths.length;
+                showStatus(
+                    'Committed ' + count + (count === 1 ? ' file' : ' files') + ' to GitHub',
+                    'ready',
+                );
+                void refreshCommitState();
+            },
+            onClose: () => {
+                void refreshCommitState();
+            },
+        });
+
+        /**
+         * Guard a switch away from a project with uncommitted changes.
+         *
+         * Called after flushCurrent(), so the buffer is already in the vault and
+         * the dialog lists it. Resolves true when the switch should go ahead.
+         *
+         * @returns {Promise<boolean>}
+         */
+        async function confirmLeaveProject() {
+            if (currentFileName === null) {
+                return true;
+            }
+            let uncommitted = uncommittedNow;
+            try {
+                uncommitted = await sync.hasUncommitted(currentFileName);
+            } catch {
+                // Fall back to what the toolbar last showed.
+            }
+            if (!uncommitted) {
+                return true;
+            }
+            const outcome = await commitDialog.open(currentFileName, { leaving: true });
+            return outcome !== 'cancelled';
+        }
+
+        commitBtn.addEventListener('click', async () => {
+            if (currentFileName === null) {
+                return;
+            }
+            if (!(await flushCurrent())) {
+                return;
+            }
+            void commitDialog.open(currentFileName);
+        });
+
+        // A tab close is not the moment to explain a commit dialog. Ask the
+        // browser for its own generic warning, and only while this project has
+        // something uncommitted.
+        window.addEventListener('beforeunload', (event) => {
+            if (!uncommittedNow) {
+                return;
+            }
+            event.preventDefault();
+            event.returnValue = '';
+        });
+
+        sync.subscribe(() => {
+            void refreshCommitState();
+        });
+
+        paintCommitState(0);
 
         // The GitHub half needs a configured OAuth app. Without one, the local vault
         // still works, so hide the button rather than offering a dead end. One
@@ -975,6 +1186,7 @@ print(greet("World"))</pre>
         } else {
             syncBtn.style.display = 'none';
             document.getElementById('sync-status').style.display = 'none';
+            historyBtn.style.display = 'none';
         }
 
         async function refreshVaultProjects() {
