@@ -1,11 +1,54 @@
 /**
  * The first commit in an empty repository.
  *
- * An empty repo has no ref to patch, so the branch is created with
- * `POST /git/refs` rather than `PATCH /git/refs/...`. The branch name comes from
- * the repo's `default_branch` — never hardcode `main`.
+ * A repository with no commits is a special case that GitHub makes awkward: the
+ * git data API answers `409 Conflict` for blob creation until at least one commit
+ * exists, so the usual blob, tree, commit, ref sequence cannot start from nothing.
+ * The Contents API is the one endpoint that works on an empty repository, so it
+ * seeds the first file and creates the branch, and the remainder of the scaffold
+ * is committed normally on top.
+ *
+ * The branch name comes from the repo's `default_branch` — never hardcode `main`.
  */
-import { createBlob, createCommit, createRef, createTree } from './git-data.js';
+import { GitHubError, ghFetch } from './http.js';
+import {
+    createBlob,
+    createCommit,
+    createRef,
+    createTree,
+    getCommit,
+    getRef,
+    updateRef,
+} from './git-data.js';
+
+/**
+ * Base64 for a UTF-8 string, which is what the Contents API wants.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function toBase64(text) {
+    const bytes = new TextEncoder().encode(text);
+    let binary = '';
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+}
+
+/**
+ * Create the very first commit through the Contents API.
+ *
+ * @param {{ token: string, owner: string, repo: string, file: { path: string, content: string }, message: string }} options
+ * @returns {Promise<void>}
+ */
+async function seedFirstFile({ token, owner, repo, file, message }) {
+    await ghFetch(`/repos/${owner}/${repo}/contents/${encodeURIComponent(file.path)}`, {
+        token,
+        method: 'PUT',
+        body: { message, content: toBase64(file.content) },
+    });
+}
 
 /**
  * The files every pydle workspace starts with.
@@ -54,27 +97,54 @@ export async function bootstrapRepo({ token, owner, repo, branch, identity }) {
     }
 
     const files = scaffoldFiles();
+    const message = 'Create pydle workspace';
 
-    const entries = await Promise.all(
-        files.map(async (file) => {
-            const blob = await createBlob({ token, owner, repo, content: file.content });
-            return { path: file.path, mode: '100644', type: 'blob', sha: blob.sha };
-        }),
-    );
+    /** @param {Array<{ path: string, content: string }>} subset */
+    const entriesFor = async (subset) =>
+        Promise.all(
+            subset.map(async (file) => {
+                const blob = await createBlob({ token, owner, repo, content: file.content });
+                return { path: file.path, mode: '100644', type: 'blob', sha: blob.sha };
+            }),
+        );
 
-    const tree = await createTree({ token, owner, repo, tree: entries });
-    const commit = await createCommit({
-        token,
-        owner,
-        repo,
-        message: 'Create pydle workspace',
-        tree: tree.sha,
-        parents: [],
-        author: identity,
-        committer: identity,
-    });
+    const commitSubset = async (subset, baseTree, parents) => {
+        const tree = await createTree({ token, owner, repo, tree: await entriesFor(subset), baseTree });
+        return createCommit({
+            token,
+            owner,
+            repo,
+            message,
+            tree: tree.sha,
+            parents,
+            author: identity,
+            committer: identity,
+        });
+    };
 
-    await createRef({ token, owner, repo, ref: `refs/heads/${branch}`, sha: commit.sha });
+    // The normal path, for a repository that already has a commit.
+    try {
+        const commit = await commitSubset(files, undefined, []);
+        await createRef({ token, owner, repo, ref: `refs/heads/${branch}`, sha: commit.sha });
+        return commit;
+    } catch (error) {
+        if (!(error instanceof GitHubError) || error.status !== 409) {
+            throw error;
+        }
+    }
+
+    // Empty repository: seed one file so a commit exists, then commit the rest.
+    await seedFirstFile({ token, owner, repo, file: files[0], message });
+
+    const rest = files.slice(1);
+    const head = await getRef({ token, owner, repo, branch });
+    if (rest.length === 0 || !head) {
+        return null;
+    }
+
+    const headCommit = await getCommit({ token, owner, repo, sha: head.sha });
+    const commit = await commitSubset(rest, headCommit.tree.sha, [head.sha]);
+    await updateRef({ token, owner, repo, ref: `refs/heads/${branch}`, sha: commit.sha });
 
     return commit;
 }

@@ -93,6 +93,19 @@ export async function getRef({ token, owner, repo, branch }) {
 }
 
 /**
+ * Read a commit, including the sha of its root tree.
+ *
+ * Needed when adding to an existing commit: the tree API wants the base tree, and
+ * the only way to get it from a branch name is through its head commit.
+ *
+ * @param {{ token: string, owner: string, repo: string, sha: string }} options
+ * @returns {Promise<any>} The commit object.
+ */
+export function getCommit({ token, owner, repo, sha }) {
+    return ghFetch(`${repoPath(owner, repo)}/git/commits/${encodeURIComponent(sha)}`, { token });
+}
+
+/**
  * Store one file's contents as a blob.
  *
  * @param {{ token: string, owner: string, repo: string, content: string }} options

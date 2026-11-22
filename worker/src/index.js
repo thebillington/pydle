@@ -189,6 +189,35 @@ export default {
      * @returns {Promise<Response>}
      */
     async fetch(request, env) {
-        return handleRequest(request, env);
+        const started = Date.now();
+        let status = 0;
+
+        try {
+            const response = await handleRequest(request, env);
+            status = response.status;
+            return response;
+        } catch (error) {
+            status = 500;
+            console.log(
+                JSON.stringify({
+                    event: 'shim_threw',
+                    message: error && error.message ? error.message : String(error),
+                }),
+            );
+            throw error;
+        } finally {
+            // Method, path and status only. Never the body: the token response is
+            // in it, and logs are the last place a token should end up.
+            const url = new URL(request.url);
+            console.log(
+                JSON.stringify({
+                    event: 'shim',
+                    method: request.method,
+                    path: url.pathname,
+                    status,
+                    ms: Date.now() - started,
+                }),
+            );
+        }
     },
 };
