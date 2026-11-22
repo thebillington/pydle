@@ -2,8 +2,17 @@ name = "pydle-auth"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
 
+# A real hostname rather than the workers.dev one: school filters block workers.dev
+# routinely, and a subdomain of the real site reads as trustworthy. DNS for pydle.uk
+# is on Cloudflare, so attaching this creates the record and the certificate.
+workers_dev = true
+
+routes = [
+  { pattern = "auth.pydle.uk", custom_domain = true }
+]
+
 # Plain vars, not secrets: the allowlist is public and the client id is public.
 # CLIENT_ID is the pydle GitHub OAuth App id; leave it empty to skip the pin.
 [vars]
 ALLOWED_ORIGINS = "https://pydle.uk,https://www.pydle.uk,http://localhost:8080,http://127.0.0.1:8080"
-CLIENT_ID = ""
+CLIENT_ID = "Ov23ligramyjE9ZbukBl"
