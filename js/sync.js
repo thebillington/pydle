@@ -25,8 +25,28 @@ import { planMerge } from './reconcile.js';
 /** Repo name inside the user's own account. One workspace per person. */
 export const REPO_NAME = 'pydle';
 
-/** Directory inside the repo that holds projects. */
+/** Directory inside the repo that holds program projects. */
 const WORK_ROOT = 'work';
+
+/**
+ * Repository root per kind.
+ *
+ * `work` holds programs, `drawings` holds turtle work. The vault mirrors this, and
+ * keeps `work` at its existing path so nothing on a device migrates.
+ */
+const KIND_ROOTS = { work: 'work', drawings: 'drawings' };
+
+/**
+ * @param {string} [kind]
+ * @returns {string}
+ */
+function repoRoot(kind = 'work') {
+    const root = KIND_ROOTS[kind];
+    if (typeof root !== 'string') {
+        throw new SyncError('config', 'Unknown project type.');
+    }
+    return root;
+}
 
 /** Refresh a little before expiry rather than waiting for a 401. */
 const EXPIRY_SKEW_MS = 60_000;
@@ -458,22 +478,29 @@ export function createSync({ onChange } = {}) {
                 return { projects: 0, applied: 0, conflicts: [] };
             }
 
-            const projects = await remoteProjects(head.sha);
+            // Both namespaces live in the same repository, so one pull covers
+            // programs and drawings.
             const conflicts = [];
             let applied = 0;
+            let count = 0;
 
-            for (const project of projects) {
-                // Reconcile rather than overwrite: a device that has been away gets
-                // the files only the repository changed, and keeps its own.
-                const result = await preflight(project);
-                applied += result.applied.length;
-                for (const conflict of result.conflicts) {
-                    conflicts.push({ ...conflict, project });
+            for (const kind of Object.keys(KIND_ROOTS)) {
+                const projects = await remoteProjects(head.sha, kind);
+                count += projects.length;
+
+                for (const project of projects) {
+                    // Reconcile rather than overwrite: a device that has been away
+                    // gets the files only the repository changed, and keeps its own.
+                    const result = await preflight(project, {}, kind);
+                    applied += result.applied.length;
+                    for (const conflict of result.conflicts) {
+                        conflicts.push({ ...conflict, project, kind });
+                    }
                 }
             }
 
             emit();
-            return { projects: projects.length, applied, conflicts };
+            return { projects: count, applied, conflicts };
         } catch (error) {
             const syncError = asSyncError(error);
             setStatus(syncError.kind === 'auth' ? 'signed-out' : 'error', syncError);
@@ -521,8 +548,8 @@ export function createSync({ onChange } = {}) {
      * @param {string} ref Branch or commit sha.
      * @returns {Promise<Record<string, string>>}
      */
-    async function remoteProjectHashes(project, ref) {
-        const prefix = `${WORK_ROOT}/${project}/`;
+    async function remoteProjectHashes(project, ref, kind = 'work') {
+        const prefix = `${repoRoot(kind)}/${project}/`;
         const tree = await withToken((token) =>
             ghFetch(
                 `/repos/${workspace.owner}/${workspace.repo}/git/trees/` +
@@ -547,7 +574,7 @@ export function createSync({ onChange } = {}) {
      * @param {string} ref
      * @returns {Promise<string[]>}
      */
-    async function remoteProjects(ref) {
+    async function remoteProjects(ref, kind = 'work') {
         const tree = await withToken((token) =>
             ghFetch(
                 `/repos/${workspace.owner}/${workspace.repo}/git/trees/` +
@@ -557,7 +584,7 @@ export function createSync({ onChange } = {}) {
         );
 
         const projects = new Set();
-        const prefix = `${WORK_ROOT}/`;
+        const prefix = `${repoRoot(kind)}/`;
         for (const entry of (tree && tree.tree) || []) {
             if (!entry.path.startsWith(prefix)) {
                 continue;
@@ -599,7 +626,7 @@ export function createSync({ onChange } = {}) {
      *   made for previously reported conflicts.
      * @returns {Promise<{ applied: string[], conflicts: Array<{ path: string, kind: string, remoteHash: string | null }>, headSha: string | null }>}
      */
-    async function preflight(name, resolutions = {}) {
+    async function preflight(name, resolutions = {}, kind = 'work') {
         if (!workspace) {
             throw new SyncError('auth', 'Sign in to GitHub first.');
         }
@@ -619,11 +646,11 @@ export function createSync({ onChange } = {}) {
                 return { applied: [], conflicts: [], headSha: null };
             }
 
-            const snapshot = await vault.readCommitSnapshot(project);
+            const snapshot = await vault.readCommitSnapshot(project, { kind });
             const base = snapshot && snapshot.files ? snapshot.files : {};
-            const remote = await remoteProjectHashes(project, head.sha);
+            const remote = await remoteProjectHashes(project, head.sha, kind);
 
-            const localFiles = await readProject(project);
+            const localFiles = await readProject(project, kind);
             const local = {};
             for (const [path, content] of Object.entries(localFiles)) {
                 local[path] = await gitBlobHash(content);
@@ -645,9 +672,9 @@ export function createSync({ onChange } = {}) {
             const applied = [];
             for (const item of toApply) {
                 if (item.remoteHash === null) {
-                    await vault.deleteFile(project, item.path);
+                    await vault.deleteFile(project, item.path, { kind });
                 } else {
-                    await vault.writeFile(project, item.path, await readBlobText(item.remoteHash));
+                    await vault.writeFile(project, item.path, await readBlobText(item.remoteHash), { kind });
                 }
                 applied.push(item.path);
             }
@@ -667,10 +694,14 @@ export function createSync({ onChange } = {}) {
                         nextFiles[item.path] = item.remoteHash;
                     }
                 }
-                await vault.writeCommitSnapshot(project, {
-                    sha: remaining.length === 0 ? head.sha : snapshot ? snapshot.sha : head.sha,
-                    files: nextFiles,
-                });
+                await vault.writeCommitSnapshot(
+                    project,
+                    {
+                        sha: remaining.length === 0 ? head.sha : snapshot ? snapshot.sha : head.sha,
+                        files: nextFiles,
+                    },
+                    { kind },
+                );
             }
 
             emit();
@@ -690,7 +721,7 @@ export function createSync({ onChange } = {}) {
      * @param {string} name
      * @returns {Promise<{ paths: Array<{ path: string, status: 'added' | 'modified' | 'deleted' }>, count: number, lastCommit: string | null }>}
      */
-    async function dirty(name) {
+    async function dirty(name, kind = 'work') {
         let project;
         try {
             project = normalizeProjectName(name);
@@ -698,8 +729,8 @@ export function createSync({ onChange } = {}) {
             return { paths: [], count: 0, lastCommit: null };
         }
 
-        const files = await readProject(project);
-        const snapshot = await vault.readCommitSnapshot(project);
+        const files = await readProject(project, kind);
+        const snapshot = await vault.readCommitSnapshot(project, { kind });
         const committed = snapshot && snapshot.files ? snapshot.files : {};
 
         const paths = [];
@@ -736,7 +767,7 @@ export function createSync({ onChange } = {}) {
      * @param {{ project: string, paths: string[], message: string, resolutions?: { [path: string]: 'local' | 'remote' } }} options
      * @returns {Promise<{ sha: string, message: string }>}
      */
-    async function commit({ project: name, paths, message, resolutions = {} }) {
+    async function commit({ project: name, paths, message, resolutions = {}, kind = 'work' }) {
         if (!workspace || !user) {
             throw new SyncError('auth', 'Sign in to GitHub before committing.');
         }
@@ -768,7 +799,7 @@ export function createSync({ onChange } = {}) {
             // Reconcile first. If the repository moved while this device was away,
             // taking the safe changes is right, but overwriting a file both sides
             // changed is not, so that stops here and asks.
-            const check = await preflight(project, resolutions);
+            const check = await preflight(project, resolutions, kind);
             if (check.conflicts.length > 0) {
                 const clash = new SyncError(
                     'conflict',
@@ -778,8 +809,8 @@ export function createSync({ onChange } = {}) {
                 throw clash;
             }
 
-            const files = await readProject(project);
-            const snapshot = await vault.readCommitSnapshot(project);
+            const files = await readProject(project, kind);
+            const snapshot = await vault.readCommitSnapshot(project, { kind });
             const committed = snapshot && snapshot.files ? snapshot.files : {};
 
             const upserts = [];
@@ -788,11 +819,11 @@ export function createSync({ onChange } = {}) {
             for (const path of selected) {
                 if (Object.prototype.hasOwnProperty.call(files, path)) {
                     upserts.push({
-                        path: `${WORK_ROOT}/${project}/${safeJoin(path)}`,
+                        path: `${repoRoot(kind)}/${project}/${safeJoin(path)}`,
                         content: files[path],
                     });
                 } else if (Object.prototype.hasOwnProperty.call(committed, path)) {
-                    deletes.push(`${WORK_ROOT}/${project}/${safeJoin(path)}`);
+                    deletes.push(`${repoRoot(kind)}/${project}/${safeJoin(path)}`);
                 }
             }
 
@@ -821,7 +852,7 @@ export function createSync({ onChange } = {}) {
                     delete nextFiles[path];
                 }
             }
-            await vault.writeCommitSnapshot(project, { sha: result.sha, files: nextFiles });
+            await vault.writeCommitSnapshot(project, { sha: result.sha, files: nextFiles }, { kind });
 
             setStatus('connected');
             return { sha: result.sha, message: trimmedMessage };
@@ -844,7 +875,7 @@ export function createSync({ onChange } = {}) {
      * @param {{ limit?: number }} [options]
      * @returns {Promise<Array<{ sha: string, message: string, date: string | null, author: string }>>}
      */
-    async function listCommits(name, { limit = 30 } = {}) {
+    async function listCommits(name, { limit = 30, kind = 'work' } = {}) {
         if (!workspace) {
             throw new SyncError('auth', 'Sign in to GitHub to see history.');
         }
@@ -855,7 +886,7 @@ export function createSync({ onChange } = {}) {
             throw new SyncError('config', 'That project does not exist.');
         }
 
-        const scope = `${WORK_ROOT}/${project}`;
+        const scope = `${repoRoot(kind)}/${project}`;
         try {
             const commits = await withToken((token) =>
                 ghFetch(
@@ -894,10 +925,11 @@ export function createSync({ onChange } = {}) {
             );
 
             const files = (detail && detail.files ? detail.files : []).map((file) => ({
-                // Strip the work/ prefix so the list reads as project paths.
-                path: file.filename.startsWith(`${WORK_ROOT}/`)
-                    ? file.filename.slice(WORK_ROOT.length + 1)
-                    : file.filename,
+                // Strip the namespace root so the list reads as project paths.
+                path: Object.values(KIND_ROOTS).reduce(
+                    (acc, root) => (acc.startsWith(`${root}/`) ? acc.slice(root.length + 1) : acc),
+                    file.filename,
+                ),
                 status: file.status || 'modified',
                 additions: file.additions || 0,
                 deletions: file.deletions || 0,
@@ -924,7 +956,7 @@ export function createSync({ onChange } = {}) {
      * @param {string} project
      * @returns {Promise<string | null>}
      */
-    async function fileAt(project, path, sha) {
+    async function fileAt(project, path, sha, kind = 'work') {
         if (!workspace) {
             throw new SyncError('auth', 'Sign in to GitHub to see history.');
         }
@@ -941,7 +973,7 @@ export function createSync({ onChange } = {}) {
             const blob = await withToken((token) =>
                 ghFetch(
                     `/repos/${workspace.owner}/${workspace.repo}/contents/` +
-                        `${encodeURIComponent(`${WORK_ROOT}/${slug}/${relative}`)}` +
+                        `${encodeURIComponent(`${repoRoot(kind)}/${slug}/${relative}`)}` +
                         `?ref=${encodeURIComponent(sha)}`,
                     { token },
                 ),
@@ -979,9 +1011,9 @@ export function createSync({ onChange } = {}) {
      *
      * @returns {Promise<Array<{ name: string, updatedAt: number }>>}
      */
-    async function listProjects() {
+    async function listProjects(kind = 'work') {
         try {
-            return await vault.listProjects();
+            return await vault.listProjects(kind);
         } catch {
             return [];
         }
@@ -993,9 +1025,9 @@ export function createSync({ onChange } = {}) {
      * @param {string} name
      * @returns {Promise<Record<string, string>>}
      */
-    async function readProject(name) {
+    async function readProject(name, kind = 'work') {
         try {
-            return await vault.readProject(name);
+            return await vault.readProject(name, { kind });
         } catch {
             return {};
         }
@@ -1012,8 +1044,8 @@ export function createSync({ onChange } = {}) {
      * @param {string} content
      * @returns {Promise<void>}
      */
-    async function writeFiles(name, path, content) {
-        await vault.writeFile(name, path, content);
+    async function writeFiles(name, path, content, { kind = 'work' } = {}) {
+        await vault.writeFile(name, path, content, { kind });
         emit();
     }
 
@@ -1025,8 +1057,8 @@ export function createSync({ onChange } = {}) {
      * @param {string} path
      * @returns {Promise<void>}
      */
-    async function deleteFile(name, path) {
-        await vault.deleteFile(name, path);
+    async function deleteFile(name, path, { kind = 'work' } = {}) {
+        await vault.deleteFile(name, path, { kind });
         emit();
     }
 
@@ -1036,7 +1068,7 @@ export function createSync({ onChange } = {}) {
      * @param {string} name
      * @returns {Promise<void>}
      */
-    async function deleteProject(name) {
+    async function deleteProject(name, kind = 'work') {
         let project;
         try {
             project = normalizeProjectName(name);
@@ -1047,7 +1079,7 @@ export function createSync({ onChange } = {}) {
         // Deleting a project is already a confirmed, destructive action, so the
         // remote deletion happens with it rather than being left as an orphaned
         // dirty state for a project that no longer appears anywhere.
-        const snapshot = await vault.readCommitSnapshot(project);
+        const snapshot = await vault.readCommitSnapshot(project, { kind });
         const committed = snapshot && snapshot.files ? Object.keys(snapshot.files) : [];
 
         if (committed.length > 0 && workspace && user) {
@@ -1059,7 +1091,7 @@ export function createSync({ onChange } = {}) {
                         repo: workspace.repo,
                         branch: workspace.branch,
                         files: [],
-                        deletes: committed.map((path) => `${WORK_ROOT}/${project}/${path}`),
+                        deletes: committed.map((path) => `${repoRoot(kind)}/${project}/${path}`),
                         message: `Delete ${project}`,
                         identity: identityFor(user),
                     }),
@@ -1070,7 +1102,7 @@ export function createSync({ onChange } = {}) {
             }
         }
 
-        await vault.deleteProject(project);
+        await vault.deleteProject(project, { kind });
         emit();
     }
 
