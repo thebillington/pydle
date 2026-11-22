@@ -220,6 +220,7 @@ print(greet("World"))</pre>
     <script src="vendor/codemirror/comment.min.js"></script>
 
     <script type="module">
+        import { CONFIG } from './js/config.js';
         import { createSync } from './js/sync.js';
         import { mountConnect } from './js/ui/connect.js';
         import { mountStatus } from './js/ui/status.js';
@@ -573,19 +574,28 @@ print(greet("World"))</pre>
         const closeSyncBtn = document.getElementById('close-sync');
 
         mountStatus(document.getElementById('sync-status'), sync);
-        mountConnect(document.getElementById('connect-panel'), sync);
-        mountProjects(document.getElementById('project-list'), sync, {
-            onOpen: (name) => {
-                closeSyncOverlay();
-                void loadFile(name);
-            },
-            onDelete: async (name) => {
-                localStorage.removeItem(STORAGE_PREFIX + name);
-                await sync.deleteProject(name);
-                await refreshVaultProjects();
-                refreshLoadList();
-            },
-        });
+
+        // The GitHub half needs a configured OAuth app. Without one, the local vault
+        // still works, so hide the button rather than offering a dead end. One
+        // client id in js/config.js turns all of this on.
+        if (CONFIG.clientId) {
+            mountConnect(document.getElementById('connect-panel'), sync);
+            mountProjects(document.getElementById('project-list'), sync, {
+                onOpen: (name) => {
+                    closeSyncOverlay();
+                    void loadFile(name);
+                },
+                onDelete: async (name) => {
+                    localStorage.removeItem(STORAGE_PREFIX + name);
+                    await sync.deleteProject(name);
+                    await refreshVaultProjects();
+                    refreshLoadList();
+                },
+            });
+        } else {
+            syncBtn.style.display = 'none';
+            document.getElementById('sync-status').style.display = 'none';
+        }
 
         async function refreshVaultProjects() {
             try {
@@ -628,10 +638,9 @@ print(greet("World"))</pre>
             }
         });
 
-        void sync
-            .connect()
-            .catch(() => {})
-            .then(() => refreshVaultProjects());
+        void (CONFIG.clientId
+            ? sync.connect().catch(() => {}).then(() => refreshVaultProjects())
+            : refreshVaultProjects());
 
         initWorker();
     </script>

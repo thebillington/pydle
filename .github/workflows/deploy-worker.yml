@@ -30,10 +30,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN is not set; skipping deploy."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # Fail loudly rather than shipping a shim that will reject every request. An
       # empty CLIENT_ID means the OAuth app has not been created yet, or its id has
       # not been committed.
       - name: Check CLIENT_ID is configured
+        if: steps.check.outputs.configured == 'true'
         run: |
           if grep -q 'CLIENT_ID *= *""' worker/wrangler.toml; then
             echo "::error::CLIENT_ID in worker/wrangler.toml is empty."
@@ -43,6 +54,7 @@ jobs:
           fi
 
       - name: Deploy
+        if: steps.check.outputs.configured == 'true'
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
