@@ -235,6 +235,12 @@ any host. This is the exit path and the answer to "what if pydle stops".
 
 ## 10. Ceilings
 
+- **50 sign-ins per hour, per OAuth app.** GitHub rate-limits device-flow
+  verification-code submissions to 50/hour per application. This, not Cloudflare,
+  decides onboarding capacity. Fine for a class of 30; not fine for a whole school at
+  once, or for the week a term's refresh tokens expire together. Stagger onboarding
+  one class at a time. Each school registering its own OAuth app resets the limit for
+  that school.
 - **Account required** for sync, therefore 13+. Without an account pydle works as it
   does today.
 - **Signup is the sharp edge.** Accounts created in bulk from one school NAT get
@@ -242,9 +248,9 @@ any host. This is the exit path and the answer to "what if pydle stops".
   class at this, the guide must say: sign up at home, before the lesson.
 - **`api.github.com` must be reachable.** Different hostname from `github.com`, and
   filters sometimes allow one and block the other.
-- **PAT fallback is coarse.** OAuth needs the `repo` scope, which GitHub renders as
-  *"Full control of private repositories"*. Fine for personal repos; alarming on a
-  consent screen if unexplained.
+- **The consent screen is broad.** OAuth needs the `repo` scope, which GitHub renders
+  as *"Full control of private repositories"*. Fine for personal repos; alarming on a
+  consent screen if unexplained, so page copy should name it before GitHub does.
 
 ---
 
