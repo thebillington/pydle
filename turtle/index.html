@@ -124,11 +124,17 @@
     <link rel="stylesheet" href="turtle.css">
     <link rel="stylesheet" href="../css/editor-extras.css">
     <link rel="stylesheet" href="../css/dialog.css">
+    <link rel="stylesheet" href="../css/sync.css">
+    <link rel="stylesheet" href="../css/commit.css">
+    <link rel="stylesheet" href="../css/conflict.css">
+    <link rel="stylesheet" href="../css/turtle-sync.css">
 </head>
 <body>
     <header>
         <h1>pydle <span class="subtitle">python turtle graphics in your browser</span></h1>
         <div class="controls">
+            <span id="sync-status" class="sync-status"></span>
+            <a id="switch-btn" class="btn btn-switch" href="/" title="Open the Python editor">Switch to Python</a>
             <span id="theme-toggle" class="theme-toggle-slot"></span>
             <button id="instructions-btn" class="btn btn-instr">Help</button>
             <a href="https://github.com/thebillington/pydle/issues/new" target="_blank" rel="noopener noreferrer" class="btn btn-issue">
@@ -143,15 +149,19 @@
             <div class="editor-toolbar">
                 <span class="panel-label-inline">editor</span>
                 <div class="editor-toolbar-right">
-                    <span id="file-indicator" class="file-indicator" title="Saved in browser only">untitled</span>
-                    <button id="save-btn" class="toolbar-btn" title="Save to browser (Ctrl+S)">
+                    <span id="file-indicator" class="file-indicator" title="Saved on this device">untitled</span>
+                    <button id="save-btn" class="toolbar-btn" title="Save on this device and open the commit dialog (Ctrl+S)">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                     </button>
-                    <button id="load-btn" class="toolbar-btn" title="Load saved file">
+                    <button id="load-btn" class="toolbar-btn" title="Open a saved drawing">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                     </button>
                     <button id="download-btn" class="toolbar-btn" title="Download as .py file">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </button>
+                    <button id="commit-btn" class="toolbar-btn commit-btn" title="Nothing to commit" aria-label="Nothing to commit" aria-haspopup="dialog" disabled>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><line x1="1.5" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22.5" y2="12"/></svg>
+                        <span id="commit-count" class="commit-count" hidden>0</span>
                     </button>
                     <button id="copy-btn" class="toolbar-btn" title="Copy to clipboard">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -247,7 +257,7 @@ t.isvisible()      # Is turtle visible?</pre>
                 <h3>Keyboard Shortcuts</h3>
                 <ul>
                     <li><strong>Ctrl+Enter</strong> - Run code</li>
-                    <li><strong>Ctrl+S</strong> - Save to browser</li>
+                    <li><strong>Ctrl+S</strong> - Save and open the commit dialog</li>
                     <li><strong>Ctrl+/</strong> - Toggle comment</li>
                     <li><strong>Escape</strong> - Close this dialog</li>
                 </ul>
@@ -259,12 +269,35 @@ t.isvisible()      # Is turtle visible?</pre>
         <div class="overlay-backdrop"></div>
         <div class="overlay-content">
             <div class="overlay-header">
-                <h2>Load File <span class="file-note">(browser storage only)</span></h2>
+                <h2>Load Drawing <span class="file-note">(on this device)</span></h2>
                 <button id="close-load" class="btn btn-close">&times;</button>
             </div>
             <div id="load-body" class="file-list"></div>
         </div>
     </div>
+
+    <div id="sync-overlay" class="overlay sync-overlay hidden">
+        <div class="overlay-backdrop"></div>
+        <div class="overlay-content" role="dialog" aria-modal="true" aria-labelledby="sync-title">
+            <div class="overlay-header">
+                <h2 id="sync-title">Your work</h2>
+                <button id="close-sync" class="btn btn-close" aria-label="Close Your work">&times;</button>
+            </div>
+            <div class="sync-body">
+                <p id="sync-pull-note" class="sync-pull-note" role="status" aria-live="polite" hidden></p>
+                <section class="sync-section" aria-labelledby="sync-github-heading">
+                    <h3 class="sync-section-label" id="sync-github-heading">In your GitHub repository</h3>
+                    <div id="connect-panel"></div>
+                </section>
+                <section class="sync-section" aria-labelledby="sync-drawings-heading">
+                    <h3 class="sync-section-label" id="sync-drawings-heading">Drawings</h3>
+                    <p class="sync-text">Drawings are kept in the drawings folder of the same repository as your Python programs. A drawing reaches GitHub only when you commit it.</p>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <div id="commit-root"></div>
 
     <script src="vendor/codemirror/codemirror.min.js"></script>
     <script src="vendor/codemirror/python.min.js"></script>
@@ -277,9 +310,16 @@ t.isvisible()      # Is turtle visible?</pre>
     <script src="../vendor/codemirror/addon/selection/active-line.js"></script>
 
     <script type="module">
+        import { createSync } from '../js/sync.js';
         import { getResolvedTheme, mountThemeToggle } from '../js/ui/theme.js';
         import { lineFromTraceback } from '../js/traceback.js';
         import { confirmAction, notify, promptText } from '../js/ui/dialog.js';
+        import { projectSlug } from '../js/ui/files.js';
+        import { mountStatus } from '../js/ui/status.js';
+        import { mountConnect } from '../js/ui/connect.js';
+        import { mountCommit } from '../js/ui/commit.js';
+        import { mountDrawings } from '../js/ui/turtle-drawings.js';
+        import { createDrawings } from '../js/ui/turtle-storage.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
@@ -370,6 +410,9 @@ t.isvisible()      # Is turtle visible?</pre>
         const loadBtn = document.getElementById('load-btn');
         const downloadBtn = document.getElementById('download-btn');
         const copyBtn = document.getElementById('copy-btn');
+        const commitBtn = document.getElementById('commit-btn');
+        const commitCount = document.getElementById('commit-count');
+        const switchBtn = document.getElementById('switch-btn');
         const resizeHandle = document.getElementById('resize-handle');
         const canvasPanel = document.querySelector('.canvas-panel');
 
@@ -380,7 +423,18 @@ t.isvisible()      # Is turtle visible?</pre>
         let currentFileName = null;
         let lastSavedCode = editor.getValue();
         let dirty = false;
-        const STORAGE_PREFIX = 'pydle_turtle_file_';
+
+        // Drawings live in their own namespace in the vault, so a turtle
+        // drawing and a program can share a name without colliding.
+        const sync = createSync();
+        const drawings = createDrawings(sync);
+
+        // Filled in below; declared here because the indicator is repainted
+        // during startup, before either has been mounted.
+        let drawingsList = null;
+        let commitDialog = null;
+        let uncommittedNow = false;
+        let commitStateToken = 0;
 
         let isResizing = false;
         let isHResizing = false;
@@ -434,6 +488,12 @@ t.isvisible()      # Is turtle visible?</pre>
         function updateFileIndicator() {
             const name = currentFileName || 'untitled';
             fileIndicator.textContent = dirty ? name + ' •' : name;
+            fileIndicator.title = currentFileName
+                ? 'Saved on this device. Commit to put it on GitHub.'
+                : 'Not saved yet';
+            if (drawingsList) {
+                drawingsList.setCurrent();
+            }
         }
 
         function markDirty() {
@@ -451,60 +511,119 @@ t.isvisible()      # Is turtle visible?</pre>
             return confirmAction({
                 title: 'Discard unsaved changes?',
                 message:
-                    'Your drawing has changes that have not been saved. Loading another drawing will discard them.',
+                    'This drawing has changes that have not been saved. Opening another drawing will discard them.',
                 confirmLabel: 'Discard changes',
                 danger: true,
             });
         }
 
+        /**
+         * Write the editor to the vault when it has unsaved changes.
+         *
+         * The vault is the source of truth, so a flush is local and immediate.
+         * Nothing here touches GitHub: that is the commit dialog's job.
+         *
+         * @returns {Promise<boolean>} False when the vault refused the write.
+         */
+        async function flush() {
+            if (currentFileName === null || !dirty) {
+                return true;
+            }
+
+            const code = editor.getValue();
+            try {
+                await drawings.save(currentFileName, code);
+            } catch {
+                showStatus('Could not save ' + currentFileName + ' yet', 'error');
+                return false;
+            }
+
+            lastSavedCode = code;
+            dirty = false;
+            updateFileIndicator();
+            void refreshCommitState();
+            return true;
+        }
+
         async function saveFile() {
             const code = editor.getValue();
+
             if (currentFileName === null) {
                 const entered = await promptText({
                     title: 'Save your drawing',
                     label: 'Name',
                     value: 'my_drawing',
                     confirmLabel: 'Save',
-                    hint: 'A single name, with no slashes. A trailing .py is dropped.',
-                    validate: (value) => {
-                        const name = value.trim().replace(/\.py$/, '');
-                        if (name === '') {
-                            return 'Enter a name for your drawing.';
-                        }
-                        if (name.includes('/') || name.includes('\\')) {
-                            return 'Use a single name, with no slashes.';
-                        }
-                        return null;
-                    },
+                    hint: 'It is stored in lowercase with hyphens, so my drawing becomes my-drawing.',
+                    validate: (value) =>
+                        projectSlug(value) === null
+                            ? 'Use a name with at least one letter or number.'
+                            : null,
                 });
-                if (entered === null) return;
-                currentFileName = entered.trim().replace(/\.py$/, '');
-                if (!currentFileName) { currentFileName = null; return; }
+                if (entered === null) {
+                    return;
+                }
+                const slug = projectSlug(entered);
+                if (slug === null) {
+                    showStatus('That name has no usable characters', 'error');
+                    return;
+                }
+                currentFileName = slug;
             }
-            const key = STORAGE_PREFIX + currentFileName;
+
             try {
-                localStorage.setItem(key, code);
+                await drawings.save(currentFileName, code);
             } catch {
                 await notify({
-                    title: 'Could not save to this browser',
+                    title: 'Could not save this drawing',
                     message:
                         'pydle could not save this drawing on this device. Your code is still in the editor, so you can copy it or download it before trying again.',
                     variant: 'error',
                 });
                 return;
             }
+
             lastSavedCode = code;
             dirty = false;
             updateFileIndicator();
             showStatus('Saved: ' + currentFileName, 'ready');
+            void refreshCommitState();
+            if (drawingsList) {
+                void drawingsList.refresh();
+            }
+
+            // Saving is not committing. The dialog asks which file and what message.
+            void commitDialog.open(currentFileName);
         }
 
         async function loadFile(name) {
-            const key = STORAGE_PREFIX + name;
-            const code = localStorage.getItem(key);
-            if (code === null) return;
-            if (!(await checkUnsaved())) return;
-            if (tickRunning) stopCode();
+            if (name === currentFileName) {
+                closeLoadOverlay();
+                return;
+            }
+            if (!(await checkUnsaved())) {
+                return;
+            }
+
+            let code = null;
+            try {
+                code = await drawings.read(name);
+            } catch {
+                code = null;
+            }
+            if (code === null) {
+                await notify({
+                    title: 'Could not open that drawing',
+                    message:
+                        'pydle could not read this drawing on this device. It has not been changed.',
+                    variant: 'error',
+                });
+                return;
+            }
+
+            if (tickRunning) {
+                stopCode();
+            }
             editor.setValue(code);
             currentFileName = name;
             lastSavedCode = code;
@@ -512,66 +631,147 @@ t.isvisible()      # Is turtle visible?</pre>
             clearErrorLine();
             clearConsole();
             clearCanvas();
-            showStatus('Loaded: ' + name, 'ready');
             updateFileIndicator();
+            showStatus('Loaded: ' + name, 'ready');
             closeLoadOverlay();
+            void refreshCommitState();
         }
 
         async function deleteFile(name) {
+            const isOpen = name === currentFileName;
+            if (isOpen && !(await checkUnsaved())) {
+                return;
+            }
+
             const ok = await confirmAction({
                 title: 'Delete this drawing?',
-                message: `“${name}” will be deleted from this device. This cannot be undone.`,
+                message: `“${name}” will be removed from this device. If you have committed it, it is removed from your GitHub repository as well. This cannot be undone.`,
                 confirmLabel: 'Delete drawing',
                 danger: true,
             });
-            if (!ok) return;
-            localStorage.removeItem(STORAGE_PREFIX + name);
-            refreshLoadList();
+            if (!ok) {
+                return;
+            }
+
+            try {
+                await drawings.remove(name);
+            } catch {
+                await notify({
+                    title: 'Could not delete this drawing',
+                    message:
+                        'pydle could not delete this drawing. Nothing was changed, so you can try again.',
+                    variant: 'error',
+                });
+                return;
+            }
+
+            if (isOpen) {
+                closeDrawingIfOpen(name);
+            }
+            showStatus('Deleted: ' + name, 'ready');
         }
 
-        function getSavedFiles() {
-            const files = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith(STORAGE_PREFIX)) {
-                    files.push(key.slice(STORAGE_PREFIX.length));
-                }
+        /** Forget the editor state for a drawing that no longer exists. */
+        function closeDrawingIfOpen(name) {
+            if (currentFileName !== name) {
+                return;
             }
-            files.sort();
-            return files;
+            currentFileName = null;
+            lastSavedCode = editor.getValue();
+            dirty = false;
+            updateFileIndicator();
+            paintCommitState(0);
         }
 
         const loadOverlay = document.getElementById('load-overlay');
         const closeLoadBtn = document.getElementById('close-load');
         const loadBody = document.getElementById('load-body');
 
-        function refreshLoadList() {
-            loadBody.innerHTML = '';
-            const files = getSavedFiles();
-            if (files.length === 0) {
-                loadBody.textContent = 'No saved files yet. Use Save to store your code in your browser.';
-                return;
-            }
-            for (const name of files) {
-                const row = document.createElement('div');
-                row.className = 'file-item';
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'file-item-name';
-                nameSpan.textContent = name;
-                nameSpan.addEventListener('click', () => { void loadFile(name); });
-                const delBtn = document.createElement('button');
-                delBtn.className = 'btn btn-file-delete';
-                delBtn.textContent = '✕';
-                delBtn.title = 'Delete';
-                delBtn.addEventListener('click', (e) => { e.stopPropagation(); void deleteFile(name); });
-                row.appendChild(nameSpan);
-                row.appendChild(delBtn);
-                loadBody.appendChild(row);
-            }
+        /* ---- Commits ------------------------------------------------------ */
+        //
+        // The commit dialog is shared with the REPL page. It asks its sync
+        // object for dirty() and commit() only, so a thin adapter adds the
+        // drawings namespace rather than a second copy of the dialog.
+
+        /**
+         * Reflect the open drawing's uncommitted files on the toolbar.
+         *
+         * @param {number} count
+         */
+        function paintCommitState(count) {
+            const safe = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+            uncommittedNow = safe > 0;
+            commitCount.textContent = safe > 99 ? '99+' : String(safe);
+            commitCount.hidden = safe === 0;
+            commitBtn.classList.toggle('has-changes', safe > 0);
+            commitBtn.disabled = safe === 0;
+            const label = safe === 0
+                ? (currentFileName === null
+                    ? 'Nothing to commit'
+                    : 'Nothing to commit in ' + currentFileName)
+                : 'Commit ' + safe + (safe === 1 ? ' uncommitted file' : ' uncommitted files') + ' to GitHub';
+            commitBtn.title = label;
+            commitBtn.setAttribute('aria-label', label);
         }
 
+        /** Ask the vault what this drawing has not committed, then repaint. */
+        async function refreshCommitState() {
+            const token = ++commitStateToken;
+            if (currentFileName === null) {
+                paintCommitState(0);
+                return;
+            }
+            const name = currentFileName;
+            const report = await drawings.dirty(name);
+            if (token !== commitStateToken || currentFileName !== name) {
+                return;
+            }
+            paintCommitState(report.count);
+        }
+
+        const commitTarget = {
+            dirty: (name) => sync.dirty(name, 'drawings'),
+            commit: (options) => sync.commit({ ...options, kind: 'drawings' }),
+        };
+
+        commitDialog = mountCommit(document.getElementById('commit-root'), commitTarget, {
+            onCommitted: (result) => {
+                const count = result.paths.length;
+                showStatus(
+                    'Committed ' + count + (count === 1 ? ' file' : ' files') + ' to GitHub',
+                    'ready',
+                );
+                void refreshCommitState();
+            },
+            onClose: () => {
+                void refreshCommitState();
+            },
+        });
+
+        commitBtn.addEventListener('click', async () => {
+            if (currentFileName === null) {
+                return;
+            }
+            if (!(await flush())) {
+                return;
+            }
+            void commitDialog.open(currentFileName);
+        });
+
+        /* ---- Drawings list ------------------------------------------------ */
+
+        drawingsList = mountDrawings(loadBody, {
+            list: () => drawings.list(),
+            getCurrent: () => currentFileName,
+            onOpen: (name) => loadFile(name),
+            onDelete: (name) => deleteFile(name),
+        });
+
         function openLoadOverlay() {
-            refreshLoadList();
+            if (drawingsList) {
+                drawingsList.setCurrent();
+                void drawingsList.refresh();
+            }
             loadOverlay.classList.remove('hidden');
         }
 
@@ -778,6 +978,193 @@ t.isvisible()      # Is turtle visible?</pre>
             }
         });
 
+        /* ---- Leaving for the Python editor -------------------------------- */
+        //
+        // Guarded the same way as leaving a project on the REPL: write the
+        // buffer to the vault first, then let the commit dialog decide whether
+        // the drawing's uncommitted changes should be dealt with before going.
+
+        /**
+         * @returns {Promise<boolean>} True when it is safe to leave the page.
+         */
+        async function confirmLeave() {
+            if (currentFileName === null) {
+                // An unnamed drawing has nowhere to be flushed, so the only
+                // honest option is to ask before dropping the edits.
+                return checkUnsaved();
+            }
+            if (!(await flush())) {
+                return false;
+            }
+
+            let uncommitted = uncommittedNow;
+            try {
+                uncommitted = await drawings.hasUncommitted(currentFileName);
+            } catch {
+                // Fall back to what the toolbar last showed.
+            }
+            if (!uncommitted) {
+                return true;
+            }
+
+            const outcome = await commitDialog.open(currentFileName, { leaving: true });
+            return outcome !== 'cancelled';
+        }
+
+        switchBtn.addEventListener('click', async (event) => {
+            if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) {
+                // A new tab or window should behave like any other link.
+                return;
+            }
+            event.preventDefault();
+            if (!(await confirmLeave())) {
+                return;
+            }
+            window.location.assign('/');
+        });
+
+        /* ---- GitHub sync -------------------------------------------------- */
+        //
+        // The sign-in is shared with the REPL page through this origin's
+        // IndexedDB, so a student who signed in there is already signed in here.
+        const syncOverlay = document.getElementById('sync-overlay');
+        const closeSyncBtn = document.getElementById('close-sync');
+        const syncPullNote = document.getElementById('sync-pull-note');
+
+        mountStatus(document.getElementById('sync-status'), sync);
+        mountConnect(document.getElementById('connect-panel'), sync);
+
+        function openSyncOverlay() {
+            syncOverlay.classList.remove('hidden');
+            closeSyncBtn.focus({ preventScroll: true });
+        }
+
+        function closeSyncOverlay() {
+            syncOverlay.classList.add('hidden');
+        }
+
+        document.addEventListener('pydle:open-sync', openSyncOverlay);
+        closeSyncBtn.addEventListener('click', closeSyncOverlay);
+        syncOverlay.addEventListener('click', (e) => {
+            if (e.target === syncOverlay || e.target.classList.contains('overlay-backdrop')) {
+                closeSyncOverlay();
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !syncOverlay.classList.contains('hidden')) {
+                closeSyncOverlay();
+            }
+        });
+
+        /**
+         * Show (or clear) the quiet line above the GitHub section.
+         *
+         * @param {string} text
+         * @param {'ok' | 'warn'} [tone]
+         */
+        function showPullNote(text, tone) {
+            syncPullNote.textContent = text;
+            syncPullNote.className = 'sync-pull-note' + (tone ? ' sync-pull-note-' + tone : '');
+            syncPullNote.hidden = text === '';
+        }
+
+        /** Pull at most once per page, however the connection was made. */
+        let caughtUp = false;
+        let catchingUp = false;
+
+        async function catchUpFromGitHub() {
+            if (catchingUp || caughtUp) {
+                return;
+            }
+            if (!sync.workspace || typeof sync.pull !== 'function') {
+                return;
+            }
+
+            catchingUp = true;
+
+            let report;
+            try {
+                report = await sync.pull();
+            } catch {
+                showPullNote(
+                    'Could not catch up with GitHub just now. Your drawings are safe on this device.',
+                    'warn',
+                );
+                catchingUp = false;
+                caughtUp = true;
+                return;
+            }
+
+            const applied = report && Number.isFinite(report.applied) ? report.applied : 0;
+            const conflicts = report && Array.isArray(report.conflicts) ? report.conflicts : [];
+
+            if (applied > 0 && drawingsList) {
+                await drawingsList.refresh();
+            }
+
+            catchingUp = false;
+            caughtUp = true;
+
+            if (conflicts.length > 0) {
+                showPullNote('');
+                await notify({
+                    title: 'Drawings changed in two places',
+                    message:
+                        conflicts.length +
+                        (conflicts.length === 1 ? ' file needs' : ' files need') +
+                        ' a decision. You will be asked which copy to keep the next time you commit that drawing.',
+                    variant: 'info',
+                });
+                return;
+            }
+
+            if (applied > 0) {
+                showPullNote(
+                    'Caught up with GitHub. ' +
+                        applied +
+                        (applied === 1
+                            ? ' file was updated on this device.'
+                            : ' files were updated on this device.'),
+                    'ok',
+                );
+            }
+        }
+
+        sync.subscribe(() => {
+            void refreshCommitState();
+        });
+
+        paintCommitState(0);
+
+        /**
+         * Load the drawings, then connect. The worker starts alongside, so
+         * Python is ready whether or not the network is.
+         */
+        async function start() {
+            try {
+                await drawings.migrate();
+            } catch {
+                // Migration is best effort; the drawings list still loads.
+            }
+
+            await drawingsList.refresh();
+
+            let connected = false;
+            try {
+                await sync.connect();
+                connected = true;
+            } catch {
+                // The status control already explains what went wrong.
+            }
+
+            if (connected) {
+                await catchUpFromGitHub();
+            }
+
+            void refreshCommitState();
+        }
+
+        void start();
         initWorker();
     </script>
     <footer>
