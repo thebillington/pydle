@@ -108,13 +108,13 @@ export async function bootstrapRepo({ token, owner, repo, branch, identity }) {
             }),
         );
 
-    const commitSubset = async (subset, baseTree, parents) => {
+    const commitSubset = async (subset, baseTree, parents, commitMessage = message) => {
         const tree = await createTree({ token, owner, repo, tree: await entriesFor(subset), baseTree });
         return createCommit({
             token,
             owner,
             repo,
-            message,
+            message: commitMessage,
             tree: tree.sha,
             parents,
             author: identity,
@@ -143,7 +143,9 @@ export async function bootstrapRepo({ token, owner, repo, branch, identity }) {
     }
 
     const headCommit = await getCommit({ token, owner, repo, sha: head.sha });
-    const commit = await commitSubset(rest, headCommit.tree.sha, [head.sha]);
+    // A distinct message: the seed and the layout are two steps, and the history
+    // should not read as though the same thing happened twice.
+    const commit = await commitSubset(rest, headCommit.tree.sha, [head.sha], 'Add the workspace layout');
     await updateRef({ token, owner, repo, ref: `refs/heads/${branch}`, sha: commit.sha });
 
     return commit;
