@@ -91,11 +91,14 @@
     <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css">
     <link rel="stylesheet" href="vendor/codemirror/dracula.min.css">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/sync.css">
 </head>
 <body>
     <header>
         <h1>pydle <span class="subtitle">python in your browser</span></h1>
         <div class="controls">
+            <span id="sync-status" class="sync-status"></span>
+            <button id="sync-btn" class="btn btn-sync" title="Save your work to your own GitHub repository">Sync</button>
             <button id="instructions-btn" class="btn btn-instr">Help</button>
             <a href="https://github.com/thebillington/pydle/issues/new" target="_blank" rel="noopener noreferrer" class="btn btn-issue">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
@@ -197,11 +200,31 @@ print(greet("World"))</pre>
         </div>
     </div>
 
+    <div id="sync-overlay" class="overlay hidden">
+        <div class="overlay-backdrop"></div>
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <h2>Your work</h2>
+                <button id="close-sync" class="btn btn-close">&times;</button>
+            </div>
+            <div id="connect-panel"></div>
+            <div class="sync-projects">
+                <h3>Saved on this device</h3>
+                <div id="project-list"></div>
+            </div>
+        </div>
+    </div>
+
     <script src="vendor/codemirror/codemirror.min.js"></script>
     <script src="vendor/codemirror/python.min.js"></script>
     <script src="vendor/codemirror/comment.min.js"></script>
 
-    <script>
+    <script type="module">
+        import { createSync } from './js/sync.js';
+        import { mountConnect } from './js/ui/connect.js';
+        import { mountStatus } from './js/ui/status.js';
+        import { mountProjects } from './js/ui/projects.js';
+
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
             theme: 'dracula',
@@ -297,13 +320,26 @@ print(greet("World"))</pre>
             dirty = false;
             updateFileIndicator();
             showStatus('Saved: ' + currentFileName, 'ready');
+            void persistToRepository(currentFileName, code);
         }
 
-        function loadFile(name) {
-            const key = STORAGE_PREFIX + name;
-            const code = localStorage.getItem(key);
-            if (code === null) return;
+        async function loadFile(name) {
             if (!checkUnsaved()) return;
+
+            let code = null;
+            try {
+                const files = await sync.readProject(name);
+                if (files && typeof files['main.py'] === 'string') {
+                    code = files['main.py'];
+                }
+            } catch (e) {
+                code = null;
+            }
+            if (code === null) {
+                code = localStorage.getItem(STORAGE_PREFIX + name);
+            }
+            if (code === null) return;
+
             editor.setValue(code);
             currentFileName = name;
             lastSavedCode = code;
@@ -318,18 +354,22 @@ print(greet("World"))</pre>
             if (!confirm('Delete "' + name + '"?')) return;
             localStorage.removeItem(STORAGE_PREFIX + name);
             refreshLoadList();
+            void sync
+                .deleteProject(name)
+                .catch(() => {})
+                .then(() => refreshVaultProjects())
+                .then(() => refreshLoadList());
         }
 
         function getSavedFiles() {
-            const files = [];
+            const files = new Set(vaultProjects);
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
                 if (key.startsWith(STORAGE_PREFIX)) {
-                    files.push(key.slice(STORAGE_PREFIX.length));
+                    files.add(key.slice(STORAGE_PREFIX.length));
                 }
             }
-            files.sort();
-            return files;
+            return [...files].sort();
         }
 
         const loadOverlay = document.getElementById('load-overlay');
@@ -363,6 +403,7 @@ print(greet("World"))</pre>
 
         function openLoadOverlay() {
             refreshLoadList();
+            void refreshVaultProjects().then(refreshLoadList);
             loadOverlay.classList.remove('hidden');
         }
 
@@ -518,6 +559,79 @@ print(greet("World"))</pre>
                 helpOverlay.classList.add('hidden');
             }
         });
+
+        // ---- Sync: your work lives in a git repo you own -------------------
+        //
+        // The vault (OPFS, IndexedDB fallback) is the source of truth. GitHub is a
+        // target: a failed push means "not synced yet", never "not saved", so the
+        // editor never waits on the network.
+        const sync = createSync();
+        let vaultProjects = [];
+
+        const syncOverlay = document.getElementById('sync-overlay');
+        const syncBtn = document.getElementById('sync-btn');
+        const closeSyncBtn = document.getElementById('close-sync');
+
+        mountStatus(document.getElementById('sync-status'), sync);
+        mountConnect(document.getElementById('connect-panel'), sync);
+        mountProjects(document.getElementById('project-list'), sync, {
+            onOpen: (name) => {
+                closeSyncOverlay();
+                void loadFile(name);
+            },
+            onDelete: async (name) => {
+                localStorage.removeItem(STORAGE_PREFIX + name);
+                await sync.deleteProject(name);
+                await refreshVaultProjects();
+                refreshLoadList();
+            },
+        });
+
+        async function refreshVaultProjects() {
+            try {
+                const projects = await sync.listProjects();
+                vaultProjects = projects.map((project) => project.name);
+            } catch (e) {
+                vaultProjects = [];
+            }
+        }
+
+        async function persistToRepository(name, code) {
+            try {
+                await sync.writeFiles(name, 'main.py', code);
+                await refreshVaultProjects();
+            } catch (e) {
+                // Local save already succeeded, so this is only a sync problem.
+                showStatus('Saved locally; will sync later', 'ready');
+            }
+        }
+
+        function openSyncOverlay() {
+            syncOverlay.classList.remove('hidden');
+            void refreshVaultProjects();
+        }
+
+        function closeSyncOverlay() {
+            syncOverlay.classList.add('hidden');
+        }
+
+        syncBtn.addEventListener('click', openSyncOverlay);
+        closeSyncBtn.addEventListener('click', closeSyncOverlay);
+        syncOverlay.addEventListener('click', (e) => {
+            if (e.target === syncOverlay || e.target.classList.contains('overlay-backdrop')) {
+                closeSyncOverlay();
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !syncOverlay.classList.contains('hidden')) {
+                closeSyncOverlay();
+            }
+        });
+
+        void sync
+            .connect()
+            .catch(() => {})
+            .then(() => refreshVaultProjects());
 
         initWorker();
     </script>
