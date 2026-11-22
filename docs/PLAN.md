@@ -201,21 +201,40 @@ and migrate rather than guess.
 { "format": 1, "app": "pydle" }
 ```
 
-## 7. Sync
+## 7. Saving and committing
 
-Local first. The browser is the source of truth; GitHub is a sync target.
+Two separate things, deliberately:
 
-- Files live in OPFS with an IndexedDB fallback.
-- Saves write locally immediately, and commit to GitHub on a debounce (~20–30s) or
-  on an explicit save.
-- If the network, the token, or GitHub itself fails, the save still succeeds locally
-  and the commit is queued. Never block editing on a network call.
-- Queue the commit, not each keystroke. On reconnect, one commit covering what
-  changed.
+**Saving is automatic and local.** Editing writes the file into the vault (OPFS with
+an IndexedDB fallback) immediately, and never waits on the network. This is what
+makes an expired token, a filter, or an outage cost nothing: the lesson's work is on
+the device regardless.
 
-This is the property that makes the whole thing usable in a school: an expired
-token, a filter, or an outage means "will sync later", never "lost the lesson's
-work".
+**Committing is manual and deliberate.** Nothing reaches GitHub without the user
+choosing files and writing a message. There is no debounce, no background commit and
+no commit on a timer. The commit is the thing being taught, so it is the thing the
+user does.
+
+Which files are uncommitted is answered offline: after each commit, the hash of every
+committed file is stored beside the project in the vault. Comparing current files to
+that snapshot gives added / modified / deleted without a network call. Files left out
+of a commit stay dirty — an unselected edit is never recorded as committed.
+
+### Guards before leaving
+
+- **Switching file, switching project, closing the editor**: our own modal, with the
+  file picker and message box.
+- **Closing the tab or reloading**: the browser's own dialog. A page cannot customise
+  `beforeunload`, so this is a generic "may not be saved" prompt and nothing more.
+  Do not promise a custom modal here.
+
+### History
+
+Read from GitHub rather than stored locally: commits that touched the project
+(`/commits?path=work/<project>`), and one commit expanded to per-file patches
+(`/commits/<sha>`). It needs a connection, and it is where "view all changes in a
+commit" lives. Deleting a project also commits that deletion, because the user has
+already confirmed a destructive action.
 
 ## 8. Conflicts
 

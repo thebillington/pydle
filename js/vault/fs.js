@@ -22,6 +22,9 @@ const FILE_STORE = 'files';
 const META_STORE = 'meta';
 const AUTH_STORE = 'auth';
 
+/** Meta keys holding a project's last committed state. */
+const SNAPSHOT_PREFIX = 'commit:';
+
 /** Directory under the OPFS origin root that holds every project. */
 const VAULT_DIR = 'vault';
 
@@ -484,6 +487,10 @@ export async function listProjects() {
             if (typeof key !== 'string' || projects.has(key)) {
                 continue;
             }
+            // The meta store also holds commit snapshots; those are not projects.
+            if (key.startsWith(SNAPSHOT_PREFIX)) {
+                continue;
+            }
             const updatedAt = value && Number.isFinite(value.updatedAt) ? value.updatedAt : 0;
             projects.set(key, updatedAt);
         }
@@ -632,6 +639,54 @@ export async function deleteFile(project, path) {
 }
 
 /**
+ * Record the last committed state of a project: the commit sha, and the hash of
+ * every file as it was committed. Kept in the `meta` store so no schema change is
+ * needed, which matters because two modules open this database.
+ *
+ * @param {string} project Normalised project slug.
+ * @returns {Promise<{ sha: string, files: Record<string, string> } | null>}
+ */
+export async function readCommitSnapshot(project) {
+    try {
+        const slug = normalizeProjectName(project);
+        const value = await idbGet(META_STORE, SNAPSHOT_PREFIX + slug);
+        if (value && typeof value === 'object' && value.files && typeof value.files === 'object') {
+            return value;
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Store the last committed state of a project.
+ *
+ * @param {string} project Project name.
+ * @param {{ sha: string, files: Record<string, string> }} snapshot
+ * @returns {Promise<void>}
+ */
+export async function writeCommitSnapshot(project, snapshot) {
+    const slug = normalizeProjectName(project);
+    await idbPut(META_STORE, snapshot, SNAPSHOT_PREFIX + slug);
+}
+
+/**
+ * Forget a project's committed state, used when the project is deleted.
+ *
+ * @param {string} project Project name.
+ * @returns {Promise<void>}
+ */
+export async function clearCommitSnapshot(project) {
+    try {
+        const slug = normalizeProjectName(project);
+        await idbDelete(META_STORE, SNAPSHOT_PREFIX + slug);
+    } catch {
+        // Nothing recorded: nothing to forget.
+    }
+}
+
+/**
  * Delete a project and everything in it. Missing projects are ignored.
  *
  * @param {string} name Project name.
@@ -654,6 +709,7 @@ export async function deleteProject(name) {
     }
 
     await idbDelete(META_STORE, project);
+    await clearCommitSnapshot(project);
 }
 
 /**

@@ -6,9 +6,10 @@
  * Nothing else in the app needs to know that, and the UI never imports from
  * `js/github/` or `js/vault/` directly.
  *
- * The rule that matters: the browser is the source of truth. A failed push means
- * "not synced yet", never "not saved". Every failure path here leaves the local
- * files untouched and leaves the project in the pending set so it can be retried.
+ * The rule that matters: the browser is the source of truth. Editing writes to the
+ * local vault immediately and never waits on the network. Committing to GitHub is a
+ * separate, deliberate act: nothing reaches GitHub until the user commits, with a
+ * message and a chosen set of files.
  */
 import { CONFIG } from './config.js';
 import { DeviceFlowError, pollForToken, refreshAccessToken, startDeviceFlow } from './github/device-flow.js';
@@ -25,9 +26,6 @@ export const REPO_NAME = 'pydle';
 
 /** Directory inside the repo that holds projects. */
 const WORK_ROOT = 'work';
-
-/** How long to wait after an edit before committing. */
-const DEBOUNCE_MS = 25_000;
 
 /** Refresh a little before expiry rather than waiting for a 401. */
 const EXPIRY_SKEW_MS = 60_000;
@@ -141,12 +139,8 @@ export function createSync({ onChange } = {}) {
     /** @type {AbortController | null} */
     let signInController = null;
 
-    /** project slug -> debounce timer */
-    const timers = new Map();
-    /** project slugs waiting to be committed */
-    const pending = new Set();
-    /** repo path -> true, for files deleted since the last successful push */
-    const deleted = new Set();
+    /** Set while a commit is in flight, so two prompts cannot race. */
+    let committing = false;
 
     const listeners = new Set();
     if (typeof onChange === 'function') {
@@ -159,7 +153,7 @@ export function createSync({ onChange } = {}) {
             identity: user ? { login: user.login, name: user.name || user.login } : null,
             workspace: workspace ? { owner: workspace.owner, repo: workspace.repo } : null,
             error: lastError,
-            pending: pending.size,
+            committing,
         };
     }
 
@@ -433,12 +427,6 @@ export function createSync({ onChange } = {}) {
         tokens = null;
         user = null;
         workspace = null;
-        pending.clear();
-        deleted.clear();
-        for (const timer of timers.values()) {
-            clearTimeout(timer);
-        }
-        timers.clear();
         setStatus('signed-out');
     }
 
@@ -516,128 +504,301 @@ export function createSync({ onChange } = {}) {
     }
 
     /* -------------------------------------------------------------- */
-    /* Push                                                            */
+    /* Committing                                                      */
     /* -------------------------------------------------------------- */
 
     /**
-     * Queue a commit for one project. Debounced, so typing is not syncing.
+     * Hex SHA-256 of a file's contents.
+     *
+     * Only ever used to answer "has this changed since it was committed", so a
+     * plain hash suffices: no diffing, no line mapping, no dependency.
+     *
+     * @param {string} text
+     * @returns {Promise<string>}
+     */
+    async function contentHash(text) {
+        const bytes = new TextEncoder().encode(text);
+        const digest = await crypto.subtle.digest('SHA-256', bytes);
+        return [...new Uint8Array(digest)]
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join('');
+    }
+
+    /**
+     * Files that differ from what was last committed.
+     *
+     * Answered from a snapshot on this device, so it works offline and without
+     * asking GitHub. A project that has never been committed counts every file as
+     * added, which is the honest answer.
      *
      * @param {string} name
+     * @returns {Promise<{ paths: Array<{ path: string, status: 'added' | 'modified' | 'deleted' }>, count: number, lastCommit: string | null }>}
      */
-    function saveProject(name) {
+    async function dirty(name) {
         let project;
         try {
             project = normalizeProjectName(name);
         } catch {
-            return;
+            return { paths: [], count: 0, lastCommit: null };
         }
-        pending.add(project);
 
-        const existing = timers.get(project);
-        if (existing) {
-            clearTimeout(existing);
+        const files = await readProject(project);
+        const snapshot = await vault.readCommitSnapshot(project);
+        const committed = snapshot && snapshot.files ? snapshot.files : {};
+
+        const paths = [];
+        const onDisk = new Set(Object.keys(files));
+
+        for (const [path, content] of Object.entries(files)) {
+            const hash = await contentHash(content);
+            if (!Object.prototype.hasOwnProperty.call(committed, path)) {
+                paths.push({ path, status: 'added' });
+            } else if (committed[path] !== hash) {
+                paths.push({ path, status: 'modified' });
+            }
         }
-        timers.set(
-            project,
-            setTimeout(() => {
-                timers.delete(project);
-                void flushProject(project);
-            }, DEBOUNCE_MS),
-        );
-        emit();
+        for (const path of Object.keys(committed)) {
+            if (!onDisk.has(path)) {
+                paths.push({ path, status: 'deleted' });
+            }
+        }
+
+        paths.sort((a, b) => a.path.localeCompare(b.path));
+        return {
+            paths,
+            count: paths.length,
+            lastCommit: snapshot ? snapshot.sha : null,
+        };
     }
 
     /**
-     * Record that a project file was deleted, so the next commit removes it.
+     * Commit the chosen files. This is the only way work reaches GitHub.
      *
-     * @param {string} name
-     * @param {string} path path relative to the project
-     */
-    function saveDeletion(name, path) {
-        let project;
-        try {
-            project = normalizeProjectName(name);
-        } catch {
-            return;
-        }
-        try {
-            deleted.add(`${WORK_ROOT}/${safeJoin(`${project}/${path}`)}`);
-        } catch {
-            return;
-        }
-        saveProject(project);
-    }
-
-    /**
-     * Commit everything pending for one project.
+     * Files that were left out of `paths` stay dirty: an unselected edit is never
+     * silently recorded as committed.
      *
-     * @param {string} project
-     * @returns {Promise<void>}
+     * @param {{ project: string, paths: string[], message: string }} options
+     * @returns {Promise<{ sha: string, message: string }>}
      */
-    async function flushProject(project) {
+    async function commit({ project: name, paths, message }) {
         if (!workspace || !user) {
-            setStatus('offline');
-            return;
+            throw new SyncError('auth', 'Sign in to GitHub before committing.');
+        }
+        if (committing) {
+            throw new SyncError('config', 'A commit is already in progress.');
         }
 
+        let project;
         try {
-            const files = await vault.readProject(project);
-            const entries = Object.entries(files)
-                .map(([path, content]) => ({
-                    path: `${WORK_ROOT}/${project}/${path}`,
-                    content,
-                }))
-                .filter((entry) => entry.path.length > 0);
+            project = normalizeProjectName(name);
+        } catch {
+            throw new SyncError('config', 'That project does not exist.');
+        }
 
-            const deletions = [...deleted].filter((path) =>
-                path.startsWith(`${WORK_ROOT}/${project}/`),
-            );
+        const trimmedMessage = String(message || '').trim();
+        if (trimmedMessage === '') {
+            throw new SyncError('config', 'A commit needs a message.');
+        }
 
-            if (entries.length === 0 && deletions.length === 0) {
-                pending.delete(project);
-                emit();
-                return;
+        const selected = Array.isArray(paths) ? [...new Set(paths)] : [];
+        if (selected.length === 0) {
+            throw new SyncError('config', 'Choose at least one file to commit.');
+        }
+
+        committing = true;
+        emit();
+
+        try {
+            const files = await readProject(project);
+            const snapshot = await vault.readCommitSnapshot(project);
+            const committed = snapshot && snapshot.files ? snapshot.files : {};
+
+            const upserts = [];
+            const deletes = [];
+
+            for (const path of selected) {
+                if (Object.prototype.hasOwnProperty.call(files, path)) {
+                    upserts.push({
+                        path: `${WORK_ROOT}/${project}/${safeJoin(path)}`,
+                        content: files[path],
+                    });
+                } else if (Object.prototype.hasOwnProperty.call(committed, path)) {
+                    deletes.push(`${WORK_ROOT}/${project}/${safeJoin(path)}`);
+                }
             }
 
-            await withToken((token) =>
+            if (upserts.length === 0 && deletes.length === 0) {
+                throw new SyncError('config', 'Those files have not changed since the last commit.');
+            }
+
+            const result = await withToken((token) =>
                 commitFiles({
                     token,
                     owner: workspace.owner,
                     repo: workspace.repo,
                     branch: workspace.branch,
-                    files: entries,
-                    deletes: deletions,
-                    message: `work: save ${project}`,
+                    files: upserts,
+                    deletes,
+                    message: trimmedMessage,
                     identity: identityFor(user),
                 }),
             );
 
-            pending.delete(project);
-            for (const path of deletions) {
-                deleted.delete(path);
+            const nextFiles = { ...committed };
+            for (const path of selected) {
+                if (Object.prototype.hasOwnProperty.call(files, path)) {
+                    nextFiles[path] = await contentHash(files[path]);
+                } else {
+                    delete nextFiles[path];
+                }
             }
+            await vault.writeCommitSnapshot(project, { sha: result.sha, files: nextFiles });
+
             setStatus('connected');
+            return { sha: result.sha, message: trimmedMessage };
         } catch (error) {
             const syncError = asSyncError(error);
-            // Keep the project pending: it will be retried on the next flush.
-            setStatus(syncError.kind === 'auth' ? 'signed-out' : 'offline', syncError);
+            setStatus(syncError.kind === 'auth' ? 'signed-out' : 'error', syncError);
+            throw syncError;
+        } finally {
+            committing = false;
+            emit();
+        }
+    }
+
+    /* History ---------------------------------------------------------- */
+
+    /**
+     * Commits that touched a project, newest first.
+     *
+     * @param {string} name
+     * @param {{ limit?: number }} [options]
+     * @returns {Promise<Array<{ sha: string, message: string, date: string | null, author: string }>>}
+     */
+    async function listCommits(name, { limit = 30 } = {}) {
+        if (!workspace) {
+            throw new SyncError('auth', 'Sign in to GitHub to see history.');
+        }
+        let project;
+        try {
+            project = normalizeProjectName(name);
+        } catch {
+            throw new SyncError('config', 'That project does not exist.');
+        }
+
+        const scope = `${WORK_ROOT}/${project}`;
+        try {
+            const commits = await withToken((token) =>
+                ghFetch(
+                    `/repos/${workspace.owner}/${workspace.repo}/commits` +
+                        `?path=${encodeURIComponent(scope)}&per_page=${Math.min(Math.max(limit, 1), 100)}`,
+                    { token },
+                ),
+            );
+
+            return (Array.isArray(commits) ? commits : []).map((entry) => ({
+                sha: entry.sha,
+                message: (entry.commit && entry.commit.message) || '',
+                date: entry.commit && entry.commit.author ? entry.commit.author.date : null,
+                author: entry.commit && entry.commit.author ? entry.commit.author.name : '',
+            }));
+        } catch (error) {
+            throw asSyncError(error);
         }
     }
 
     /**
-     * Commit everything pending now, in order.
+     * One commit with the patch for every file it touched.
      *
-     * @returns {Promise<void>}
+     * @param {string} sha
+     * @returns {Promise<{ sha: string, message: string, date: string | null, author: string, files: Array<{ path: string, status: string, additions: number, deletions: number, patch: string }> }>}
      */
-    async function flush() {
-        for (const timer of timers.values()) {
-            clearTimeout(timer);
+    async function getCommit(sha) {
+        if (!workspace) {
+            throw new SyncError('auth', 'Sign in to GitHub to see history.');
         }
-        timers.clear();
+        try {
+            const detail = await withToken((token) =>
+                ghFetch(`/repos/${workspace.owner}/${workspace.repo}/commits/${encodeURIComponent(sha)}`, {
+                    token,
+                }),
+            );
 
-        for (const project of [...pending]) {
-            await flushProject(project);
+            const files = (detail && detail.files ? detail.files : []).map((file) => ({
+                // Strip the work/ prefix so the list reads as project paths.
+                path: file.filename.startsWith(`${WORK_ROOT}/`)
+                    ? file.filename.slice(WORK_ROOT.length + 1)
+                    : file.filename,
+                status: file.status || 'modified',
+                additions: file.additions || 0,
+                deletions: file.deletions || 0,
+                patch: file.patch || '',
+            }));
+
+            return {
+                sha: detail.sha || sha,
+                message: (detail.commit && detail.commit.message) || '',
+                date: detail.commit && detail.commit.author ? detail.commit.author.date : null,
+                author: detail.commit && detail.commit.author ? detail.commit.author.name : '',
+                files,
+            };
+        } catch (error) {
+            throw asSyncError(error);
         }
+    }
+
+    /**
+     * The contents of one file as it was at a given commit, or null.
+     *
+     * @param {string} sha
+     * @param {string} path Path inside the project.
+     * @param {string} project
+     * @returns {Promise<string | null>}
+     */
+    async function fileAt(project, path, sha) {
+        if (!workspace) {
+            throw new SyncError('auth', 'Sign in to GitHub to see history.');
+        }
+        let slug;
+        let relative;
+        try {
+            slug = normalizeProjectName(project);
+            relative = safeJoin(path);
+        } catch {
+            return null;
+        }
+
+        try {
+            const blob = await withToken((token) =>
+                ghFetch(
+                    `/repos/${workspace.owner}/${workspace.repo}/contents/` +
+                        `${encodeURIComponent(`${WORK_ROOT}/${slug}/${relative}`)}` +
+                        `?ref=${encodeURIComponent(sha)}`,
+                    { token },
+                ),
+            );
+            if (!blob || typeof blob.content !== 'string') {
+                return null;
+            }
+            return blob.encoding === 'base64' ? decodeBase64(blob.content) : blob.content;
+        } catch (error) {
+            const syncError = asSyncError(error);
+            if (syncError.kind === 'config') {
+                return null;
+            }
+            throw syncError;
+        }
+    }
+
+    /**
+     * True when anything in a project is uncommitted. Used to decide whether to
+     * warn before leaving.
+     *
+     * @param {string} name
+     * @returns {Promise<boolean>}
+     */
+    async function hasUncommitted(name) {
+        return (await dirty(name)).count > 0;
     }
 
     /* -------------------------------------------------------------- */
@@ -672,10 +833,10 @@ export function createSync({ onChange } = {}) {
     }
 
     /**
-     * Write one file into a project and queue a commit.
+     * Write one file into a project. Local only: this never touches the network.
      *
-     * This is the call the editor uses on save. It returns as soon as the file is
-     * on disk locally; the commit is debounced and may happen much later.
+     * This is the call the editor makes on save. Whether and when it becomes a
+     * commit is the user's decision, made in the commit prompt.
      *
      * @param {string} name Project name.
      * @param {string} path Path relative to the project.
@@ -684,11 +845,12 @@ export function createSync({ onChange } = {}) {
      */
     async function writeFiles(name, path, content) {
         await vault.writeFile(name, path, content);
-        saveProject(name);
+        emit();
     }
 
     /**
-     * Delete a file locally and queue its removal on GitHub.
+     * Delete a file locally. Its removal from GitHub happens on the next commit,
+     * where it shows up as a deleted file.
      *
      * @param {string} name
      * @param {string} path
@@ -696,7 +858,7 @@ export function createSync({ onChange } = {}) {
      */
     async function deleteFile(name, path) {
         await vault.deleteFile(name, path);
-        saveDeletion(name, path);
+        emit();
     }
 
     /**
@@ -713,28 +875,34 @@ export function createSync({ onChange } = {}) {
             return;
         }
 
-        const files = await readProject(project);
-        for (const path of Object.keys(files)) {
+        // Deleting a project is already a confirmed, destructive action, so the
+        // remote deletion happens with it rather than being left as an orphaned
+        // dirty state for a project that no longer appears anywhere.
+        const snapshot = await vault.readCommitSnapshot(project);
+        const committed = snapshot && snapshot.files ? Object.keys(snapshot.files) : [];
+
+        if (committed.length > 0 && workspace && user) {
             try {
-                deleted.add(`${WORK_ROOT}/${project}/${path}`);
+                await withToken((token) =>
+                    commitFiles({
+                        token,
+                        owner: workspace.owner,
+                        repo: workspace.repo,
+                        branch: workspace.branch,
+                        files: [],
+                        deletes: committed.map((path) => `${WORK_ROOT}/${project}/${path}`),
+                        message: `Delete ${project}`,
+                        identity: identityFor(user),
+                    }),
+                );
             } catch {
-                // Unusable path: nothing was ever committed for it.
+                // The local delete is what the user asked for; a failed remote
+                // delete is reported through status, not by blocking the delete.
             }
         }
 
         await vault.deleteProject(project);
-        pending.add(project);
-        await flushProject(project);
-    }
-
-    // Flush when the tab goes away, so a closing browser is not a lost commit.
-    if (typeof window !== 'undefined') {
-        window.addEventListener('pagehide', () => {
-            void flush();
-        });
-        window.addEventListener('online', () => {
-            void flush();
-        });
+        emit();
     }
 
     return {
@@ -750,8 +918,8 @@ export function createSync({ onChange } = {}) {
         get error() {
             return lastError;
         },
-        get pending() {
-            return pending.size;
+        get committing() {
+            return committing;
         },
         subscribe,
         onStatus: subscribe,
@@ -765,13 +933,16 @@ export function createSync({ onChange } = {}) {
         writeFiles,
         deleteFile,
         deleteProject,
-        saveProject,
-        saveDeletion,
-        flush,
+        dirty,
+        commit,
+        hasUncommitted,
+        listCommits,
+        getCommit,
+        fileAt,
         disconnect,
     };
 }
 
 export { REPO_NAME as DEFAULT_REPO_NAME };
 export const WORK_DIR = WORK_ROOT;
-export const constants = { DEBOUNCE_MS, WORK_ROOT, REPO_NAME };
+export const constants = { WORK_ROOT, REPO_NAME };
