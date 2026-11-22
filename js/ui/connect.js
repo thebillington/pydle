@@ -431,6 +431,9 @@ export function mountConnect(element, sync) {
      *
      * @returns {{ message: string, label: string, run: () => void }}
      */
+    /** @type {string} */
+    let lastLoggedSignature = '';
+
     function errorPlan() {
         const error = localError || (sync && sync.error) || null;
         const kind = error && typeof error.kind === 'string' ? error.kind : '';
@@ -464,6 +467,13 @@ export function mountConnect(element, sync) {
                 run: createWorkspace,
             };
         }
+        if (kind === 'config' && error && typeof error.message === 'string' && error.message !== '') {
+            return {
+                message: error.message,
+                label: 'Try again',
+                run: retryConnect,
+            };
+        }
         if (kind === 'network') {
             return {
                 message: 'pydle could not reach GitHub. You can keep working and try again when you are online.',
@@ -472,7 +482,10 @@ export function mountConnect(element, sync) {
             };
         }
         return {
-            message: 'Something went wrong while signing in.',
+            message:
+                error && typeof error.message === 'string' && error.message !== ''
+                    ? error.message
+                    : 'Something went wrong while signing in.',
             label: 'Try again',
             run: retryConnect,
         };
@@ -746,6 +759,17 @@ export function mountConnect(element, sync) {
 
     function renderError() {
         const plan = errorPlan();
+
+        const error = localError || (sync && sync.error) || null;
+        const signature = error
+            ? [error.name, error.kind, error.code, error.status, error.message].join('|')
+            : 'none';
+        if (signature !== lastLoggedSignature) {
+            lastLoggedSignature = signature;
+            // The panel shows a sentence a person can act on; the console keeps the
+            // detail, which is the only way to diagnose a failure reported second-hand.
+            console.error('[pydle] sync error:', error);
+        }
 
         root.append(
             el('p', 'sync-lede', 'Sign-in did not finish.'),
