@@ -142,6 +142,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="css/sync.css">
     <link rel="stylesheet" href="css/editor-extras.css">
+    <link rel="stylesheet" href="css/editor-files.css">
 </head>
 <body>
     <header>
@@ -181,10 +182,15 @@
                     </button>
                 </div>
             </div>
-            <textarea id="code-editor"># Welcome to pydle!
+            <div class="editor-body">
+                <aside id="file-rail" class="file-rail" aria-label="Files in this project"></aside>
+                <div class="editor-main">
+                    <textarea id="code-editor"># Welcome to pydle!
 # Write Python code here and click Run (or press Ctrl+Enter)
 
 print("Hello, World!")</textarea>
+                </div>
+            </div>
         </section>
 
         <div id="resize-handle" class="resize-handle"></div>
@@ -292,6 +298,7 @@ print(greet("World"))</pre>
         import { mountStatus } from './js/ui/status.js';
         import { mountProjects } from './js/ui/projects.js';
         import { getResolvedTheme, mountThemeToggle } from './js/ui/theme.js';
+        import { defaultFilePath, mountFileRail, projectSlug } from './js/ui/files.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
@@ -386,10 +393,27 @@ print(greet("World"))</pre>
 
         let worker = null;
         let workerReady = false;
+        // The open project and the open file inside it are separate: a project
+        // is a directory, so `currentPath` is what the editor is looking at.
         let currentFileName = null;
+        let currentPath = null;
+        /** Files of the open project, path -> content. */
+        let projectFiles = {};
         let lastSavedCode = editor.getValue();
         let dirty = false;
         const STORAGE_PREFIX = 'pydle_file_';
+
+        // Commits are manual. The lead wires the commit prompt here (or leaves
+        // it null, in which case saving only writes the vault copy).
+        let onBeforeLeave = null;
+
+        const fileRail = mountFileRail(document.getElementById('file-rail'), {
+            onSelect: (path) => { void selectFile(path); },
+            onCreate: (name) => createFile(name),
+            onRename: (from, to) => renameFile(from, to),
+            onDelete: (path) => removeFile(path),
+        });
+        refreshRail();
 
         let isResizing = false;
         resizeHandle.addEventListener('mousedown', (e) => {
@@ -413,9 +437,28 @@ print(greet("World"))</pre>
             }
         });
 
+        function fileLabel() {
+            if (currentFileName === null) {
+                return 'untitled';
+            }
+            return currentPath ? currentFileName + '/' + currentPath : currentFileName;
+        }
+
         function updateFileIndicator() {
-            const name = currentFileName || 'untitled';
+            const name = fileLabel();
             fileIndicator.textContent = dirty ? name + ' •' : name;
+            fileIndicator.title = currentFileName
+                ? 'Saved in this browser and your repository'
+                : 'Saved in browser only';
+        }
+
+        /** Redraw the rail from the project's files and the open path. */
+        function refreshRail() {
+            fileRail.setState({
+                project: currentFileName,
+                files: Object.keys(projectFiles).sort(),
+                current: currentPath,
+            });
         }
 
         function markDirty() {
@@ -426,24 +469,56 @@ print(greet("World"))</pre>
 
         editor.on('change', markDirty);
 
-        function checkUnsaved() {
-            if (dirty) {
-                return confirm('You have unsaved changes. Discard them?');
+        /**
+         * Write the open buffer to the vault if it has unsaved changes.
+         *
+         * Called before switching files, before switching projects and before
+         * adding, renaming or deleting a file, so no buffer is ever dropped.
+         *
+         * @returns {Promise<boolean>} False when the vault refused the write.
+         */
+        async function flushCurrent() {
+            if (currentFileName === null || currentPath === null) {
+                return true;
             }
+            const code = editor.getValue();
+            projectFiles[currentPath] = code;
+            if (!dirty) {
+                return true;
+            }
+            try {
+                await sync.writeFiles(currentFileName, currentPath, code);
+            } catch (error) {
+                showStatus('Could not save ' + currentPath + ' yet', 'error');
+                return false;
+            }
+            lastSavedCode = code;
+            dirty = false;
+            updateFileIndicator();
+            refreshRail();
             return true;
         }
 
-        function saveFile() {
+        async function saveFile() {
             const code = editor.getValue();
             if (currentFileName === null) {
-                currentFileName = prompt('Save as (name):', 'my_program');
-                if (currentFileName === null) return;
-                currentFileName = currentFileName.trim().replace(/\.py$/, '');
-                if (!currentFileName) { currentFileName = null; return; }
+                const entered = prompt('Save as (project name):', 'my_program');
+                if (entered === null) return;
+                const slug = projectSlug(entered);
+                if (slug === null) {
+                    showStatus('That name has no usable characters', 'error');
+                    return;
+                }
+                currentFileName = slug;
+                currentPath = 'main.py';
             }
-            const key = STORAGE_PREFIX + currentFileName;
+            if (currentPath === null) {
+                currentPath = 'main.py';
+            }
+
+            projectFiles[currentPath] = code;
             try {
-                localStorage.setItem(key, code);
+                localStorage.setItem(STORAGE_PREFIX + currentFileName, code);
             } catch (e) {
                 alert('Save failed: ' + e.message);
                 return;
@@ -451,41 +526,199 @@ print(greet("World"))</pre>
             lastSavedCode = code;
             dirty = false;
             updateFileIndicator();
-            showStatus('Saved: ' + currentFileName, 'ready');
-            void persistToRepository(currentFileName, code);
+            refreshRail();
+            showStatus('Saved: ' + currentFileName + '/' + currentPath, 'ready');
+            await persistToRepository(currentFileName, currentPath, code);
         }
 
-        async function loadFile(name) {
-            if (!checkUnsaved()) return;
+        /** Open one file of the current project. */
+        async function selectFile(path) {
+            if (path === currentPath) {
+                return;
+            }
+            if (!(await flushCurrent())) {
+                return;
+            }
 
-            let code = null;
-            try {
-                const files = await sync.readProject(name);
-                if (files && typeof files['main.py'] === 'string') {
-                    code = files['main.py'];
+            let content = projectFiles[path];
+            if (typeof content !== 'string') {
+                let files = {};
+                try {
+                    files = (await sync.readProject(currentFileName)) || {};
+                } catch {
+                    files = {};
                 }
-            } catch (e) {
-                code = null;
+                projectFiles = { ...projectFiles, ...files };
+                content = files[path];
             }
-            if (code === null) {
-                code = localStorage.getItem(STORAGE_PREFIX + name);
+            if (typeof content !== 'string') {
+                showStatus('Could not open ' + path, 'error');
+                return;
             }
-            if (code === null) return;
 
-            editor.setValue(code);
+            currentPath = path;
+            editor.setValue(content);
+            lastSavedCode = content;
+            dirty = false;
+            clearErrorLine();
+            updateFileIndicator();
+            refreshRail();
+            showStatus('Loaded: ' + currentFileName + '/' + path, 'ready');
+        }
+
+        /**
+         * Open a project and select its entry file.
+         *
+         * `main.py` wins when present, because every project made before the
+         * file rail has one; otherwise the rail picks the first Python file.
+         *
+         * @param {string} name
+         */
+        async function loadFile(name) {
+            if (!(await flushCurrent())) {
+                return;
+            }
+
+            let files = {};
+            try {
+                files = (await sync.readProject(name)) || {};
+            } catch {
+                files = {};
+            }
+            if (Object.keys(files).length === 0) {
+                // Projects saved before the vault existed only live in
+                // localStorage, under the project name.
+                const legacy = localStorage.getItem(STORAGE_PREFIX + name);
+                if (legacy !== null) {
+                    files = { 'main.py': legacy };
+                }
+            }
+
+            const paths = Object.keys(files);
+            if (paths.length === 0) {
+                return;
+            }
+            const chosen = defaultFilePath(paths);
+            if (chosen === null) {
+                return;
+            }
+
             currentFileName = name;
-            lastSavedCode = code;
+            projectFiles = files;
+            currentPath = chosen;
+            editor.setValue(files[chosen]);
+            lastSavedCode = files[chosen];
             dirty = false;
             clearErrorLine();
             clearConsole();
-            showStatus('Loaded: ' + name, 'ready');
+            showStatus('Loaded: ' + name + '/' + chosen, 'ready');
             updateFileIndicator();
+            refreshRail();
             closeLoadOverlay();
+        }
+
+        /** Add an empty file to the open project and switch to it. */
+        async function createFile(name) {
+            if (currentFileName === null) {
+                return;
+            }
+            if (!(await flushCurrent())) {
+                return;
+            }
+
+            await sync.writeFiles(currentFileName, name, '');
+
+            projectFiles[name] = '';
+            currentPath = name;
+            editor.setValue('');
+            lastSavedCode = '';
+            dirty = false;
+            clearErrorLine();
+            updateFileIndicator();
+            refreshRail();
+            editor.focus();
+            showStatus('Added: ' + currentFileName + '/' + name, 'ready');
+        }
+
+        /**
+         * Rename a file by writing the new path and deleting the old one.
+         *
+         * @param {string} from
+         * @param {string} to
+         */
+        async function renameFile(from, to) {
+            if (currentFileName === null) {
+                return;
+            }
+            if (!(await flushCurrent())) {
+                return;
+            }
+
+            const content = typeof projectFiles[from] === 'string' ? projectFiles[from] : '';
+            await sync.writeFiles(currentFileName, to, content);
+            await sync.deleteFile(currentFileName, from);
+
+            projectFiles[to] = content;
+            delete projectFiles[from];
+            if (currentPath === from) {
+                currentPath = to;
+            }
+            updateFileIndicator();
+            refreshRail();
+            showStatus('Renamed ' + from + ' to ' + to, 'ready');
+        }
+
+        /**
+         * Delete one file. The rail refuses to remove the last one.
+         *
+         * @param {string} path
+         */
+        async function removeFile(path) {
+            if (currentFileName === null) {
+                return;
+            }
+            if (Object.keys(projectFiles).length <= 1) {
+                showStatus('A project needs at least one file', 'error');
+                return;
+            }
+            if (currentPath === path && !(await flushCurrent())) {
+                return;
+            }
+
+            await sync.deleteFile(currentFileName, path);
+            delete projectFiles[path];
+
+            if (currentPath === path) {
+                currentPath = defaultFilePath(Object.keys(projectFiles));
+                const content = currentPath ? projectFiles[currentPath] || '' : '';
+                editor.setValue(content);
+                lastSavedCode = content;
+                dirty = false;
+                clearErrorLine();
+            }
+            updateFileIndicator();
+            refreshRail();
+            showStatus('Deleted ' + path, 'ready');
+        }
+
+        /** Forget the editor state for a project that no longer exists. */
+        function closeProjectIfOpen(name) {
+            if (currentFileName !== name) {
+                return;
+            }
+            currentFileName = null;
+            currentPath = null;
+            projectFiles = {};
+            lastSavedCode = editor.getValue();
+            dirty = false;
+            updateFileIndicator();
+            refreshRail();
         }
 
         function deleteFile(name) {
             if (!confirm('Delete "' + name + '"?')) return;
             localStorage.removeItem(STORAGE_PREFIX + name);
+            closeProjectIfOpen(name);
             refreshLoadList();
             void sync
                 .deleteProject(name)
@@ -561,7 +794,8 @@ print(greet("World"))</pre>
 
         downloadBtn.addEventListener('click', () => {
             const code = editor.getValue();
-            const name = (currentFileName || 'untitled') + '.py';
+            // The file you are looking at, not the project, is what downloads.
+            const name = currentPath ? currentPath.split('/').pop() : 'untitled.py';
             const blob = new Blob([code], { type: 'text/x-python' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -728,6 +962,7 @@ print(greet("World"))</pre>
                 },
                 onDelete: async (name) => {
                     localStorage.removeItem(STORAGE_PREFIX + name);
+                    closeProjectIfOpen(name);
                     await sync.deleteProject(name);
                     await refreshVaultProjects();
                     refreshLoadList();
@@ -751,13 +986,19 @@ print(greet("World"))</pre>
             }
         }
 
-        async function persistToRepository(name, code) {
+        async function persistToRepository(name, path, code) {
             try {
-                await sync.writeFiles(name, 'main.py', code);
+                await sync.writeFiles(name, path, code);
                 await refreshVaultProjects();
             } catch (e) {
                 // Local save already succeeded, so this is only a sync problem.
                 showStatus('Saved locally; will sync later', 'ready');
+                return;
+            }
+
+            // Commits are manual: the commit prompt opens from here.
+            if (typeof onBeforeLeave === 'function') {
+                await onBeforeLeave();
             }
         }
 
