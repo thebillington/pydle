@@ -1,9 +1,9 @@
 /**
- * The sign-in panel.
+ * The "In your GitHub repository" half of the Your work dialog.
  *
- * Six views: welcome, the code to type, waiting, "create a workspace", connected,
- * and an error. Nothing here knows about GitHub internals — it calls the `Sync`
- * object and renders what comes back.
+ * The views are: not connected, asking for a code, showing the code, waiting to
+ * be approved, needing a repository, connected, and an error. Nothing here knows
+ * about GitHub internals — it calls the `Sync` object and renders what comes back.
  *
  * Every piece of remote data (the user code, the login, the repository name) is
  * written with `textContent`, never `innerHTML`.
@@ -438,68 +438,147 @@ export function mountConnect(element, sync) {
 
         if (codeName === 'expired_token') {
             return {
-                message: 'That code expired before it was approved. Press Connect GitHub to get a new one.',
-                label: 'Connect GitHub',
+                message: 'That code expired before it was approved.',
+                label: 'Get a new code',
                 run: startSignIn,
             };
         }
         if (codeName === 'access_denied') {
             return {
-                message: 'The sign-in was cancelled on GitHub. You can try again whenever you like.',
-                label: 'Connect GitHub',
+                message: 'The sign-in was cancelled on GitHub. Nothing changed.',
+                label: 'Try again',
                 run: startSignIn,
             };
         }
         if (kind === 'auth' || errorSource === 'signin') {
             return {
-                message: 'GitHub needs you to sign in again. Your work is safe on this device.',
-                label: 'Reconnect GitHub',
+                message: 'GitHub needs you to sign in again.',
+                label: 'Sign in with GitHub',
                 run: startSignIn,
             };
         }
         if (awaitingWorkspace) {
             return {
-                message: 'The workspace could not be created. Nothing was changed. You can try again.',
+                message: 'The repository could not be created. Nothing was changed.',
                 label: 'Try again',
                 run: createWorkspace,
             };
         }
         if (kind === 'network') {
             return {
-                message: 'We could not reach GitHub. Your work is safe on this device and will sync later.',
+                message: 'pydle could not reach GitHub. You can keep working and try again when you are online.',
                 label: 'Try again',
                 run: retryConnect,
             };
         }
         return {
-            message: 'Something went wrong while connecting. Your work is safe on this device.',
+            message: 'Something went wrong while signing in.',
             label: 'Try again',
             run: retryConnect,
         };
     }
 
+    /**
+     * The longer explanation, behind a disclosure so the panel rests quietly.
+     *
+     * @returns {HTMLDetailsElement}
+     */
+    function howItWorks() {
+        const details = el('details', 'sync-details');
+        details.append(el('summary', '', 'How this works'));
+
+        const body = el('div', 'sync-details-body');
+
+        const about = el('p');
+        about.append(
+            el('strong', '', 'What connecting does. '),
+            document.createTextNode(
+                'pydle asks GitHub for a small amount of access, so it can keep one repository up to date for you. There is no pydle account and no extra password to remember.',
+            ),
+        );
+
+        const owns = el('p');
+        owns.append(
+            el('strong', '', 'The repository is yours. '),
+            document.createTextNode(
+                'It sits in your GitHub account, under your name. You can open it, download it, share it or delete it without asking us, and it stays yours even if pydle is not around.',
+            ),
+        );
+
+        const sees = el('p');
+        sees.append(
+            el('strong', '', 'What pydle can see. '),
+            document.createTextNode(
+                'GitHub asks you to allow pydle to read and write your repositories. pydle only ever touches the one it makes for you. It never sees your GitHub password, and it does not read your other repositories, your email or your profile.',
+            ),
+        );
+
+        const offline = el('p');
+        offline.append(
+            el('strong', '', 'Your work stays usable offline. '),
+            document.createTextNode(
+                'Every project is kept on this device as well. You can write and run code with no internet at all, and pydle catches up with GitHub when the connection comes back.',
+            ),
+        );
+
+        const steps = el('ol', 'sync-steps');
+        const stepOne = el('li');
+        stepOne.append(
+            document.createTextNode('Press '),
+            el('strong', '', 'Sign in with GitHub'),
+            document.createTextNode(' and pydle shows you an eight-character code.'),
+        );
+        const stepTwo = el('li');
+        stepTwo.append(
+            document.createTextNode('Open '),
+            el('code', '', 'github.com/login/device'),
+            document.createTextNode(' on any device where you are signed in, type the code, and press Continue.'),
+        );
+        const stepThree = el('li');
+        stepThree.append(
+            document.createTextNode('Check that pydle is the name on the page, then press Authorize.'),
+        );
+        steps.append(stepOne, stepTwo, stepThree);
+
+        const approve = el('p');
+        approve.append(
+            el('strong', '', 'To approve a code, '),
+            document.createTextNode('follow these three steps.'),
+        );
+
+        body.append(about, owns, sees, offline, approve, steps);
+        details.append(body);
+        return details;
+    }
+
     function renderIdle() {
         root.append(
-            el('p', 'sync-lede', 'Keep your work in your own GitHub repository. No account with us.'),
+            el('p', 'sync-lede', 'Keep your work in a repository that belongs to you.'),
             el(
                 'p',
-                'sync-muted',
-                'Sign in with GitHub and your projects are saved to a repository you own. Your work also stays on this device.',
+                'sync-text',
+                'Sign in with GitHub and pydle saves a copy of every project in your own repository. Your work also stays on this device, so you can keep going without a connection.',
             ),
         );
 
         const actions = el('div', 'sync-actions');
-        actions.append(
-            button('Connect GitHub', 'primary', startSignIn, { disabled: busy }),
-            el('span', 'sync-small sync-muted', 'You will need a GitHub account.'),
-        );
+        actions.append(button('Sign in with GitHub', 'primary', startSignIn, { disabled: busy }));
         root.append(actions);
+
+        root.append(
+            el(
+                'p',
+                'sync-meta',
+                'You need a GitHub account. GitHub accounts are for people aged 13 and over.',
+            ),
+            howItWorks(),
+        );
     }
 
     function renderConnecting() {
         root.append(
-            el('p', 'sync-lede', 'Asking GitHub for a code…'),
-            el('p', 'sync-muted sync-small', 'This usually takes a moment.'),
+            el('p', 'sync-lede', 'Asking GitHub for a code.'),
+            el('p', 'sync-text', 'This usually takes a moment.'),
         );
 
         const actions = el('div', 'sync-actions');
@@ -514,13 +593,18 @@ export function mountConnect(element, sync) {
         }
 
         root.append(
-            el('p', 'sync-lede', 'Enter this code on GitHub to sign in.'),
+            el('p', 'sync-lede', 'Enter this code on GitHub.'),
+            el(
+                'p',
+                'sync-text',
+                'Open the page below, sign in if you need to, and type the code. It lasts fifteen minutes.',
+            ),
         );
 
         const codeRow = el('div', 'sync-code-row');
         const codeNode = el('code', 'sync-code', code.userCode || '—');
         codeNode.setAttribute('aria-label', 'Your sign-in code');
-        const copyMessage = el('span', 'sync-small sync-muted sync-copy-message');
+        const copyMessage = el('span', 'sync-copy-message');
         copyMessage.setAttribute('aria-live', 'polite');
 
         const copy = button('Copy code', 'quiet', () => {
@@ -530,29 +614,33 @@ export function mountConnect(element, sync) {
         codeRow.append(codeNode, copy);
         root.append(codeRow, copyMessage);
 
-        root.append(
-            el(
-                'p',
-                'sync-muted sync-small',
-                'Only enter this code on a page you opened yourself. A code sent to you might not be from pydle.',
-            ),
-        );
-
-        const link = el('a', 'sync-link', 'Open github.com/login/device');
+        const link = el('a', 'sync-btn sync-btn-primary', 'Open github.com/login/device');
         link.href = code.verificationUri;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        root.append(link);
+        const linkRow = el('div', 'sync-actions');
+        linkRow.append(link);
+        root.append(linkRow);
 
-        countdown = el('p', 'sync-countdown', countdownText());
+        root.append(
+            el(
+                'p',
+                'sync-meta',
+                'Only type this code on a GitHub page you opened yourself. A code someone sends you might not be from pydle.',
+            ),
+        );
+
+        countdown = el('span', 'sync-countdown', countdownText());
         countdown.setAttribute('aria-live', 'polite');
-        root.append(countdown);
+
+        const waiting = el('span', 'sync-waiting', 'Waiting for you to approve');
+        waiting.setAttribute('aria-live', 'polite');
+
+        const right = el('span', 'sync-actions-group');
+        right.append(countdown, button('Cancel', 'quiet', cancelSignIn));
 
         const actions = el('div', 'sync-actions sync-actions-between');
-        actions.append(
-            el('span', 'sync-waiting', 'Waiting for you to approve…'),
-            button('Cancel', 'quiet', cancelSignIn),
-        );
+        actions.append(waiting, right);
         root.append(actions);
     }
 
@@ -560,28 +648,45 @@ export function mountConnect(element, sync) {
         const login = typeof sync?.identity?.login === 'string' ? sync.identity.login : '';
 
         root.append(
-            el('p', 'sync-lede', 'You are signed in, but there is no pydle workspace yet.'),
-        );
-
-        if (login) {
-            root.append(el('p', 'sync-muted sync-small', `Signed in as ${login}.`));
-        }
-
-        root.append(
+            el('p', 'sync-lede', 'One more step: pydle needs somewhere to keep your work.'),
             el(
                 'p',
-                'sync-muted',
-                'No repository called pydle was found in your GitHub account. Create one to keep your work there. It is private, and only you can see it.',
+                'sync-text',
+                'There is no repository called pydle in your account yet. pydle can create one for you. It is private, so only you can see it, and you can delete it whenever you like.',
             ),
         );
 
+        if (login) {
+            root.append(el('p', 'sync-repo-account', `Signed in as ${login}`));
+        }
+
         const actions = el('div', 'sync-actions');
         actions.append(
-            button(busy ? 'Creating…' : 'Create my workspace', 'primary', createWorkspace, {
+            button(busy ? 'Creating…' : 'Create my repository', 'primary', createWorkspace, {
                 disabled: busy,
             }),
         );
         root.append(actions);
+    }
+
+    /**
+     * Only build a repository link from names that are safe in a URL.
+     *
+     * @param {unknown} owner
+     * @param {unknown} repo
+     * @returns {string}
+     */
+    function repoHref(owner, repo) {
+        const clean = /^[A-Za-z0-9._-]+$/;
+        if (
+            typeof owner === 'string' &&
+            typeof repo === 'string' &&
+            clean.test(owner) &&
+            clean.test(repo)
+        ) {
+            return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+        }
+        return '';
     }
 
     function renderConnected() {
@@ -591,36 +696,66 @@ export function mountConnect(element, sync) {
         const login = typeof sync?.identity?.login === 'string' ? sync.identity.login : '';
         const offline = sync?.status === 'offline';
 
-        root.append(el('p', 'sync-lede', 'Your work is saved to your GitHub repository.'));
+        root.append(el('p', 'sync-lede', 'Your work is saved in your GitHub repository.'));
 
-        if (owner && repo) {
-            const line = el('p', 'sync-workspace');
-            line.append(el('code', '', `${owner}/${repo}`));
-            root.append(line);
-        }
-
+        const summary = el('div', 'sync-repo');
+        summary.append(el('p', 'sync-repo-name', owner && repo ? `${owner}/${repo}` : 'Your repository'));
         if (login) {
-            const line = el('p', 'sync-muted sync-small');
-            line.append(document.createTextNode('Signed in as '), el('strong', '', login), document.createTextNode('.'));
-            root.append(line);
+            summary.append(el('p', 'sync-repo-account', `Signed in as ${login}`));
         }
-
-        root.append(el('p', 'sync-muted', 'Local work stays on this device as well.'));
+        root.append(summary);
 
         if (offline) {
             root.append(
-                el('p', 'sync-muted sync-small', 'You are offline. Changes are kept here and will sync later.'),
+                el(
+                    'p',
+                    'sync-note',
+                    'You are offline. Your work is still here, and pydle will catch up with GitHub when you are back online.',
+                ),
+            );
+        } else {
+            root.append(
+                el(
+                    'p',
+                    'sync-text',
+                    'A copy also stays on this device, so you can keep working with no connection.',
+                ),
             );
         }
 
-        const actions = el('div', 'sync-actions');
+        const actions = el('div', 'sync-actions sync-actions-between');
+        const href = repoHref(owner, repo);
+        if (href) {
+            const open = el('a', 'sync-btn sync-btn-primary', 'Open on GitHub');
+            open.href = href;
+            open.target = '_blank';
+            open.rel = 'noopener noreferrer';
+            actions.append(open);
+        }
         actions.append(button('Forget this device', 'quiet', disconnect, { disabled: busy }));
         root.append(actions);
+
+        root.append(
+            el(
+                'p',
+                'sync-meta',
+                'Forgetting this device removes the sign-in from this browser. Your repository and your work stay exactly where they are.',
+            ),
+        );
     }
 
     function renderError() {
         const plan = errorPlan();
-        root.append(el('p', 'sync-lede sync-error', plan.message));
+
+        root.append(
+            el('p', 'sync-lede', 'Sign-in did not finish.'),
+        );
+
+        const notice = el('div', 'sync-note sync-note-error', plan.message);
+        notice.setAttribute('role', 'alert');
+        root.append(notice);
+
+        root.append(el('p', 'sync-meta', 'Your work is still on this device. Nothing was lost.'));
 
         const actions = el('div', 'sync-actions');
         actions.append(button(plan.label, 'primary', plan.run, { disabled: busy }));

@@ -146,7 +146,10 @@
         <h1>pydle <span class="subtitle">python in your browser</span></h1>
         <div class="controls">
             <span id="sync-status" class="sync-status"></span>
-            <button id="sync-btn" class="btn btn-sync" title="Save your work to your own GitHub repository">Sync</button>
+            <button id="sync-btn" class="btn btn-sync" title="Your work: your GitHub repository and the projects on this device" aria-haspopup="dialog" aria-controls="sync-overlay" aria-label="Your work">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                Your work
+            </button>
             <span id="theme-toggle" class="theme-toggle-slot"></span>
             <button id="instructions-btn" class="btn btn-instr">Help</button>
             <a href="https://github.com/thebillington/pydle/issues/new" target="_blank" rel="noopener noreferrer" class="btn btn-issue">
@@ -249,17 +252,22 @@ print(greet("World"))</pre>
         </div>
     </div>
 
-    <div id="sync-overlay" class="overlay hidden">
+    <div id="sync-overlay" class="overlay sync-overlay hidden">
         <div class="overlay-backdrop"></div>
-        <div class="overlay-content">
+        <div class="overlay-content" role="dialog" aria-modal="true" aria-labelledby="sync-title">
             <div class="overlay-header">
-                <h2>Your work</h2>
-                <button id="close-sync" class="btn btn-close">&times;</button>
+                <h2 id="sync-title">Your work</h2>
+                <button id="close-sync" class="btn btn-close" aria-label="Close Your work">&times;</button>
             </div>
-            <div id="connect-panel"></div>
-            <div class="sync-projects">
-                <h3>Saved on this device</h3>
-                <div id="project-list"></div>
+            <div class="sync-body">
+                <section class="sync-section" aria-labelledby="sync-github-heading">
+                    <h3 class="sync-section-label" id="sync-github-heading">In your GitHub repository</h3>
+                    <div id="connect-panel"></div>
+                </section>
+                <section class="sync-section" aria-labelledby="sync-local-heading">
+                    <h3 class="sync-section-label" id="sync-local-heading">On this device</h3>
+                    <div id="project-list"></div>
+                </section>
             </div>
         </div>
     </div>
@@ -647,6 +655,10 @@ print(greet("World"))</pre>
                     await refreshVaultProjects();
                     refreshLoadList();
                 },
+                onStart: () => {
+                    closeSyncOverlay();
+                    editor.focus();
+                },
             });
         } else {
             syncBtn.style.display = 'none';
@@ -674,6 +686,7 @@ print(greet("World"))</pre>
 
         function openSyncOverlay() {
             syncOverlay.classList.remove('hidden');
+            closeSyncBtn.focus({ preventScroll: true });
             void refreshVaultProjects();
         }
 

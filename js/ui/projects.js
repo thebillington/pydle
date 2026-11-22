@@ -136,7 +136,7 @@ function normalizeProjects(value) {
  *
  * @param {HTMLElement} element Container supplied by the caller.
  * @param {object} sync The `Sync` object from `js/sync.js`.
- * @param {{ onDelete?: (name: string) => unknown, onOpen?: (name: string) => unknown }} [options]
+ * @param {{ onDelete?: (name: string) => unknown, onOpen?: (name: string) => unknown, onStart?: () => unknown }} [options]
  * @returns {{ update: () => void, destroy: () => void }}
  */
 export function mountProjects(element, sync, options = {}) {
@@ -146,6 +146,7 @@ export function mountProjects(element, sync, options = {}) {
 
     const onDelete = typeof options?.onDelete === 'function' ? options.onDelete : null;
     const onOpen = typeof options?.onOpen === 'function' ? options.onOpen : null;
+    const onStart = typeof options?.onStart === 'function' ? options.onStart : null;
 
     const root = document.createElement('div');
     root.className = 'sync-projects';
@@ -180,9 +181,19 @@ export function mountProjects(element, sync, options = {}) {
         }
 
         if (projects.length === 0) {
-            root.append(
-                el('p', 'sync-empty', 'No projects yet. Create one in the editor to get started.'),
+            const empty = el('div', 'sync-empty');
+            empty.append(
+                el('p', 'sync-empty-text', 'Nothing saved on this device yet.'),
+                el(
+                    'p',
+                    'sync-meta',
+                    'Projects you save in pydle are kept here, so they open without a connection.',
+                ),
+                button('Open the editor', 'quiet', startEditor, {
+                    ariaLabel: 'Close this dialog and open the editor',
+                }),
             );
+            root.append(empty);
             return;
         }
 
@@ -251,10 +262,31 @@ export function mountProjects(element, sync, options = {}) {
     }
 
     /**
+     * Leave the dialog and put the cursor in the editor.
+     */
+    function startEditor() {
+        if (onStart) {
+            try {
+                onStart();
+                return;
+            } catch {
+                // Fall through to the plain page behaviour.
+            }
+        }
+        const overlay = root.closest('.overlay');
+        if (overlay) {
+            overlay.classList.add('hidden');
+        }
+        const editor = document.getElementById('code-editor');
+        if (editor && typeof editor.focus === 'function') {
+            editor.focus();
+        }
+    }
+
+    /**
      * @param {string} name
      */
-    function openProject(name) {
-        if (onOpen) {
+    function openProject(name) {        if (onOpen) {
             try {
                 const result = onOpen(name);
                 if (result && typeof result.catch === 'function') {

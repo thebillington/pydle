@@ -96,20 +96,20 @@ export function mountStatus(element, sync) {
                 break;
             case 'connected':
                 label.textContent = login ? `Signed in as ${login}` : 'Signed in to GitHub';
-                root.title = 'Your work is saved to your GitHub repository.';
+                root.title = 'Your work is saved in your GitHub repository and on this device.';
                 break;
             case 'offline':
                 label.textContent = 'Offline — saved on this device';
-                root.title = 'Your work is safe. It will sync when you are online again.';
+                root.title = 'Your work is safe. pydle will catch up when you are online again.';
                 break;
             case 'error':
-                label.textContent = 'Sync paused';
-                root.title = 'Your work is safe on this device. Sign in again or try later.';
+                label.textContent = 'Not connected — your work is safe';
+                root.title = 'Your work is still on this device. Open Your work to sign in again.';
                 break;
             case 'signed-out':
             default:
-                label.textContent = 'Sign in to save your work';
-                root.title = 'Sign in with GitHub to keep your work in your own repository.';
+                label.textContent = 'Not connected to GitHub';
+                root.title = 'Your work is saved on this device. Sign in to keep a copy in your own repository.';
                 break;
         }
     }

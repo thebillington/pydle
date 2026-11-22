@@ -1,11 +1,33 @@
 /*
- * Sync UI: the toolbar indicator, the sign-in panel, and the project list.
+ * Your work: the toolbar control, its indicator, and the dialog that explains
+ * the connection and lists the projects kept on this device.
  *
- * Colours, radii and font stacks come from the variables in style.css so this
- * reads as part of the same tool rather than a separate widget.
+ * Colours, radii and font stacks come from style.css so this reads as part of
+ * the same tool rather than a separate widget. The spacing and type values
+ * below are the dialog's own scale, used everywhere in this file: 4 / 8 / 12 /
+ * 16 / 24px, and 18 / 15 / 13.5 / 12px type.
  */
 
-/* Toolbar indicator ------------------------------------------------------- */
+/* Toolbar control --------------------------------------------------------- */
+
+.btn-sync {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.btn-sync:hover {
+    border-color: var(--text-secondary);
+}
+
+.btn-sync svg {
+    flex-shrink: 0;
+    opacity: 0.85;
+}
 
 .sync-status {
     display: inline-flex;
@@ -60,16 +82,65 @@
     color: var(--accent-red);
 }
 
-/* Sign-in panel ----------------------------------------------------------- */
+/* Dialog ------------------------------------------------------------------ */
+
+.sync-overlay .overlay-content {
+    width: calc(100vw - 32px);
+    max-width: 680px;
+    max-height: 86vh;
+}
+
+.sync-overlay .overlay-header {
+    padding: 18px 28px;
+}
+
+.sync-overlay .overlay-header h2 {
+    font-size: 19px;
+    letter-spacing: -0.01em;
+}
+
+/* The scrolling region. Sections own their own padding so the hairline
+   divider can run from edge to edge. */
+.sync-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.sync-section {
+    padding: 24px 28px;
+}
+
+.sync-section + .sync-section {
+    border-top: 1px solid var(--border);
+}
+
+/* Quiet section label: smaller and warmer than the dialog title, so the two
+   never compete. */
+.sync-section-label {
+    margin-bottom: 14px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+/* Panel type scale -------------------------------------------------------- */
+
+.sync-panel,
+.sync-projects {
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
 
 .sync-panel {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    font-family: var(--font-sans);
-    font-size: 13px;
-    line-height: 1.55;
-    color: var(--text-primary);
+    gap: 14px;
 }
 
 .sync-panel:focus {
@@ -77,59 +148,81 @@
 }
 
 .sync-lede {
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.5;
+    color: var(--text-primary);
 }
 
-.sync-muted {
+.sync-text {
     color: var(--text-secondary);
 }
 
-.sync-small {
+.sync-meta {
     font-size: 12px;
+    line-height: 1.55;
+    color: var(--text-secondary);
 }
 
 .sync-error {
     color: var(--accent-red);
 }
 
+.sync-small {
+    font-size: 12px;
+}
+
+/* Actions ----------------------------------------------------------------- */
+
 .sync-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-    margin-top: 4px;
 }
 
 .sync-actions-between {
     justify-content: space-between;
 }
 
+.sync-actions-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sync-actions + .sync-meta {
+    margin-top: -6px;
+}
+
 /* Buttons ----------------------------------------------------------------- */
 
 .sync-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 7px 16px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
     font-family: var(--font-sans);
     font-size: 13px;
     font-weight: 600;
-    padding: 8px 16px;
-    border: 1px solid transparent;
-    border-radius: 6px;
+    line-height: 1.2;
+    text-decoration: none;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, opacity 0.15s, transform 0.1s;
-}
-
-.sync-btn:active {
-    transform: scale(0.97);
+    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
 }
 
 .sync-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-    transform: none;
 }
 
 .sync-btn-primary {
     background: var(--accent-green);
+    border-color: var(--accent-green);
     color: var(--bg-primary);
 }
 
@@ -149,8 +242,8 @@
 
 .sync-btn-danger {
     background: transparent;
-    border-color: var(--border);
-    color: var(--accent-red);
+    border-color: transparent;
+    color: var(--text-secondary);
 }
 
 .sync-btn-danger:hover:not(:disabled) {
@@ -160,12 +253,13 @@
 }
 
 .sync-btn-small {
+    min-height: 28px;
+    padding: 4px 12px;
     font-size: 12px;
-    padding: 4px 10px;
 }
 
 .sync-btn:focus-visible,
-.sync-link:focus-visible {
+.sync-details summary:focus-visible {
     outline: 2px solid var(--accent-green);
     outline-offset: 2px;
 }
@@ -181,29 +275,17 @@
 
 .sync-code {
     display: inline-block;
-    padding: 8px 14px;
+    padding: 12px 20px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--bg-tertiary);
     color: var(--text-primary);
     font-family: var(--font-mono);
-    font-size: 22px;
+    font-size: 28px;
     font-weight: 600;
-    letter-spacing: 0.12em;
-    line-height: 1.2;
+    letter-spacing: 0.16em;
+    line-height: 1.15;
     user-select: all;
-}
-
-.sync-copy-message:empty {
-    display: none;
-}
-
-.sync-link {
-    align-self: flex-start;
-    color: var(--accent-green);
-    font-size: 13px;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
 }
 
 .sync-countdown {
@@ -213,66 +295,178 @@
 }
 
 .sync-waiting {
-    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     font-size: 12px;
+    color: var(--text-secondary);
 }
 
-.sync-workspace {
+/* A single small pulse, so "waiting" reads as present without shouting. */
+.sync-waiting::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-yellow);
+}
+
+.sync-copy-message {
+    margin-top: -6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sync-copy-message:empty {
+    display: none;
+}
+
+/* Connected: the repository as a heading, not a text field. */
+
+.sync-repo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px 0 2px 0;
+}
+
+.sync-repo-name {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.sync-repo-account {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sync-note {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-primary);
+}
+
+.sync-note-error {
+    padding: 2px 0 2px 14px;
+    border: 0;
+    border-left: 2px solid var(--accent-red);
+    border-radius: 0;
+    background: transparent;
+    font-size: 13.5px;
+    color: var(--text-primary);
+}
+
+/* Disclosure -------------------------------------------------------------- */
+
+.sync-details {
+    /* No hairline: a divider here reads as a third section, because the section
+       labels above are also small uppercase text. The disclosure belongs to the
+       GitHub block, so it only needs breathing room. */
+    padding-top: 10px;
+    margin-top: 2px;
+}
+
+.sync-details summary {
     display: flex;
     align-items: center;
     gap: 8px;
+    list-style: none;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.sync-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.sync-details summary::before {
+    content: '+';
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1;
+    color: var(--text-secondary);
+}
+
+.sync-details[open] summary::before {
+    content: '\2212';
+}
+
+.sync-details summary:hover {
     color: var(--text-primary);
 }
 
-.sync-workspace code {
-    padding: 3px 8px;
-    border: 1px solid var(--border);
+.sync-details[open] summary {
+    color: var(--text-primary);
+}
+
+.sync-details-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 0 0 22px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.sync-details-body strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.sync-details-body code {
+    padding: 1px 5px;
     border-radius: 4px;
     background: var(--bg-tertiary);
     font-family: var(--font-mono);
-    font-size: 12px;
-}
-
-/* Project list ------------------------------------------------------------ */
-
-.sync-projects {
-    font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: 11.5px;
     color: var(--text-primary);
 }
 
-.sync-empty {
-    padding: 10px 0;
-    color: var(--text-secondary);
-    font-size: 12px;
+.sync-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding-left: 1.2em;
+    list-style: decimal;
 }
+
+/* Project list ------------------------------------------------------------ */
 
 .sync-project-list {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 2px;
 }
 
 .sync-project {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 7px 8px;
-    border-radius: 6px;
-    transition: background 0.15s;
+    gap: 16px;
+    padding: 11px 0;
 }
 
-.sync-project:hover {
-    background: var(--bg-tertiary);
+.sync-project + .sync-project {
+    border-top: 1px solid var(--border);
 }
 
 .sync-project-main {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 8px;
+    flex-direction: column;
+    gap: 1px;
     min-width: 0;
 }
 
@@ -282,10 +476,12 @@
     white-space: nowrap;
     font-family: var(--font-mono);
     font-size: 13px;
+    color: var(--text-primary);
 }
 
 .sync-project-state {
-    font-size: 11px;
+    font-size: 11.5px;
+    line-height: 1.45;
     color: var(--text-secondary);
 }
 
@@ -312,14 +508,33 @@
     gap: 6px;
 }
 
+.sync-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.sync-empty-text {
+    font-size: 13.5px;
+    color: var(--text-primary);
+}
+
 @media (max-width: 560px) {
+    .sync-overlay .overlay-header,
+    .sync-section {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
     .sync-project {
         align-items: flex-start;
         flex-direction: column;
-        gap: 6px;
+        gap: 8px;
     }
 
     .sync-code {
-        font-size: 19px;
+        font-size: 22px;
+        letter-spacing: 0.12em;
     }
 }
