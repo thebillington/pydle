@@ -7,10 +7,7 @@
  */
 export const CONFIG = {
     clientId: 'Ov23ligramyjE9ZbukBl',
-    // TODO: switch to https://auth.pydle.uk once the zone stops blocking the
-    // worker hostname (see docs/PLAN.md). The custom domain is attached and
-    // working, but the zone's bot protection answers 403 to every method.
-    shimBase: 'https://pydle-auth.thebillington.workers.dev',
+    shimBase: 'https://auth.pydle.uk',
     apiBase: 'https://api.github.com',
     apiVersion: '2026-03-10',
     scopes: ['repo'],
