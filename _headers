@@ -1,0 +1,25 @@
+# Cloudflare Pages headers
+#
+# The site is behind the Cloudflare proxy, which caches .js and .css by extension.
+# With a four hour TTL a deploy could take four hours to appear, and during this
+# project that meant a fix was committed, tested against a stale bundle, and
+# reported as not working.
+#
+# Revalidate instead of trusting max-age. The files are small and the app is not
+# latency sensitive enough to justify stale code.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/*.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.svg
+  Cache-Control: public, max-age=3600
