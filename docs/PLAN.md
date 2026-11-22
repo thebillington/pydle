@@ -167,15 +167,46 @@ ship in dated versions, and each version is supported for at least 24 months.
 
 ### Finding the repo after sign-in
 
-There is no pupil-ref lookup, so discover it:
+Never ask the student to type a repository name. Resolve it, in this order, and
+stop at the first hit:
+
+1. **Personal workspace.** `GET /repos/{login}/pydle`. If it exists and looks like
+   a vault, connect. If it does not exist, offer *"create my workspace"* — one
+   `POST /user/repos`, private — and scaffold it. This path needs no teacher, no
+   org and no invite, which is what makes pydle usable by an individual.
+2. **Class workspaces.**
+   `GET /user/repos?affiliation=collaborator&per_page=100`, keeping entries whose
+   name starts `pydle-` and whose `permissions.push` is true.
+3. **If a class link is present** — `pydle.uk/#org=stmarys-cs&class=9cs1` — narrow
+   step 2 to that owner and to names starting `pydle-9cs1-`. The teacher posts the
+   link once per class; it is not per student.
+4. **Exactly one match** → connect silently, with no UI at all.
+5. **Several** → picker showing `org/repo`, last commit date and last opened.
+6. **None** → *"ask your teacher for access"* if a class link is active, otherwise
+   offer the personal workspace.
+
+Naming convention, which is the whole mechanism:
 
 ```
-GET /user/repos?affiliation=collaborator&per_page=100
+<login>/pydle                       personal, created on demand by pydle
+<school-org>/pydle-<ref>            class, created by the teacher
+<school-org>/pydle-<class>-<ref>    optional, when a student may be in two classes
 ```
 
-Filter names starting `pydle-`. One match connects silently; several means the
-student is in more than one class, so show a picker; none means the teacher has
-not set them up yet, so show that message rather than an error.
+Cache `owner/repo` locally against the token, so resolution runs once per device
+and never again. If a student ends up with both a personal and a class workspace,
+give the header a two-item switcher (*Personal* / *9CS1*) rather than a prompt —
+two workspaces is honest and matches how pupils already think about school versus
+home.
+
+Guard rails on connecting:
+
+- refuse if `permissions.push` is false — read-only repos are class resources,
+  not workspaces;
+- refuse to scaffold into a non-empty repo that has no `pydle.json` and no
+  recognised layout; offer a different name rather than writing over someone's
+  files;
+- an empty repo is scaffolded per §5, creating the branch with `POST /git/refs`.
 
 ## 5. Bootstrapping an empty repo
 
