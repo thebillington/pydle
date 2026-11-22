@@ -177,9 +177,8 @@ stop at the first hit:
 2. **Class workspaces.**
    `GET /user/repos?affiliation=collaborator&per_page=100`, keeping entries whose
    name starts `pydle-` and whose `permissions.push` is true.
-3. **If a class link is present** — `pydle.uk/#org=stmarys-cs&class=9cs1` — narrow
-   step 2 to that owner and to names starting `pydle-9cs1-`. The teacher posts the
-   link once per class; it is not per student.
+3. **If a class link is present** — `pydle.uk/#org=stmarys-cs` — narrow step 2 to
+   that owner. The teacher posts the link once per class; it is not per student.
 4. **Exactly one match** → connect silently, with no UI at all.
 5. **Several** → picker showing `org/repo`, last commit date and last opened.
 6. **None** → *"ask your teacher for access"* if a class link is active, otherwise
@@ -188,16 +187,40 @@ stop at the first hit:
 Naming convention, which is the whole mechanism:
 
 ```
-<login>/pydle                       personal, created on demand by pydle
-<school-org>/pydle-<ref>            class, created by the teacher
-<school-org>/pydle-<class>-<ref>    optional, when a student may be in two classes
+<login>/pydle                personal: created on request, owned by the student
+<school-org>/pydle-<ref>     class: created by the teacher, pushed by the student
 ```
 
-Cache `owner/repo` locally against the token, so resolution runs once per device
-and never again. If a student ends up with both a personal and a class workspace,
-give the header a two-item switcher (*Personal* / *9CS1*) rather than a prompt —
-two workspaces is honest and matches how pupils already think about school versus
-home.
+No class segment in the name. A pupil who somehow ends up in two classes gets two
+repos in two orgs, which the workspace switch below already covers.
+
+**Personal and class are not a setting — they are derived:**
+
+```js
+const isPersonal = repo.owner.login === signedInUser.login;
+```
+
+Personal is a repo in the student's own account, where they are admin. Class is a
+repo in the school org, where they are an outside collaborator with push. Nothing
+else distinguishes them, so there is no preference to store and no mode to choose.
+
+A user can have both, and nothing special-cases it — they are two independent
+repositories the same account can push to. Keep it rare rather than supported:
+
+- create the personal workspace **only** on explicit request, or when nothing else
+  resolves — never automatically for someone who already has a class workspace;
+- show one active workspace, named in the header, with a **Switch workspace…**
+  action that lists the rest. Not a permanent two-item switcher, and no picker at
+  startup;
+- the picker appears only when both exist on a device with no class link, which is
+  genuinely ambiguous and worth exactly one question;
+- cache `owner/repo` locally against the token, so resolution runs once per device
+  and never again.
+
+Two side benefits of keeping personal separate: it survives the school org being
+deleted or the teacher leaving, and "archive my school work to my personal
+workspace" is later just a blob copy through the same sync code rather than a new
+feature.
 
 Guard rails on connecting:
 
