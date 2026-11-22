@@ -136,10 +136,12 @@
     </script>
 
     <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css">
+    <link rel="stylesheet" href="vendor/codemirror/addon/dialog/dialog.css">
     <link rel="stylesheet" href="vendor/codemirror/dracula.min.css">
     <link rel="stylesheet" href="css/codemirror-light.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="css/sync.css">
+    <link rel="stylesheet" href="css/editor-extras.css">
 </head>
 <body>
     <header>
@@ -275,9 +277,16 @@ print(greet("World"))</pre>
     <script src="vendor/codemirror/codemirror.min.js"></script>
     <script src="vendor/codemirror/python.min.js"></script>
     <script src="vendor/codemirror/comment.min.js"></script>
+    <script src="vendor/codemirror/addon/dialog/dialog.js"></script>
+    <script src="vendor/codemirror/addon/search/searchcursor.js"></script>
+    <script src="vendor/codemirror/addon/search/search.js"></script>
+    <script src="vendor/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="vendor/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="vendor/codemirror/addon/selection/active-line.js"></script>
 
     <script type="module">
         import { CONFIG } from './js/config.js';
+        import { lineFromTraceback } from './js/traceback.js';
         import { createSync } from './js/sync.js';
         import { mountConnect } from './js/ui/connect.js';
         import { mountStatus } from './js/ui/status.js';
@@ -288,15 +297,73 @@ print(greet("World"))</pre>
             mode: 'python',
             theme: getResolvedTheme() === 'light' ? 'pydle-light' : 'dracula',
             lineNumbers: true,
+            gutters: ['pydle-error-gutter', 'CodeMirror-linenumbers'],
             indentUnit: 4,
             tabSize: 4,
             indentWithTabs: false,
+            autoCloseBrackets: true,
+            matchBrackets: true,
+            styleActiveLine: true,
             extraKeys: {
                 'Ctrl-/': 'toggleComment',
                 'Cmd-/': 'toggleComment',
                 'Ctrl-Enter': 'false',
+                'Ctrl-F': 'findPersistent',
+                'Cmd-F': 'findPersistent',
+                'Ctrl-H': 'replace',
+                'Cmd-Alt-F': 'replace',
             },
             viewportMargin: Infinity,
+        });
+
+        // ---- Error line marker ---------------------------------------------
+        //
+        // A failed run points the student at the line that raised: a gutter
+        // dot, a line background and a cursor move. Focus stays where it was
+        // (the console), so the traceback is still readable.
+        const ERROR_GUTTER = 'pydle-error-gutter';
+        let errorLineHandle = null;
+
+        function clearErrorLine() {
+            if (!errorLineHandle) return;
+            editor.removeLineClass(errorLineHandle, 'background', 'pydle-error-line');
+            editor.setGutterMarker(errorLineHandle, ERROR_GUTTER, null);
+            errorLineHandle = null;
+        }
+
+        function markErrorLine(lineNumber) {
+            clearErrorLine();
+            if (!Number.isInteger(lineNumber)) return;
+
+            const line = lineNumber - 1;
+            if (line < 0 || line > editor.lastLine()) return;
+
+            const handle = editor.getLineHandle(line);
+            if (!handle) return;
+
+            errorLineHandle = handle;
+            editor.addLineClass(handle, 'background', 'pydle-error-line');
+
+            const marker = document.createElement('div');
+            marker.className = 'pydle-error-mark';
+            marker.textContent = '●';
+            marker.title = 'Error on this line';
+            editor.setGutterMarker(handle, ERROR_GUTTER, marker);
+
+            editor.scrollIntoView({ line, ch: 0 }, 80);
+            editor.getDoc().setCursor({ line, ch: 0 });
+        }
+
+        editor.on('change', (cm, change) => {
+            if (!errorLineHandle) return;
+            const line = cm.getLineNumber(errorLineHandle);
+            if (line === null) {
+                errorLineHandle = null;
+                return;
+            }
+            if (change.from.line <= line && change.to.line >= line) {
+                clearErrorLine();
+            }
         });
 
         mountThemeToggle(document.getElementById('theme-toggle'), {
@@ -409,6 +476,7 @@ print(greet("World"))</pre>
             currentFileName = name;
             lastSavedCode = code;
             dirty = false;
+            clearErrorLine();
             clearConsole();
             showStatus('Loaded: ' + name, 'ready');
             updateFileIndicator();
@@ -570,6 +638,14 @@ print(greet("World"))</pre>
                         showStatus('Error', 'error');
                         runBtn.disabled = false;
                         stopBtn.disabled = true;
+                        try {
+                            const line = lineFromTraceback(
+                                (traceback || '') + '\n' + (message || '')
+                            );
+                            if (line !== null) markErrorLine(line);
+                        } catch (e) {
+                            // Marking is a convenience: never break the error path.
+                        }
                         break;
 
                     case 'stdout':
@@ -589,6 +665,7 @@ print(greet("World"))</pre>
 
         function runCode() {
             if (!workerReady) return;
+            clearErrorLine();
             const code = editor.getValue();
             worker.postMessage({ type: 'run', code });
         }

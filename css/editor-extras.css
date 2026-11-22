@@ -1,0 +1,62 @@
+/*
+ * CodeMirror extras shared by the editor and turtle pages.
+ *
+ * Two jobs:
+ *   - the narrow gutter that carries the "this line raised" dot, and
+ *   - the dark-theme half of the find/replace dialog, active line and error
+ *     line. The light half lives in css/codemirror-light.css beside the rest
+ *     of the pydle-light theme.
+ *
+ * Loaded after the themes so these rules win at equal specificity.
+ */
+
+/* Error gutter ------------------------------------------------------------ */
+
+/* A dedicated gutter keeps the line numbers intact; it is empty until a run
+ * fails, so it stays narrow. */
+.CodeMirror-gutter.pydle-error-gutter {
+    width: 14px;
+}
+
+.pydle-error-gutter .CodeMirror-gutter-elt {
+    width: 14px;
+}
+
+.pydle-error-mark {
+    font-size: 10px;
+    line-height: 1.5;
+    text-align: center;
+    cursor: default;
+}
+
+/* Dark theme (dracula) ---------------------------------------------------- */
+
+.cm-s-dracula .CodeMirror-activeline-background {
+    background: #33364a;
+}
+
+.cm-s-dracula .CodeMirror-dialog {
+    background: #282a36;
+    color: #f8f8f2;
+    border-bottom: 1px solid #44475a;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    padding: 0.35em 0.8em;
+}
+
+.cm-s-dracula .CodeMirror-dialog input {
+    color: #f8f8f2;
+    font-family: var(--font-mono);
+}
+
+.cm-s-dracula .CodeMirror-dialog .CodeMirror-search-hint {
+    color: #8b96c9 !important;
+}
+
+.cm-s-dracula .pydle-error-line {
+    background: rgba(255, 85, 85, 0.16);
+    box-shadow: inset 3px 0 0 #ff5555;
+}
+
+.cm-s-dracula .pydle-error-mark {
+    color: #ff5555;
+}
