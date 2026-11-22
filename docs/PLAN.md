@@ -155,19 +155,31 @@ the root of the user's history forever.
 
 ## 4. Bootstrapping
 
-An empty repo has no ref to patch, so the first commit creates the branch. Two traps:
+An empty repo has no ref to patch, so the first commit creates the branch. Three
+traps, and the third cost an afternoon:
 
 - `PATCH /git/refs/heads/main` fails on a repo with no commits — use
   `POST /git/refs`.
 - Do not hardcode `main`. Read `default_branch` from the repo object and use it.
+- **The git data API refuses an empty repository.** `POST /git/blobs` answers
+  `409 Conflict` until at least one commit exists, so this sequence cannot start
+  from nothing:
 
 ```
-GET    /repos/{o}/{r}                           → default_branch, empty?
-POST   /git/blobs            × N                → one per scaffolded file
-POST   /git/trees                               → no base_tree, whole tree
-POST   /git/commits                             → no parents
-POST   /git/refs            refs/heads/{branch}  → creates the branch
+PUT    /repos/{o}/{r}/contents/README.md        → seeds the first commit, makes the branch
+POST   /git/blobs            × N                → the remaining scaffold files
+POST   /git/trees           base_tree           → on top of the seed commit
+POST   /git/commits         parents: [head]     → the scaffold proper
+PATCH  /git/refs/heads/{branch}
 ```
+
+The seed is why `auto_init: false` still works: history starts with our own commit
+rather than GitHub's "Initial commit", and the Contents API is the one endpoint that
+does not object to an empty repository.
+
+The failure mode is worth recognising: every page load retried blob creation, got
+409, and reported "sign-in did not finish". A later retry appeared to fix it only
+because the repository had settled by then.
 
 Every later save is the same with `base_tree`, a parent, and
 `PATCH /git/refs/heads/{branch}`.
