@@ -640,6 +640,93 @@ export function createSync({ onChange } = {}) {
         }
     }
 
+    /* -------------------------------------------------------------- */
+    /* Projects                                                        */
+    /* -------------------------------------------------------------- */
+
+    /**
+     * Projects currently in the local vault, newest first.
+     *
+     * @returns {Promise<Array<{ name: string, updatedAt: number }>>}
+     */
+    async function listProjects() {
+        try {
+            return await vault.listProjects();
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Read one project's files.
+     *
+     * @param {string} name
+     * @returns {Promise<Record<string, string>>}
+     */
+    async function readProject(name) {
+        try {
+            return await vault.readProject(name);
+        } catch {
+            return {};
+        }
+    }
+
+    /**
+     * Write one file into a project and queue a commit.
+     *
+     * This is the call the editor uses on save. It returns as soon as the file is
+     * on disk locally; the commit is debounced and may happen much later.
+     *
+     * @param {string} name Project name.
+     * @param {string} path Path relative to the project.
+     * @param {string} content
+     * @returns {Promise<void>}
+     */
+    async function writeFiles(name, path, content) {
+        await vault.writeFile(name, path, content);
+        saveProject(name);
+    }
+
+    /**
+     * Delete a file locally and queue its removal on GitHub.
+     *
+     * @param {string} name
+     * @param {string} path
+     * @returns {Promise<void>}
+     */
+    async function deleteFile(name, path) {
+        await vault.deleteFile(name, path);
+        saveDeletion(name, path);
+    }
+
+    /**
+     * Delete a whole project, locally and on GitHub.
+     *
+     * @param {string} name
+     * @returns {Promise<void>}
+     */
+    async function deleteProject(name) {
+        let project;
+        try {
+            project = normalizeProjectName(name);
+        } catch {
+            return;
+        }
+
+        const files = await readProject(project);
+        for (const path of Object.keys(files)) {
+            try {
+                deleted.add(`${WORK_ROOT}/${project}/${path}`);
+            } catch {
+                // Unusable path: nothing was ever committed for it.
+            }
+        }
+
+        await vault.deleteProject(project);
+        pending.add(project);
+        await flushProject(project);
+    }
+
     // Flush when the tab goes away, so a closing browser is not a lost commit.
     if (typeof window !== 'undefined') {
         window.addEventListener('pagehide', () => {
@@ -673,6 +760,11 @@ export function createSync({ onChange } = {}) {
         connect,
         createWorkspace,
         pull,
+        listProjects,
+        readProject,
+        writeFiles,
+        deleteFile,
+        deleteProject,
         saveProject,
         saveDeletion,
         flush,
