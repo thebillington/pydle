@@ -94,8 +94,44 @@ The shim is a Cloudflare Worker with a hard allowlist:
 - `Origin` allowlisted to the production domain, with `Vary: Origin`;
 - optionally pinned to our `client_id`.
 
-Honour `interval`, and add 5 seconds on `slow_down` (RFC 8628). Codes expire in
-15 minutes.
+GitHub's reply to the first call:
+
+```
+device_code=3584d83530557fdd1f46af828993c8ef79f9dc5   secret, stays in the browser
+user_code=WDJB-MJHT                                   the 9 characters shown to the human
+verification_uri=https://github.com/login/device
+expires_in=900
+interval=5
+```
+
+Poll the second endpoint every `interval` seconds with `device_code` and
+`grant_type=urn:ietf:params:oauth:grant-type:device_code`:
+
+- `{"error":"authorization_pending"}` — keep polling
+- `{"error":"slow_down"}` — add 5 seconds to the interval, for this and all
+  subsequent polls (RFC 8628)
+- `{"error":"expired_token"}` — the 15 minutes elapsed; start again
+- `{"error":"access_denied"}` — the student declined
+
+Success returns `access_token`, `refresh_token`, `expires_in` and `scope` in one
+JSON body. Store all four; the refresh token is what stops the next lesson costing
+another sign-in.
+
+**The authorisation step may happen on a different device from the one running
+pydle.** Show the URI as a QR alongside the code: a student whose phone is already
+signed into GitHub can scan, type the code there and approve, and the school
+machine receives a token without ever seeing a password. Design the screen around
+that path — it is what makes a shared device viable.
+
+**Device-code phishing is this flow's known weakness.** Someone sends a code and
+asks you to enter it, which grants *them* access. Show the app name and the org on
+the confirmation step so a pupil notices when the destination isn't theirs, and
+say plainly in the UI that a code should only ever be entered for a screen you are
+looking at.
+
+**The shim sees the access token in transit**, because it forwards the token
+response. "Stores nothing" is not "sees nothing". Never log request or response
+bodies — state that in the code, not just in a comment elsewhere.
 
 ### Scopes and token lifetime
 
