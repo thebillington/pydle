@@ -115,8 +115,13 @@ export async function ghFetch(path, { token, method = 'GET', body, headers } = {
     const parsed = response.status === 204 ? null : parseBody(text);
 
     if (!response.ok) {
-        // Path and status only. Never the body: a token response would be in it.
-        console.warn('[pydle] github', method, path.split('?')[0], response.status);
+        // 404 and 409 are routine here and are handled by the caller: a repository
+        // that does not exist yet, and an empty repository refusing refs and blobs.
+        // Logging them made a working sign-in look like a wall of errors.
+        if (response.status !== 404 && response.status !== 409) {
+            // Path and status only. Never the body: a token response would be in it.
+            console.warn('[pydle] github', method, path.split('?')[0], response.status);
+        }
 
         throw new GitHubError(describeError(response.status, parsed), {
             status: response.status,

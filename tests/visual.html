@@ -128,6 +128,15 @@
         if (btn) btn.click();
     }
 
+    if (wanted === 'working') {
+        // beginSignIn is replaced with one that never answers, so the panel stays
+        // in its in-flight state for the screenshot.
+        sync.beginSignIn = () => new Promise(() => {});
+        connect.update();
+        const btn = document.querySelector('#connect-slot .sync-btn-primary');
+        if (btn) btn.click();
+    }
+
     // `&details=open` shows the long explanation, which is off by default.
     if (new URLSearchParams(location.search).get('details') === 'open') {
         const details = document.querySelector('#connect-slot details');

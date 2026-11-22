@@ -186,6 +186,11 @@ export function mountConnect(element, sync) {
         if (localError) {
             return 'error';
         }
+        if (busy && !code) {
+            // Between pressing a button and the answer arriving, show one calm
+            // state rather than whatever the last status happened to be.
+            return 'working';
+        }
         if (code) {
             return 'waiting';
         }
@@ -636,6 +641,34 @@ export function mountConnect(element, sync) {
         root.append(actions);
     }
 
+    /**
+     * A single state for anything in flight, with a spinner so the wait is visible.
+     */
+    function renderWorking() {
+        const row = el('div', 'sync-working');
+        const spinner = el('span', 'sync-spinner');
+        spinner.setAttribute('aria-hidden', 'true');
+
+        const text = el(
+            'p',
+            'sync-working-text',
+            awaitingWorkspace ? 'Creating your repository\u2026' : 'Talking to GitHub\u2026',
+        );
+        text.setAttribute('role', 'status');
+        text.setAttribute('aria-live', 'polite');
+
+        row.append(spinner, text);
+        root.append(row);
+
+        if (awaitingWorkspace) {
+            root.append(
+                el('p', 'sync-meta', 'This happens once. It creates a private repository in your account.'),
+            );
+        }
+
+        root.append(el('p', 'sync-meta', 'Your work is safe on this device while we wait.'));
+    }
+
     function renderCode() {
         if (!code) {
             renderConnecting();
@@ -847,6 +880,9 @@ export function mountConnect(element, sync) {
         root.replaceChildren();
 
         switch (view) {
+            case 'working':
+                renderWorking();
+                break;
             case 'waiting':
                 renderCode();
                 break;

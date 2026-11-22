@@ -623,3 +623,39 @@
         margin-right: 18px;
     }
 }
+
+/* Anything in flight: one calm state with a spinner, instead of the panel
+   flickering through intermediate statuses while a request is outstanding. */
+.sync-working {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0 10px;
+}
+
+.sync-working-text {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.sync-spinner {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent-green);
+    animation: sync-spin 0.8s linear infinite;
+}
+
+@keyframes sync-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sync-spinner {
+        animation-duration: 2.4s;
+    }
+}
