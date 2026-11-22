@@ -14,3 +14,20 @@
 .btn-turtle:hover {
     border-color: var(--text-secondary);
 }
+
+/* Save carries a small dot when there is work that is not in GitHub yet, so the
+   state is visible without a second button explaining it. */
+.toolbar-btn.has-uncommitted {
+    position: relative;
+}
+
+.toolbar-btn.has-uncommitted::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-green);
+}

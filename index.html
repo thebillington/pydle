@@ -173,7 +173,7 @@
                 <span class="panel-label-inline">editor</span>
                 <div class="editor-toolbar-right">
                     <span id="file-indicator" class="file-indicator" title="Saved in browser only">untitled</span>
-                    <button id="save-btn" class="toolbar-btn" title="Save to this device">
+                    <button id="save-btn" class="toolbar-btn" title="Save (Ctrl+S)">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                     </button>
                     <button id="load-btn" class="toolbar-btn" title="Load saved file">
@@ -187,10 +187,6 @@
                     </button>
                     <button id="copy-btn" class="toolbar-btn" title="Copy to clipboard">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    </button>
-                    <button id="commit-btn" class="toolbar-btn commit-btn" title="Nothing to commit" aria-label="Nothing to commit" aria-haspopup="dialog" disabled>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><line x1="1.5" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22.5" y2="12"/></svg>
-                        <span id="commit-count" class="commit-count" hidden>0</span>
                     </button>
                 </div>
             </div>
@@ -235,10 +231,10 @@ print("Hello, World!")</textarea>
                 <p>A project is a folder for one piece of work, and it can hold several files. The rail down the left side lists the files in the open project. Use it to add a file, rename one or delete one.</p>
                 <p><strong>Save</strong> keeps the file you are working on safe on this device.</p>
 
-                <h3>Saving is not committing</h3>
-                <p>Saving keeps your work on this computer as you go. Committing is a second, deliberate step: it puts a copy of the project into your own GitHub repository, with a short message saying what changed.</p>
-                <p>The copy in your repository is what follows you to another computer. If you only save, your work stays on this device.</p>
-
+                <h3>Saving your work</h3>
+                <p>Press <strong>Ctrl+S</strong>, or the save button, to save. That always keeps your work on this device, so nothing is lost if the connection drops.</p>
+                <p>If you are signed in to GitHub, saving also asks for a short message and gives you a list of the files that changed. Press commit and a copy goes into your own GitHub repository. That copy is what follows you to another computer.</p>
+                <p>If you are not signed in, saving only keeps the work on this device. The save button shows a small dot until your work is in GitHub, and the button in the header connects you.</p>
                 <h3>Your GitHub copy</h3>
                 <p>To commit, sign in from the <strong>Your work</strong> button in the header. pydle stores your projects in a repository that belongs to your account, and you can change your mind and stop at any time.</p>
                 <p>Nothing is shared with anyone else. The repository is yours: you can look at it, change it or delete it whenever you like.</p>
@@ -414,8 +410,6 @@ print("Hello, World!")</textarea>
         const downloadBtn = document.getElementById('download-btn');
         const historyBtn = document.getElementById('history-btn');
         const copyBtn = document.getElementById('copy-btn');
-        const commitBtn = document.getElementById('commit-btn');
-        const commitCount = document.getElementById('commit-count');
         const resizeHandle = document.getElementById('resize-handle');
         const consolePanel = document.querySelector('.console-panel');
 
@@ -641,8 +635,23 @@ print("Hello, World!")</textarea>
             dirty = false;
             updateFileIndicator();
             refreshRail();
-            showStatus('Saved: ' + currentFileName + '/' + currentPath, 'ready');
-            await persistToRepository(currentFileName, currentPath, code);
+
+            // Saving and committing were two buttons for one intention. When there
+            // is a repository, saving asks for a message and commits; when there is
+            // not, it says plainly that the work is only on this device.
+            const connected = Boolean(sync.workspace);
+            if (connected && !document.querySelector('.commit-overlay:not(.hidden)')) {
+                showStatus('Saved on this device. Add a message to put it in GitHub.', 'ready');
+                void commitDialog.open(currentFileName);
+                return;
+            }
+
+            showStatus(
+                connected
+                    ? 'Saved: ' + currentFileName + '/' + currentPath
+                    : 'Saved on this device only. Not in GitHub.',
+                'ready',
+            );
         }
 
         /** Open one file of the current project. */
@@ -942,7 +951,7 @@ print("Hello, World!")</textarea>
                 if (document.querySelector('.commit-overlay:not(.hidden)')) {
                     return;
                 }
-                void commitCurrent();
+                void saveFile();
             }
             if (e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();
@@ -1095,17 +1104,15 @@ print("Hello, World!")</textarea>
         function paintCommitState(count) {
             const safe = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
             uncommittedNow = safe > 0;
-            commitCount.textContent = safe > 99 ? '99+' : String(safe);
-            commitCount.hidden = safe === 0;
-            commitBtn.classList.toggle('has-changes', safe > 0);
-            commitBtn.disabled = safe === 0;
-            const label = safe === 0
-                ? (currentFileName === null
-                    ? 'Nothing to commit'
-                    : 'Nothing to commit in ' + currentFileName)
-                : 'Commit ' + safe + (safe === 1 ? ' uncommitted file' : ' uncommitted files') + ' to GitHub';
-            commitBtn.title = label;
-            commitBtn.setAttribute('aria-label', label);
+
+            // A quiet marker on Save, so "not yet in GitHub" is visible without a
+            // second button that has to be understood.
+            saveBtn.classList.toggle('has-uncommitted', safe > 0 && Boolean(sync.workspace));
+            const base = sync.workspace ? 'Save and commit (Ctrl+S)' : 'Save (Ctrl+S)';
+            saveBtn.title = safe > 0
+                ? base + ': ' + safe + (safe === 1 ? ' file' : ' files') + ' not in GitHub yet'
+                : base;
+            saveBtn.setAttribute('aria-label', saveBtn.title);
         }
 
         /**
@@ -1198,21 +1205,6 @@ print("Hello, World!")</textarea>
          * The commit button and Ctrl+S are the same action, so they share this
          * rather than each keeping its own copy of the three steps.
          */
-        async function commitCurrent() {
-            if (currentFileName === null) {
-                showStatus('Save your project before committing it', 'ready');
-                return;
-            }
-            if (!(await flushCurrent())) {
-                return;
-            }
-            void commitDialog.open(currentFileName);
-        }
-
-        commitBtn.addEventListener('click', () => {
-            void commitCurrent();
-        });
-
         // Switching editors is still a switch: save first, then let the same
         // guard ask about uncommitted work before the page changes.
         const turtleBtn = document.getElementById('turtle-btn');
