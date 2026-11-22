@@ -31,11 +31,12 @@ Hostname: **`auth.pydle.uk`** as a Worker Custom Domain. DNS is already on Cloud
 so adding the custom domain creates the record. A real hostname matters — `workers.dev`
 is blocked by many school filters and looks untrustworthy.
 
-Note: the pydle.uk zone's bot protection answers **403 to every method** on a Worker
-custom domain, while the static site is unaffected. If that happens, either turn off
-Bot Fight Mode (Security → Bots) or add a WAF rule that skips host
-`auth.pydle.uk`. Until it is fixed, `js/config.js` points `shimBase` at the
-`workers.dev` hostname instead.
+Gotcha: the zone has an SEO custom rule, `SEO: hostnames that do not exist`, which
+blocks every host other than `pydle.uk`, `www.pydle.uk` and `auth.pydle.uk`. A new
+Worker hostname answers **403 to every method** (no `cf-mitigated` header) while the
+static site stays fine, because the request never reaches the Worker. Add the
+hostname to that rule's expression — it is a WAF custom rule, not bot protection, so
+turning Bot Fight Mode off will not help.
 
 ### Site → unchanged
 
