@@ -146,6 +146,7 @@
     <link rel="stylesheet" href="css/editor-extras.css">
     <link rel="stylesheet" href="css/editor-files.css">
     <link rel="stylesheet" href="css/dialog.css">
+    <link rel="stylesheet" href="css/repl.css">
 </head>
 <body>
     <header>
@@ -157,6 +158,7 @@
                 Your work
             </button>
             <span id="theme-toggle" class="theme-toggle-slot"></span>
+            <a id="turtle-btn" class="btn btn-turtle" href="/turtle/" title="Switch to the turtle editor">Switch to turtle</a>
             <button id="instructions-btn" class="btn btn-instr">Help</button>
             <a href="https://github.com/thebillington/pydle/issues/new" target="_blank" rel="noopener noreferrer" class="btn btn-issue">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
@@ -171,7 +173,7 @@
                 <span class="panel-label-inline">editor</span>
                 <div class="editor-toolbar-right">
                     <span id="file-indicator" class="file-indicator" title="Saved in browser only">untitled</span>
-                    <button id="save-btn" class="toolbar-btn" title="Save to browser (Ctrl+S)">
+                    <button id="save-btn" class="toolbar-btn" title="Save to this device">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                     </button>
                     <button id="load-btn" class="toolbar-btn" title="Load saved file">
@@ -225,36 +227,41 @@ print("Hello, World!")</textarea>
                 <button id="close-help" class="btn btn-close">&times;</button>
             </div>
             <div id="help-body" class="help-content">
-                <h3>Getting Started</h3>
-                <p>Write Python code in the editor on the left. Click <strong>Run</strong> or press <strong>Ctrl+Enter</strong> to execute your code.</p>
-                
-                <h3>Keyboard Shortcuts</h3>
+                <h3>Getting started</h3>
+                <p>Write Python in the editor on the left. Press <strong>Ctrl+Enter</strong> or click <strong>Run</strong> to try it, and the result appears in the console on the right.</p>
+                <pre>print("Hello, World!")</pre>
+
+                <h3>Projects and files</h3>
+                <p>A project is a folder for one piece of work, and it can hold several files. The rail down the left side lists the files in the open project. Use it to add a file, rename one or delete one.</p>
+                <p><strong>Save</strong> keeps the file you are working on safe on this device.</p>
+
+                <h3>Saving is not committing</h3>
+                <p>Saving keeps your work on this computer as you go. Committing is a second, deliberate step: it puts a copy of the project into your own GitHub repository, with a short message saying what changed.</p>
+                <p>The copy in your repository is what follows you to another computer. If you only save, your work stays on this device.</p>
+
+                <h3>Your GitHub copy</h3>
+                <p>To commit, sign in from the <strong>Your work</strong> button in the header. pydle stores your projects in a repository that belongs to your account, and you can change your mind and stop at any time.</p>
+                <p>Nothing is shared with anyone else. The repository is yours: you can look at it, change it or delete it whenever you like.</p>
+
+                <h3>History</h3>
+                <p>Every commit is kept. Open a project, then use the history button in the toolbar to see its earlier versions.</p>
+                <p>Choose any earlier version to look at it, or load it back into the editor and commit it again as a new change. Nothing is ever rewritten.</p>
+
+                <h3>When a run fails</h3>
+                <p>If your code stops with an error, the line that raised it is marked beside the line numbers and scrolled into view, so you can see where to start looking.</p>
+
+                <h3>Keyboard shortcuts</h3>
                 <ul>
-                    <li><strong>Ctrl+Enter</strong> - Run code</li>
-                    <li><strong>Ctrl+S</strong> - Save to browser</li>
-                    <li><strong>Ctrl+/</strong> - Toggle comment</li>
-                    <li><strong>Escape</strong> - Close this dialog</li>
+                    <li><strong>Ctrl+Enter</strong>: run your code</li>
+                    <li><strong>Ctrl+S</strong>: commit your work to GitHub</li>
+                    <li><strong>Ctrl+F</strong>: find text</li>
+                    <li><strong>Ctrl+H</strong>: find and replace</li>
+                    <li><strong>Ctrl+/</strong>: add or remove a comment</li>
+                    <li><strong>Escape</strong>: close a dialog</li>
                 </ul>
 
-                <h3>Printing Output</h3>
-                <pre>print("Hello!")</pre>
-                
-                <h3>Variables</h3>
-                <pre>x = 10
-print(x * 2)</pre>
-
-                <h3>Loops</h3>
-                <pre>for i in range(5):
-    print(i)</pre>
-
-                <h3>Functions</h3>
-                <pre>def greet(name):
-    return "Hello, " + name
-
-print(greet("World"))</pre>
-
-                <h3>Saving Your Work</h3>
-                <p>Files are saved in your browser's local storage. Use <strong>Download</strong> to save a .py file to your computer.</p>
+                <h3>Appearance</h3>
+                <p>The theme control in the header cycles through <strong>Auto</strong>, <strong>Light</strong> and <strong>Dark</strong>. Auto follows your computer's own setting, and pydle remembers the choice for next time.</p>
             </div>
         </div>
     </div>
@@ -643,10 +650,7 @@ print(greet("World"))</pre>
             if (path === currentPath) {
                 return;
             }
-            if (!(await flushCurrent())) {
-                return;
-            }
-            if (!(await confirmLeaveProject())) {
+            if (!(await readyToLeave())) {
                 return;
             }
 
@@ -686,10 +690,7 @@ print(greet("World"))</pre>
          * @param {string} name
          */
         async function loadFile(name) {
-            if (!(await flushCurrent())) {
-                return;
-            }
-            if (!(await confirmLeaveProject())) {
+            if (!(await readyToLeave())) {
                 return;
             }
 
@@ -936,7 +937,12 @@ print(greet("World"))</pre>
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                void saveFile();
+                // Do not reopen the commit dialog over someone who is already
+                // typing a message in it: that would throw the message away.
+                if (document.querySelector('.commit-overlay:not(.hidden)')) {
+                    return;
+                }
+                void commitCurrent();
             }
             if (e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();
@@ -1149,6 +1155,9 @@ print(greet("World"))</pre>
          * Called after flushCurrent(), so the buffer is already in the vault and
          * the dialog lists it. Resolves true when the switch should go ahead.
          *
+         * This is the only "leaving" prompt: file switches, opening another
+         * project and the link to the turtle editor all pass through it.
+         *
          * @returns {Promise<boolean>}
          */
         async function confirmLeaveProject() {
@@ -1168,14 +1177,58 @@ print(greet("World"))</pre>
             return outcome !== 'cancelled';
         }
 
-        commitBtn.addEventListener('click', async () => {
+        /**
+         * Put the buffer in the vault, then ask about uncommitted work.
+         *
+         * The shared guard for anything that leaves the editor: switching
+         * files, opening another project, or going to the turtle page.
+         *
+         * @returns {Promise<boolean>} True when it is safe to go.
+         */
+        async function readyToLeave() {
+            if (!(await flushCurrent())) {
+                return false;
+            }
+            return confirmLeaveProject();
+        }
+
+        /**
+         * Save the open buffer, then open the commit dialog.
+         *
+         * The commit button and Ctrl+S are the same action, so they share this
+         * rather than each keeping its own copy of the three steps.
+         */
+        async function commitCurrent() {
             if (currentFileName === null) {
+                showStatus('Save your project before committing it', 'ready');
                 return;
             }
             if (!(await flushCurrent())) {
                 return;
             }
             void commitDialog.open(currentFileName);
+        }
+
+        commitBtn.addEventListener('click', () => {
+            void commitCurrent();
+        });
+
+        // Switching editors is still a switch: save first, then let the same
+        // guard ask about uncommitted work before the page changes.
+        const turtleBtn = document.getElementById('turtle-btn');
+        turtleBtn.addEventListener('click', async (event) => {
+            // A modified click means "open in a new tab": leave it to the browser.
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            event.preventDefault();
+            if (!(await readyToLeave())) {
+                return;
+            }
+            // They have already answered the uncommitted question, so do not
+            // ask it a second time in the browser's own leaving warning.
+            uncommittedNow = false;
+            window.location.assign(turtleBtn.getAttribute('href'));
         });
 
         // A tab close is not the moment to explain a commit dialog. Ask the
@@ -1398,7 +1451,7 @@ print(greet("World"))</pre>
         initWorker();
     </script>
     <footer>
-        <a href="https://github.com/thebillington/pydle" target="_blank" rel="noopener noreferrer"><span class="repo">pydle</span></a> is an <a href="https://github.com/thebillington/pydle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT-licensed</a> project built and maintained by <a href="https://github.com/thebillington" target="_blank" rel="noopener noreferrer">thebillington</a> &middot; <a href="/python-turtle-online/">Python turtle guide</a> &middot; <a href="/trinket-alternative/">Trinket alternative</a> &middot; <a href="https://github.com/sponsors/thebillington" target="_blank" rel="noopener noreferrer" class="sponsor">Sponsor this project</a>
+        <a href="https://github.com/thebillington/pydle" target="_blank" rel="noopener noreferrer"><span class="repo">pydle</span></a> is an <a href="https://github.com/thebillington/pydle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT-licensed</a> project built and maintained by <a href="https://github.com/thebillington" target="_blank" rel="noopener noreferrer">thebillington</a> &middot; <a href="https://github.com/sponsors/thebillington" target="_blank" rel="noopener noreferrer" class="sponsor">Sponsor this project</a>
     </footer>
 </body>
 </html>
