@@ -449,18 +449,16 @@ export function createSync({ onChange } = {}) {
                             repo: REPO_NAME,
                             branch: repo.default_branch,
                         };
-                        // An empty repository is ours but unfinished: finish it here,
-                        // so a half-created workspace heals on the next load.
-                        if (!repo.size) {
-                            await withToken((token) =>
-                                scaffoldWithRetry({
-                                    token,
-                                    owner: workspace.owner,
-                                    repo: workspace.repo,
-                                    branch: workspace.branch,
-                                }),
-                            );
-                        }
+                        // Finish an unfinished workspace. bootstrapRepo is idempotent
+                        // now, so this does nothing once the branch exists.
+                        await withToken((token) =>
+                            scaffoldWithRetry({
+                                token,
+                                owner: workspace.owner,
+                                repo: workspace.repo,
+                                branch: workspace.branch,
+                            }),
+                        );
                     }
                 }
             } catch (error) {
@@ -584,18 +582,15 @@ export function createSync({ onChange } = {}) {
 
             workspace = { owner: user.login, repo: REPO_NAME, branch: repo.default_branch };
 
-            // Idempotent: a repository that exists but is still empty gets its
-            // scaffold now rather than leaving the student with a broken workspace.
-            if (!repo.size) {
-                await withToken((token) =>
-                    scaffoldWithRetry({
-                        token,
-                        owner: workspace.owner,
-                        repo: workspace.repo,
-                        branch: workspace.branch,
-                    }),
-                );
-            }
+            // Idempotent: does nothing once the branch exists.
+            await withToken((token) =>
+                scaffoldWithRetry({
+                    token,
+                    owner: workspace.owner,
+                    repo: workspace.repo,
+                    branch: workspace.branch,
+                }),
+            );
 
             setStatus('connected');
         } catch (error) {

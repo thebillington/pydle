@@ -122,6 +122,14 @@ export async function bootstrapRepo({ token, owner, repo, branch, identity }) {
         });
     };
 
+    // Already initialised? Do nothing. The branch is authoritative; `repo.size`
+    // is not, and trusting it re-ran the whole scaffold on every page load.
+    const existingHead = await getRef({ token, owner, repo, branch });
+    if (existingHead) {
+        console.info('[pydle] scaffold: already initialised on', branch);
+        return null;
+    }
+
     // The normal path, for a repository that already has a commit.
     try {
         const commit = await commitSubset(files, undefined, []);
@@ -134,11 +142,20 @@ export async function bootstrapRepo({ token, owner, repo, branch, identity }) {
     }
 
     // Empty repository: seed one file so a commit exists, then commit the rest.
+    console.info('[pydle] scaffold: repository is empty, seeding', files[0].path);
     await seedFirstFile({ token, owner, repo, file: files[0], message });
 
     const rest = files.slice(1);
     const head = await getRef({ token, owner, repo, branch });
-    if (rest.length === 0 || !head) {
+    if (!head) {
+        // The seed should have created the branch. If it did not, the repository's
+        // default branch is not the name we were given, and guessing would loop.
+        throw new Error(
+            `Seeded the first file but found no branch called ${branch}. ` +
+                'The repository default branch may not match the one reported earlier.',
+        );
+    }
+    if (rest.length === 0) {
         return null;
     }
 
