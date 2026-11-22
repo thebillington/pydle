@@ -20,6 +20,7 @@ import { ConflictError, commitFiles } from './github/commit.js';
 import { clearTokens, loadTokens, saveTokens } from './vault/tokens.js';
 import * as vault from './vault/fs.js';
 import { normalizeProjectName, safeJoin } from './vault/paths.js';
+import { planMerge } from './reconcile.js';
 
 /** Repo name inside the user's own account. One workspace per person. */
 export const REPO_NAME = 'pydle';
@@ -450,52 +451,29 @@ export function createSync({ onChange } = {}) {
         try {
             setStatus('connected');
 
-            const tree = await withToken((token) =>
-                ghFetch(
-                    `/repos/${workspace.owner}/${workspace.repo}/git/trees/${encodeURIComponent(workspace.branch)}?recursive=1`,
-                    { token },
-                ),
+            const head = await withToken((token) =>
+                getRef({ token, owner: workspace.owner, repo: workspace.repo, branch: workspace.branch }),
             );
+            if (!head) {
+                return { projects: 0, applied: 0, conflicts: [] };
+            }
 
-            let written = 0;
-            let skipped = 0;
+            const projects = await remoteProjects(head.sha);
+            const conflicts = [];
+            let applied = 0;
 
-            for (const entry of tree.tree || []) {
-                if (entry.type !== 'blob' || !entry.path.startsWith(`${WORK_ROOT}/`)) {
-                    continue;
+            for (const project of projects) {
+                // Reconcile rather than overwrite: a device that has been away gets
+                // the files only the repository changed, and keeps its own.
+                const result = await preflight(project);
+                applied += result.applied.length;
+                for (const conflict of result.conflicts) {
+                    conflicts.push({ ...conflict, project });
                 }
-                const rest = entry.path.slice(WORK_ROOT.length + 1);
-                const slash = rest.indexOf('/');
-                if (slash <= 0) {
-                    continue;
-                }
-                const project = rest.slice(0, slash);
-                const file = rest.slice(slash + 1);
-
-                let existing = {};
-                try {
-                    existing = await vault.readProject(project);
-                } catch {
-                    existing = {};
-                }
-                if (Object.prototype.hasOwnProperty.call(existing, file)) {
-                    skipped += 1;
-                    continue;
-                }
-
-                const blob = await withToken((token) =>
-                    ghFetch(
-                        `/repos/${workspace.owner}/${workspace.repo}/git/blobs/${entry.sha}`,
-                        { token },
-                    ),
-                );
-                const content = blob.encoding === 'base64' ? decodeBase64(blob.content) : blob.content;
-                await vault.writeFile(project, file, content);
-                written += 1;
             }
 
             emit();
-            return { written, skipped };
+            return { projects: projects.length, applied, conflicts };
         } catch (error) {
             const syncError = asSyncError(error);
             setStatus(syncError.kind === 'auth' ? 'signed-out' : 'error', syncError);
@@ -508,20 +486,198 @@ export function createSync({ onChange } = {}) {
     /* -------------------------------------------------------------- */
 
     /**
-     * Hex SHA-256 of a file's contents.
+     * The hash git itself would give this content as a blob.
      *
-     * Only ever used to answer "has this changed since it was committed", so a
-     * plain hash suffices: no diffing, no line mapping, no dependency.
+     * This matters: the repository's tree lists blob SHAs, so a local hash is only
+     * comparable to a remote one if it is the same kind of hash. Git hashes
+     * `blob <byte-length>\0<content>` with SHA-1, so do the same here rather than
+     * inventing a second, incomparable digest.
      *
      * @param {string} text
      * @returns {Promise<string>}
      */
-    async function contentHash(text) {
-        const bytes = new TextEncoder().encode(text);
-        const digest = await crypto.subtle.digest('SHA-256', bytes);
+    async function gitBlobHash(text) {
+        const body = new TextEncoder().encode(text);
+        const header = new TextEncoder().encode(`blob ${body.length}\0`);
+        const bytes = new Uint8Array(header.length + body.length);
+        bytes.set(header, 0);
+        bytes.set(body, header.length);
+        const digest = await crypto.subtle.digest('SHA-1', bytes);
         return [...new Uint8Array(digest)]
             .map((byte) => byte.toString(16).padStart(2, '0'))
             .join('');
+    }
+
+    /* -------------------------------------------------------------- */
+    /* Remote state and reconciliation                                  */
+    /* -------------------------------------------------------------- */
+
+    /**
+     * Blob hashes for one project as the repository has them now.
+     *
+     * One tree fetch, no file downloads: enough to decide what changed.
+     *
+     * @param {string} project
+     * @param {string} ref Branch or commit sha.
+     * @returns {Promise<Record<string, string>>}
+     */
+    async function remoteProjectHashes(project, ref) {
+        const prefix = `${WORK_ROOT}/${project}/`;
+        const tree = await withToken((token) =>
+            ghFetch(
+                `/repos/${workspace.owner}/${workspace.repo}/git/trees/` +
+                    `${encodeURIComponent(ref)}?recursive=1`,
+                { token },
+            ),
+        );
+
+        const hashes = {};
+        for (const entry of (tree && tree.tree) || []) {
+            if (entry.type !== 'blob' || !entry.path.startsWith(prefix)) {
+                continue;
+            }
+            hashes[entry.path.slice(prefix.length)] = entry.sha;
+        }
+        return hashes;
+    }
+
+    /**
+     * Every project directory that exists in the repository.
+     *
+     * @param {string} ref
+     * @returns {Promise<string[]>}
+     */
+    async function remoteProjects(ref) {
+        const tree = await withToken((token) =>
+            ghFetch(
+                `/repos/${workspace.owner}/${workspace.repo}/git/trees/` +
+                    `${encodeURIComponent(ref)}?recursive=1`,
+                { token },
+            ),
+        );
+
+        const projects = new Set();
+        const prefix = `${WORK_ROOT}/`;
+        for (const entry of (tree && tree.tree) || []) {
+            if (!entry.path.startsWith(prefix)) {
+                continue;
+            }
+            const rest = entry.path.slice(prefix.length);
+            const slash = rest.indexOf('/');
+            if (slash > 0) {
+                projects.add(rest.slice(0, slash));
+            }
+        }
+        return [...projects].sort();
+    }
+
+    /**
+     * Fetch one blob's text.
+     *
+     * @param {string} sha
+     * @returns {Promise<string>}
+     */
+    async function readBlobText(sha) {
+        const blob = await withToken((token) =>
+            ghFetch(`/repos/${workspace.owner}/${workspace.repo}/git/blobs/${sha}`, { token }),
+        );
+        if (!blob || typeof blob.content !== 'string') {
+            return '';
+        }
+        return blob.encoding === 'base64' ? decodeBase64(blob.content) : blob.content;
+    }
+
+    /**
+     * Reconcile the local vault with the repository before committing.
+     *
+     * Safe changes are applied: anything only the repository changed is taken, and
+     * anything only this device changed is left alone. Only files where both sides
+     * moved differently are reported, never guessed at.
+     *
+     * @param {string} name
+     * @param {{ [path: string]: 'local' | 'remote' }} [resolutions] Choices the user
+     *   made for previously reported conflicts.
+     * @returns {Promise<{ applied: string[], conflicts: Array<{ path: string, kind: string, remoteHash: string | null }>, headSha: string | null }>}
+     */
+    async function preflight(name, resolutions = {}) {
+        if (!workspace) {
+            throw new SyncError('auth', 'Sign in to GitHub first.');
+        }
+
+        let project;
+        try {
+            project = normalizeProjectName(name);
+        } catch {
+            throw new SyncError('config', 'That project does not exist.');
+        }
+
+        try {
+            const head = await withToken((token) =>
+                getRef({ token, owner: workspace.owner, repo: workspace.repo, branch: workspace.branch }),
+            );
+            if (!head) {
+                return { applied: [], conflicts: [], headSha: null };
+            }
+
+            const snapshot = await vault.readCommitSnapshot(project);
+            const base = snapshot && snapshot.files ? snapshot.files : {};
+            const remote = await remoteProjectHashes(project, head.sha);
+
+            const localFiles = await readProject(project);
+            const local = {};
+            for (const [path, content] of Object.entries(localFiles)) {
+                local[path] = await gitBlobHash(content);
+            }
+
+            const plan = planMerge(base, local, remote);
+
+            const toApply = [...plan.apply];
+            for (const conflict of plan.conflicts) {
+                if (resolutions[conflict.path] === 'remote') {
+                    toApply.push({
+                        path: conflict.path,
+                        remoteHash: conflict.remoteHash,
+                        kind: conflict.remoteHash === null ? 'deleted' : 'updated',
+                    });
+                }
+            }
+
+            const applied = [];
+            for (const item of toApply) {
+                if (item.remoteHash === null) {
+                    await vault.deleteFile(project, item.path);
+                } else {
+                    await vault.writeFile(project, item.path, await readBlobText(item.remoteHash));
+                }
+                applied.push(item.path);
+            }
+
+            const remaining = plan.conflicts.filter(
+                (conflict) => resolutions[conflict.path] !== 'remote' && resolutions[conflict.path] !== 'local',
+            );
+
+            if (toApply.length > 0 || remaining.length === 0) {
+                // The snapshot's base moves forward for everything now agreed with
+                // the repository. Files still in conflict keep their old base.
+                const nextFiles = { ...base };
+                for (const item of toApply) {
+                    if (item.remoteHash === null) {
+                        delete nextFiles[item.path];
+                    } else {
+                        nextFiles[item.path] = item.remoteHash;
+                    }
+                }
+                await vault.writeCommitSnapshot(project, {
+                    sha: remaining.length === 0 ? head.sha : snapshot ? snapshot.sha : head.sha,
+                    files: nextFiles,
+                });
+            }
+
+            emit();
+            return { applied, conflicts: remaining, headSha: head.sha };
+        } catch (error) {
+            throw asSyncError(error);
+        }
     }
 
     /**
@@ -550,7 +706,7 @@ export function createSync({ onChange } = {}) {
         const onDisk = new Set(Object.keys(files));
 
         for (const [path, content] of Object.entries(files)) {
-            const hash = await contentHash(content);
+            const hash = await gitBlobHash(content);
             if (!Object.prototype.hasOwnProperty.call(committed, path)) {
                 paths.push({ path, status: 'added' });
             } else if (committed[path] !== hash) {
@@ -577,10 +733,10 @@ export function createSync({ onChange } = {}) {
      * Files that were left out of `paths` stay dirty: an unselected edit is never
      * silently recorded as committed.
      *
-     * @param {{ project: string, paths: string[], message: string }} options
+     * @param {{ project: string, paths: string[], message: string, resolutions?: { [path: string]: 'local' | 'remote' } }} options
      * @returns {Promise<{ sha: string, message: string }>}
      */
-    async function commit({ project: name, paths, message }) {
+    async function commit({ project: name, paths, message, resolutions = {} }) {
         if (!workspace || !user) {
             throw new SyncError('auth', 'Sign in to GitHub before committing.');
         }
@@ -609,6 +765,19 @@ export function createSync({ onChange } = {}) {
         emit();
 
         try {
+            // Reconcile first. If the repository moved while this device was away,
+            // taking the safe changes is right, but overwriting a file both sides
+            // changed is not, so that stops here and asks.
+            const check = await preflight(project, resolutions);
+            if (check.conflicts.length > 0) {
+                const clash = new SyncError(
+                    'conflict',
+                    'Some files were changed on another device as well. Choose which version to keep.',
+                );
+                clash.conflicts = check.conflicts;
+                throw clash;
+            }
+
             const files = await readProject(project);
             const snapshot = await vault.readCommitSnapshot(project);
             const committed = snapshot && snapshot.files ? snapshot.files : {};
@@ -647,7 +816,7 @@ export function createSync({ onChange } = {}) {
             const nextFiles = { ...committed };
             for (const path of selected) {
                 if (Object.prototype.hasOwnProperty.call(files, path)) {
-                    nextFiles[path] = await contentHash(files[path]);
+                    nextFiles[path] = await gitBlobHash(files[path]);
                 } else {
                     delete nextFiles[path];
                 }
@@ -934,6 +1103,7 @@ export function createSync({ onChange } = {}) {
         deleteFile,
         deleteProject,
         dirty,
+        preflight,
         commit,
         hasUncommitted,
         listCommits,
