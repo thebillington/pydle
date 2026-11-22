@@ -222,6 +222,32 @@ deleted or the teacher leaving, and "archive my school work to my personal
 workspace" is later just a blob copy through the same sync code rather than a new
 feature.
 
+### Creating repositories
+
+The `repo` scope allows `POST /user/repos`, so a student's own token can create
+`<login>/pydle`. It does **not** allow creating repos in an organisation —
+`POST /orgs/{org}/repos` needs membership, not collaborator access — so class repos
+are always the teacher's to create. Both behaviours are wanted.
+
+Always ask before creating: a repository in someone's account is a visible,
+permanent side effect. One button, not a silent side effect of signing in.
+
+Creation options matter:
+
+- `auto_init: false` — the repo is genuinely empty, so the first commit must create
+  the branch with `POST /git/refs` (§5). History is a single commit that *is* the
+  scaffold.
+- `auto_init: true` — GitHub adds a README commit and a branch, so the ordinary
+  `base_tree` + parent flow works, but that junk commit sits at the root of the
+  student's history forever.
+
+Take `auto_init: false`.
+
+A fine-grained PAT scoped to Contents only cannot create a repository; that needs
+Administration: write. If the PAT path is kept as a fallback, prefer Contents-only
+and let the teacher create the repo — it keeps the blast radius at "can write files"
+rather than "can delete the repo".
+
 Guard rails on connecting:
 
 - refuse if `permissions.push` is false — read-only repos are class resources,
