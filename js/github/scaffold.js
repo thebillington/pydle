@@ -126,8 +126,35 @@ export async function bootstrapRepo({ token, owner, repo, branch, identity }) {
     // is not, and trusting it re-ran the whole scaffold on every page load.
     const existingHead = await getRef({ token, owner, repo, branch });
     if (existingHead) {
-        console.info('[pydle] scaffold: already initialised on', branch);
-        return null;
+        // Initialised, but possibly only half way: a previous attempt may have
+        // seeded the first file and then failed. Repair rather than refuse, or the
+        // workspace can never be adopted because its marker never appears.
+        let hasMarker = true;
+        try {
+            await ghFetch(`/repos/${owner}/${repo}/contents/pydle.json`, { token });
+        } catch (error) {
+            if (error instanceof GitHubError && error.status === 404) {
+                hasMarker = false;
+            } else {
+                throw error;
+            }
+        }
+
+        if (hasMarker) {
+            console.info('[pydle] scaffold: already initialised on', branch);
+            return null;
+        }
+
+        console.info('[pydle] scaffold: repairing a half-seeded workspace');
+        const headCommit = await getCommit({ token, owner, repo, sha: existingHead.sha });
+        const commit = await commitSubset(
+            files.slice(1),
+            headCommit.tree.sha,
+            [existingHead.sha],
+            'Add the workspace layout',
+        );
+        await updateRef({ token, owner, repo, ref: `refs/heads/${branch}`, sha: commit.sha });
+        return commit;
     }
 
     // The normal path, for a repository that already has a commit.
