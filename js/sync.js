@@ -172,6 +172,13 @@ export function createSync({ onChange } = {}) {
 
     /** Set while a commit is in flight, so two prompts cannot race. */
     let committing = false;
+    /**
+     * In-flight refresh. GitHub rotates refresh tokens, so two callers refreshing
+     * at once means the loser is rejected and the winner is the only usable token.
+     */
+    let refreshInFlight = null;
+    /** In-flight connect, so a second caller joins the first instead of racing it. */
+    let connectInFlight = null;
 
     const listeners = new Set();
     if (typeof onChange === 'function') {
@@ -261,17 +268,29 @@ export function createSync({ onChange } = {}) {
         if (!tokens.refreshToken) {
             throw new SyncError('auth', 'The sign-in has expired. Please reconnect.');
         }
-        try {
-            const refreshed = await refreshAccessToken({
-                clientId: CONFIG.clientId,
-                refreshToken: tokens.refreshToken,
-                shimBase: CONFIG.shimBase,
-            });
-            await storeTokenResponse(refreshed);
-            return tokens.accessToken;
-        } catch (error) {
-            throw new SyncError('auth', 'The sign-in has expired. Please reconnect.', { cause: error });
+        if (refreshInFlight) {
+            return refreshInFlight;
         }
+
+        refreshInFlight = (async () => {
+            try {
+                const refreshed = await refreshAccessToken({
+                    clientId: CONFIG.clientId,
+                    refreshToken: tokens.refreshToken,
+                    shimBase: CONFIG.shimBase,
+                });
+                await storeTokenResponse(refreshed);
+                return tokens.accessToken;
+            } catch (error) {
+                throw new SyncError('auth', 'The sign-in has expired. Please reconnect.', {
+                    cause: error,
+                });
+            } finally {
+                refreshInFlight = null;
+            }
+        })();
+
+        return refreshInFlight;
     }
 
     /**
@@ -379,7 +398,26 @@ export function createSync({ onChange } = {}) {
      *
      * @returns {Promise<void>}
      */
-    async function connect() {
+    /**
+     * Connect, joining an in-flight attempt rather than starting a second one.
+     *
+     * Two callers run on page load (the page's own bootstrap and the panel), and
+     * both would otherwise refresh the token and then fight over the rotated
+     * result, which showed as a failed connection that a retry fixed.
+     *
+     * @returns {Promise<void>}
+     */
+    function connect() {
+        if (connectInFlight) {
+            return connectInFlight;
+        }
+        connectInFlight = doConnect().finally(() => {
+            connectInFlight = null;
+        });
+        return connectInFlight;
+    }
+
+    async function doConnect() {
         try {
             if (!tokens) {
                 tokens = await loadTokens();
@@ -570,6 +608,9 @@ export function createSync({ onChange } = {}) {
     /** Forget this device. Local work is untouched. */
     async function disconnect() {
         await clearTokens();
+        // Do not let an in-flight attempt resurrect a token after signing out.
+        refreshInFlight = null;
+        connectInFlight = null;
         tokens = null;
         user = null;
         workspace = null;
