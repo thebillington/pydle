@@ -37,28 +37,40 @@ export class ConflictError extends Error {
 }
 
 /**
- * Store every file's contents as a blob, keeping the caller's order.
+ * Store every file's contents as a blob, keeping the caller's order, and express
+ * deletions as tree entries with a null sha.
  *
- * @param {{ token: string, owner: string, repo: string, files: Array<{ path: string, content: string }> }} options
- * @returns {Promise<Array<{ path: string, mode: string, type: string, sha: string }>>}
+ * @param {{ token: string, owner: string, repo: string, files: Array<{ path: string, content: string }>, deletes?: string[] }} options
+ * @returns {Promise<Array<{ path: string, mode: string, type: string, sha: string | null }>>}
  */
-async function blobEntries({ token, owner, repo, files }) {
-    return Promise.all(
+async function blobEntries({ token, owner, repo, files, deletes = [] }) {
+    const created = await Promise.all(
         files.map(async (file) => {
             const blob = await createBlob({ token, owner, repo, content: file.content });
             return { path: file.path, mode: '100644', type: 'blob', sha: blob.sha };
         }),
     );
+
+    // A null sha in a tree entry removes that path. This is the only way to delete
+    // a file through the Git Data API: there is no "delete object" call.
+    const removed = deletes.map((path) => ({
+        path,
+        mode: '100644',
+        type: 'blob',
+        sha: null,
+    }));
+
+    return [...created, ...removed];
 }
 
 /**
  * Commit a set of files to a branch.
  *
- * @param {{ token: string, owner: string, repo: string, branch: string, files: Array<{ path: string, content: string }>, message: string, identity?: { name: string, email: string } }} options
+ * @param {{ token: string, owner: string, repo: string, branch: string, files: Array<{ path: string, content: string }>, deletes?: string[], message: string, identity?: { name: string, email: string } }} options
  * @returns {Promise<any>} The commit object that the branch now points at.
  * @throws {ConflictError} If a non-fast-forward survives one rebuild and retry.
  */
-export async function commitFiles({ token, owner, repo, branch, files, message, identity }) {
+export async function commitFiles({ token, owner, repo, branch, files, deletes = [], message, identity }) {
     const ref = `refs/heads/${branch}`;
     const head = await getRef({ token, owner, repo, branch });
 
@@ -67,7 +79,7 @@ export async function commitFiles({ token, owner, repo, branch, files, message, 
     }
 
     const oldSha = head.sha;
-    const entries = await blobEntries({ token, owner, repo, files });
+    const entries = await blobEntries({ token, owner, repo, files, deletes });
 
     let baseSha = oldSha;
 

@@ -220,6 +220,45 @@ Lead, last: browser verification, then merge to `main`.
 - With the network off, editing and saving still work, and the queue drains on
   reconnect.
 
+## Wave 2: sync core and UI
+
+`js/sync.js` (lead) is the only module that knows both the vault and GitHub. It owns
+the mapping between them: vault project `spiral` file `main.py` is repo path
+`work/spiral/main.py`. The UI never talks to `js/github/*` or `js/vault/*` directly.
+
+```js
+createSync({ onStatus }) -> Sync
+
+Sync.status        // 'signed-out' | 'connecting' | 'connected' | 'offline' | 'error'
+Sync.identity      // { login, name } | null
+Sync.workspace     // { owner, repo } | null
+
+Sync.beginSignIn({ onCode, onTick, signal })  // resolves once signed in
+Sync.cancelSignIn()
+await Sync.connect()          // token -> identity -> workspace
+await Sync.createWorkspace()  // create the repo and bootstrap it
+await Sync.pull()             // remote work/ into the vault (never overwrites local)
+await Sync.saveProject(name)  // queue a commit for one project
+await Sync.flush()            // force the queue now
+Sync.disconnect()             // forget this device
+```
+
+`SyncError.kind` is one of `'auth' | 'network' | 'conflict' | 'config'`. `'auth'`
+means reconnect; everything else means retry later. Local edits are never lost.
+
+### UI modules
+
+Presentational only, DOM built programmatically inside a container the lead supplies,
+so `index.html` needs one empty element per mount and nothing else.
+
+```js
+mountStatus(element, sync)          // small toolbar indicator
+mountConnect(element, sync)         // the whole sign-in panel
+mountProjects(element, sync)        // project list with sync state per project
+```
+
+They call `sync` and read `sync.status`; they never import from `js/github/`.
+
 ## Out of scope for this build
 
 - QR codes for the device URI (needs a vendored QR encoder; fine as a follow-up).
