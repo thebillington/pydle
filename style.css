@@ -4,19 +4,44 @@
     box-sizing: border-box;
 }
 
-:root {
+/*
+ * Two palettes, one set of token names. The inline script in each page's <head>
+ * sets data-theme before the first stylesheet loads, so there is no flash.
+ * Dark is the default and matches the original Dracula-derived design exactly.
+ */
+:root,
+[data-theme="dark"] {
     --bg-primary: #1e1e2e;
     --bg-secondary: #282a36;
     --bg-tertiary: #2d2f3f;
+    --bg-toolbar: #21222c;
     --text-primary: #f8f8f2;
     --text-secondary: #6272a4;
     --accent-green: #50fa7b;
     --accent-red: #ff5555;
     --accent-yellow: #f1fa8c;
+    --accent-cyan: #8be9fd;
     --border: #44475a;
+
     --header-height: 56px;
     --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+[data-theme="light"] {
+    color-scheme: light;
+
+    --bg-primary: #f8f8f2;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f0f0e8;
+    --bg-toolbar: #f4f4ec;
+    --text-primary: #1f2030;
+    --text-secondary: #4f5a78;
+    --accent-green: #187a33;
+    --accent-red: #b3261e;
+    --accent-yellow: #8a5a00;
+    --accent-cyan: #0b6f7d;
+    --border: #d7d7cb;
 }
 
 body {
@@ -57,6 +82,46 @@ header h1 .subtitle {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+/* Theme toggle ------------------------------------------------------------ */
+
+.theme-toggle-slot {
+    display: inline-flex;
+    align-items: center;
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* Fixed width: the label changes but the header must not reflow. */
+    min-width: 78px;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.theme-toggle:hover {
+    border-color: var(--text-secondary);
+}
+
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 2px;
+}
+
+.theme-toggle-label {
+    pointer-events: none;
 }
 
 .btn {
@@ -118,7 +183,7 @@ header h1 .subtitle {
     display: flex;
     align-items: center;
     padding: 0 10px;
-    background: #21222c;
+    background: var(--bg-toolbar);
     border-bottom: 1px solid var(--border);
     height: 30px;
     flex-shrink: 0;
@@ -128,7 +193,7 @@ header h1 .subtitle {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    color: #6272a4;
+    color: var(--text-secondary);
     font-family: var(--font-mono);
 }
 
@@ -148,18 +213,18 @@ header h1 .subtitle {
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: #8be9fd;
+    color: var(--accent-cyan);
     cursor: pointer;
     padding: 0;
     transition: background 0.12s;
 }
 
 .toolbar-btn:hover {
-    background: rgba(139, 233, 253, 0.15);
+    background: color-mix(in srgb, var(--accent-cyan) 15%, transparent);
 }
 
 .toolbar-btn:active {
-    background: rgba(139, 233, 253, 0.25);
+    background: color-mix(in srgb, var(--accent-cyan) 25%, transparent);
 }
 
 .toolbar-btn svg {
@@ -168,7 +233,7 @@ header h1 .subtitle {
 
 .file-indicator {
     font-size: 11px;
-    color: #6272a4;
+    color: var(--text-secondary);
     font-family: var(--font-mono);
     margin-right: 6px;
     max-width: 100px;

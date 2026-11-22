@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#282a36">
     <title>Free Trinket Alternative for Python and Turtle | pydle</title>
     <meta name="description" content="Trinket closed on 31 August 2026. pydle is a free, no-account browser Python editor with turtle graphics for classrooms and quick experiments.">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
@@ -25,6 +26,53 @@
     <meta name="twitter:description" content="Trinket closed on 31 August 2026. pydle is a free, no-account browser Python editor with turtle graphics.">
     <meta name="twitter:image" content="https://pydle.uk/og-image.png">
     <meta name="twitter:image:alt" content="pydle, a Python REPL and turtle editor in the browser: a turtle spiral beside the Python that drew it">
+
+    <script>
+        /*
+         * Set the palette before the first stylesheet loads, so there is no
+         * flash of the wrong theme. Kept inline and duplicated per page: an
+         * external file would race the first paint.
+         */
+        (function () {
+            var KEY = 'pydle_theme';
+            var root = document.documentElement;
+            var meta = document.querySelector('meta[name="theme-color"]');
+
+            function storedMode() {
+                try {
+                    var value = localStorage.getItem(KEY);
+                    return value === 'light' || value === 'dark' ? value : 'auto';
+                } catch (error) {
+                    return 'auto';
+                }
+            }
+
+            function apply() {
+                var mode = storedMode();
+                var dark = mode === 'dark' ||
+                    (mode === 'auto' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+                root.setAttribute('data-theme', dark ? 'dark' : 'light');
+                if (meta) {
+                    meta.setAttribute('content', dark ? '#1e1e2e' : '#f8f8f2');
+                }
+            }
+
+            apply();
+
+            var query = window.matchMedia('(prefers-color-scheme: light)');
+            var onSchemeChange = function () {
+                if (storedMode() === 'auto') {
+                    apply();
+                }
+            };
+            if (query.addEventListener) {
+                query.addEventListener('change', onSchemeChange);
+            } else if (query.addListener) {
+                query.addListener(onSchemeChange);
+            }
+            window.addEventListener('storage', apply);
+        })();
+    </script>
 
     <link rel="stylesheet" href="../pages.css">
 

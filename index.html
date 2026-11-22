@@ -88,8 +88,56 @@
     </script>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
+    <script>
+        /*
+         * Set the palette before the first stylesheet loads, so there is no
+         * flash of the wrong theme. Kept inline and duplicated per page: an
+         * external file would race the first paint.
+         */
+        (function () {
+            var KEY = 'pydle_theme';
+            var root = document.documentElement;
+            var meta = document.querySelector('meta[name="theme-color"]');
+
+            function storedMode() {
+                try {
+                    var value = localStorage.getItem(KEY);
+                    return value === 'light' || value === 'dark' ? value : 'auto';
+                } catch (error) {
+                    return 'auto';
+                }
+            }
+
+            function apply() {
+                var mode = storedMode();
+                var dark = mode === 'dark' ||
+                    (mode === 'auto' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+                root.setAttribute('data-theme', dark ? 'dark' : 'light');
+                if (meta) {
+                    meta.setAttribute('content', dark ? '#1e1e2e' : '#f8f8f2');
+                }
+            }
+
+            apply();
+
+            var query = window.matchMedia('(prefers-color-scheme: light)');
+            var onSchemeChange = function () {
+                if (storedMode() === 'auto') {
+                    apply();
+                }
+            };
+            if (query.addEventListener) {
+                query.addEventListener('change', onSchemeChange);
+            } else if (query.addListener) {
+                query.addListener(onSchemeChange);
+            }
+            window.addEventListener('storage', apply);
+        })();
+    </script>
+
     <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css">
     <link rel="stylesheet" href="vendor/codemirror/dracula.min.css">
+    <link rel="stylesheet" href="css/codemirror-light.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="css/sync.css">
 </head>
@@ -99,6 +147,7 @@
         <div class="controls">
             <span id="sync-status" class="sync-status"></span>
             <button id="sync-btn" class="btn btn-sync" title="Save your work to your own GitHub repository">Sync</button>
+            <span id="theme-toggle" class="theme-toggle-slot"></span>
             <button id="instructions-btn" class="btn btn-instr">Help</button>
             <a href="https://github.com/thebillington/pydle/issues/new" target="_blank" rel="noopener noreferrer" class="btn btn-issue">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
@@ -225,10 +274,11 @@ print(greet("World"))</pre>
         import { mountConnect } from './js/ui/connect.js';
         import { mountStatus } from './js/ui/status.js';
         import { mountProjects } from './js/ui/projects.js';
+        import { getResolvedTheme, mountThemeToggle } from './js/ui/theme.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
-            theme: 'dracula',
+            theme: getResolvedTheme() === 'light' ? 'pydle-light' : 'dracula',
             lineNumbers: true,
             indentUnit: 4,
             tabSize: 4,
@@ -239,6 +289,12 @@ print(greet("World"))</pre>
                 'Ctrl-Enter': 'false',
             },
             viewportMargin: Infinity,
+        });
+
+        mountThemeToggle(document.getElementById('theme-toggle'), {
+            onChange: (resolved) => {
+                editor.setOption('theme', resolved === 'light' ? 'pydle-light' : 'dracula');
+            },
         });
 
         const runBtn = document.getElementById('run-btn');
