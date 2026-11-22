@@ -4,7 +4,7 @@ The concrete spec. For the research behind the choices, see [SCHOOLS.md](SCHOOLS
 
 pydle is a static site. This adds one thing: **your work lives in a git repository you
 own**, so it follows you between devices, keeps its history, and survives pydle
-itself. No backend, no accounts database, no teacher admin.
+itself. No backend, no server, no OAuth app, no accounts database, no teacher admin.
 
 The classroom layer (assignments, feedback, org accounts) is deferred. See
 [Appendix A](#appendix-a-deferred-classroom-layer) — it is additive and none of it
@@ -30,86 +30,45 @@ that, pydle keeps working exactly as it does today: local storage and download t
 
 ## 2. Authentication
 
-GitHub OAuth **device flow**. The user code is eight characters plus a hyphen
-(`WDJB-MJHT`) — the only credential anyone ever types.
+A **personal access token**, minted by the user, pasted once.
 
-### Why not a personal access token
+There is no OAuth app, no client ID, no shim, and no CORS problem: the token goes
+from the browser straight to `api.github.com`, which allows CORS. Nothing of ours
+ever sees it, and there is nothing to operate.
 
-A PAT works and needs no server at all, but onboarding means walking a 13-year-old
-through GitHub's fine-grained token UI — resource owner, repository access, fifty
-permission checkboxes, expiry — and then a confusing `401` a year later when it
-expires, with nobody to help. The device flow issues a correctly scoped token in
-nine characters and refreshes it silently.
+### Onboarding
 
-Keep the PAT path as an error fallback ("having trouble connecting?"), not as the
-main route. If a zero-server v0 is wanted, ship PAT first and swap in the device
-flow behind the same `getToken() : Promise<string>`.
-
-### The flow
+Prefer a **classic** token, because the form can be pre-filled by URL:
 
 ```
-POST https://github.com/login/device/code
-     client_id=<public>  scope=repo offline_access
+https://github.com/settings/tokens/new?scopes=repo&description=pydle
 ```
 
-```json
-{
-  "device_code": "3584d835…",        // secret, stays in the browser
-  "user_code": "WDJB-MJHT",          // the 9 characters shown to the human
-  "verification_uri": "https://github.com/login/device",
-  "expires_in": 900,
-  "interval": 5
-}
-```
+That opens the create-token page with `repo` already ticked and the description
+filled in. The user picks an expiry, clicks Generate, copies. Four interactions.
 
-Poll the token endpoint every `interval` seconds with `device_code` and
-`grant_type=urn:ietf:params:oauth:grant-type:device_code`:
+Fine-grained tokens are narrower and are what GitHub recommends, but they have no
+equivalent pre-fill and around fifty permission checkboxes. That is where a
+first-time user gives up, so do not send them there by default.
 
-- `authorization_pending` — keep polling
-- `slow_down` — add 5 seconds to the interval for this and all later polls (RFC 8628)
-- `expired_token` — the 15 minutes elapsed; start again
-- `access_denied` — the user declined
+Then: a paste field, store the token in IndexedDB, and offer a **Forget this device**
+button — people will sign in on library machines.
 
-Success returns `access_token`, `refresh_token`, `expires_in` and `scope`.
+### Recovery, since there is no refresh
 
-Show a visible countdown and a "get a new code" button, or a slow user stares at a
-dead screen with no explanation. Never surface `slow_down` as an error.
+Classic tokens are shown once and cannot be read back, so a lost or expired token
+means minting a new one. That is a 30-second job and the local vault is untouched,
+provided the failure is designed rather than discovered.
 
-**The authorisation can happen on a different device.** Show the URI as a QR next to
-the code: a user whose phone is already signed into GitHub can scan, type the code
-there and approve, and the machine running pydle receives a token without ever
-seeing a password. Design the screen around that path.
+On `401`:
 
-### Refresh
+1. keep the editor working and keep saving locally;
+2. show "your GitHub link has expired" with the same deep link;
+3. accept a new token, then replay the queued commit.
 
-`offline_access` matters: new OAuth apps issue **8-hour** access tokens by default.
-Without refresh, users re-authenticate every session. With it, refresh tokens last
-~6 months of non-use, so a re-auth lands roughly once per term.
-
-```
-POST https://github.com/login/oauth/access_token
-     grant_type=refresh_token&refresh_token=…&client_id=…
-```
-
-Store access token, refresh token, expiry and scope. Refresh proactively on `401`,
-once, before surfacing an error.
-
-### The shim
-
-`github.com` sends **no CORS headers**, so the two auth endpoints cannot be called
-from a page. `api.github.com` does, so all data requests go direct from the browser.
-
-The shim is a Cloudflare Worker with a hard allowlist:
-
-- only the three auth paths above, only `POST`, everything else `404`;
-- no storage, no database, no cookies, no client secret — the device flow does not
-  need one, which is why there is nothing worth stealing;
-- `Origin` allowlisted to the production domain, with `Vary: Origin`;
-- pinned to our `client_id`.
-
-**It sees the access token in transit**, because it forwards the token response.
-"Stores nothing" is not "sees nothing". Never log request or response bodies — put
-that in the code.
+Expiry is the main operational cost of this choice. Ask for a 1-year token and treat
+the annual `401` as routine, not as an error. Do not encourage never-expiring tokens:
+a permanent credential in a school browser ends up in a screenshot.
 
 ### Requests
 
@@ -122,11 +81,18 @@ X-GitHub-Api-Version: 2026-03-10
 Pin the version header. Breaking changes ship only in dated versions, each supported
 for at least 24 months.
 
-### Device-code phishing
+Treat the token as an opaque string — never validate length or prefix. GitHub changed
+installation tokens from 40 characters to ~520 in 2026 with three weeks' notice.
 
-Someone sends a code and asks you to enter it, which grants *them* access. Show the
-app name on the confirmation step, and say plainly in the UI that a code should only
-ever be entered for a screen you are looking at.
+### If OAuth is ever wanted
+
+Keep everything behind `getToken() : Promise<string>` and the rest of the app is
+unchanged. The device flow would buy an eight-character sign-in and silent refresh,
+but `github.com` sends no CORS headers, so it needs a stateless shim in front of the
+two auth endpoints. Worth it only if token expiry becomes a real support burden.
+
+The `repo` scope grants read/write to every repository the user can see. That is why
+the token must never be shared, pasted into a chat, or committed.
 
 ## 3. Finding or creating the repo
 
@@ -136,7 +102,7 @@ GET /repos/{login}/pydle
 
 - **Exists and looks like a vault** → connect.
 - **Doesn't exist** → offer *"Create my workspace"*. `POST /user/repos` with
-  `private: true` and `auto_init: false`.
+  `private: true` and `auto_init: false`. The classic `repo` scope permits this.
 - **Exists but isn't a vault** (no `pydle.json`, no recognised layout) → refuse and
   offer a different name. Never scaffold over someone's files.
 
@@ -145,6 +111,9 @@ permanent side effect, not something to do silently on first sign-in.
 
 `auto_init: false` is deliberate: `auto_init: true` leaves a junk README commit at
 the root of the user's history forever.
+
+A fine-grained token scoped to Contents only cannot create a repository — that needs
+Administration: write. Another reason classic is the default.
 
 ## 4. Bootstrapping
 
@@ -212,9 +181,8 @@ Local first. The browser is the source of truth; GitHub is a sync target.
 - Queue the commit, not each keystroke. On reconnect, one commit covering what
   changed.
 
-This is the property that makes the whole thing usable in a school: an expired
-token, a filter, or an outage means "will sync later", never "lost the lesson's
-work".
+This is the property that makes the whole thing usable: an expired token, a filter,
+or an outage means "will sync later", never "lost the lesson's work".
 
 ## 8. Conflicts
 
@@ -236,14 +204,16 @@ any host. This is the exit path and the answer to "what if pydle stops".
 
 - **Account required** for sync, therefore 13+. Without an account pydle works as it
   does today.
+- **Token expiry is the recurring cost.** One 1-year token per user, re-minted
+  annually, with a `401` path that never loses work.
+- **Tokens are shown once.** A lost token cannot be recovered, only replaced. Say so
+  in the UI at creation time.
 - **Signup is the sharp edge.** Accounts created in bulk from one school NAT get
   flagged as multi-accounting and suspended; appeals take weeks. If teachers point a
   class at this, the guide must say: sign up at home, before the lesson.
 - **`api.github.com` must be reachable.** Different hostname from `github.com`, and
   filters sometimes allow one and block the other.
-- **PAT fallback is coarse.** OAuth needs the `repo` scope, which GitHub renders as
-  *"Full control of private repositories"*. Fine for personal repos; alarming on a
-  consent screen if unexplained.
+- **No local-only story for the under-13s.** They get today's pydle, unchanged.
 
 ---
 
