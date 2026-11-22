@@ -102,7 +102,7 @@ from a page. `api.github.com` does, so all data requests go direct from the brow
 
 The shim is a Cloudflare Worker with a hard allowlist:
 
-- only the three auth paths above, only `POST`, everything else `404`;
+- only those two paths, only `POST`, everything else `404`;
 - no storage, no database, no cookies, no client secret — the device flow does not
   need one, which is why there is nothing worth stealing;
 - `Origin` allowlisted to the production domain, with `Vary: Origin`;

@@ -1,0 +1,13 @@
+{
+  "name": "pydle-auth",
+  "private": true,
+  "type": "module",
+  "description": "CORS shim for GitHub's OAuth device flow. Deployment is done by GitHub Actions.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
