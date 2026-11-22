@@ -419,6 +419,31 @@
     color: var(--text-primary);
 }
 
+/* Quiet confirmation of a catch-up after sign-in, above the sections. */
+.sync-pull-note {
+    margin: 16px 28px 0;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.sync-pull-note[hidden] {
+    display: none;
+}
+
+.sync-pull-note-ok {
+    border-left: 2px solid var(--accent-green);
+}
+
+.sync-pull-note-warn {
+    border-left: 2px solid var(--accent-yellow);
+}
+
 /* Disclosure -------------------------------------------------------------- */
 
 .sync-details {
@@ -591,5 +616,10 @@
     .sync-code {
         font-size: 22px;
         letter-spacing: 0.12em;
+    }
+
+    .sync-pull-note {
+        margin-left: 18px;
+        margin-right: 18px;
     }
 }

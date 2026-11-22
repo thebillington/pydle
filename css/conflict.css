@@ -1,0 +1,210 @@
+/*
+ * The "Pick which version to keep" dialog.
+ *
+ * Same language as css/commit.css and css/dialog.css: colours, radii and font
+ * stacks come from style.css only, so the dialog follows both themes without a
+ * second palette. Spacing is the established 4 / 8 / 12 / 16 / 24px scale.
+ */
+
+.conflict-overlay {
+    /* Above the commit dialog it is answering, below the small notify cards. */
+    z-index: 1100;
+}
+
+.conflict-overlay .overlay-content {
+    width: calc(100vw - 32px);
+    max-width: 620px;
+    max-height: 86vh;
+}
+
+.conflict-overlay .overlay-header {
+    padding: 18px 28px;
+}
+
+.conflict-overlay .overlay-header h2 {
+    font-size: 19px;
+    letter-spacing: -0.01em;
+}
+
+.conflict-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* The project name is a quiet subtitle, not a second heading. */
+.conflict-project {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.conflict-close:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.conflict-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 20px 28px 8px;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.conflict-lede {
+    margin-bottom: 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+.conflict-shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.conflict-shortcuts-label {
+    margin-right: 2px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.conflict-list-label {
+    margin-top: 18px;
+    margin-bottom: 0;
+}
+
+.conflict-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.conflict-row {
+    padding: 14px 0;
+}
+
+.conflict-row + .conflict-row {
+    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.conflict-path {
+    display: block;
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.conflict-explain {
+    margin-top: 2px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.conflict-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* The whole card is the label, so the target is large and the radio is native
+   and keyboard-operable. */
+.conflict-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 13px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.3;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.conflict-choice:hover {
+    background: var(--bg-tertiary);
+}
+
+.conflict-choice:focus-within {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+
+.conflict-choice.is-chosen {
+    border-color: var(--accent-green);
+    background: color-mix(in srgb, var(--accent-green) 11%, transparent);
+}
+
+.conflict-choice-input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--accent-green);
+    cursor: pointer;
+}
+
+.conflict-choice.is-chosen .conflict-choice-label {
+    font-weight: 600;
+}
+
+.conflict-consequence {
+    margin-top: 8px;
+    padding: 11px 14px;
+    border-left: 2px solid var(--accent-cyan);
+    background: var(--bg-tertiary);
+    border-radius: 0 6px 6px 0;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+.conflict-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 28px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.conflict-completeness {
+    margin-right: auto;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 560px) {
+    .conflict-overlay .overlay-header,
+    .conflict-body,
+    .conflict-footer {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .conflict-completeness {
+        flex-basis: 100%;
+    }
+}

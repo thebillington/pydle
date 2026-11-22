@@ -142,6 +142,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="css/sync.css">
     <link rel="stylesheet" href="css/commit.css">
+    <link rel="stylesheet" href="css/conflict.css">
     <link rel="stylesheet" href="css/editor-extras.css">
     <link rel="stylesheet" href="css/editor-files.css">
     <link rel="stylesheet" href="css/dialog.css">
@@ -279,6 +280,7 @@ print(greet("World"))</pre>
                 <button id="close-sync" class="btn btn-close" aria-label="Close Your work">&times;</button>
             </div>
             <div class="sync-body">
+                <p id="sync-pull-note" class="sync-pull-note" role="status" aria-live="polite" hidden></p>
                 <section class="sync-section" aria-labelledby="sync-github-heading">
                     <h3 class="sync-section-label" id="sync-github-heading">In your GitHub repository</h3>
                     <div id="connect-panel"></div>
@@ -1066,6 +1068,7 @@ print(greet("World"))</pre>
         const syncOverlay = document.getElementById('sync-overlay');
         const syncBtn = document.getElementById('sync-btn');
         const closeSyncBtn = document.getElementById('close-sync');
+        const syncPullNote = document.getElementById('sync-pull-note');
 
         mountStatus(document.getElementById('sync-status'), sync);
 
@@ -1269,9 +1272,128 @@ print(greet("World"))</pre>
             }
         });
 
-        void (CONFIG.clientId
-            ? sync.connect().catch(() => {}).then(() => refreshVaultProjects())
-            : refreshVaultProjects());
+        /**
+         * Show (or clear) the quiet line above the GitHub section.
+         *
+         * @param {string} text
+         * @param {'ok' | 'warn'} [tone]
+         */
+        function showPullNote(text, tone) {
+            if (!syncPullNote) {
+                return;
+            }
+            syncPullNote.textContent = text;
+            syncPullNote.className = 'sync-pull-note' + (tone ? ' sync-pull-note-' + tone : '');
+            syncPullNote.hidden = text === '';
+        }
+
+        /** Pull at most once per page, however the connection was made. */
+        let caughtUp = false;
+        let catchingUp = false;
+
+        /**
+         * Bring in whatever the repository changed while this device was away.
+         *
+         * Pulling is deliberately forgiving: it never throws into sign-in, and
+         * a failure only updates the quiet note. Files that changed in two
+         * places are reported here and resolved later, at commit time.
+         */
+        async function catchUpFromGitHub() {
+            if (catchingUp || caughtUp) {
+                return;
+            }
+            if (!sync.workspace || typeof sync.pull !== 'function') {
+                return;
+            }
+
+            catchingUp = true;
+
+            let report;
+            try {
+                report = await sync.pull();
+            } catch {
+                showPullNote(
+                    'Could not catch up with GitHub just now. Your work is safe on this device.',
+                    'warn',
+                );
+                catchingUp = false;
+                caughtUp = true;
+                return;
+            }
+
+            const applied = report && Number.isFinite(report.applied) ? report.applied : 0;
+            const conflicts = report && Array.isArray(report.conflicts) ? report.conflicts : [];
+
+            if (applied > 0) {
+                await refreshVaultProjects();
+            }
+
+            catchingUp = false;
+            caughtUp = true;
+
+            if (conflicts.length > 0) {
+                showPullNote('');
+                await notify({
+                    title: 'Files changed in two places',
+                    message:
+                        conflicts.length +
+                        (conflicts.length === 1 ? ' file needs' : ' files need') +
+                        ' a decision. You will be asked which copy to keep the next time you commit that project.',
+                    variant: 'info',
+                });
+                return;
+            }
+
+            if (applied > 0) {
+                showPullNote(
+                    'Caught up with GitHub. ' +
+                        applied +
+                        (applied === 1
+                            ? ' file was updated on this device.'
+                            : ' files were updated on this device.'),
+                    'ok',
+                );
+            }
+        }
+
+        // Signing in through the panel calls connect() inside the sync service,
+        // not from this page, so watch for the first usable workspace. The guard
+        // also stops a later commit's status update from pulling again.
+        sync.subscribe(() => {
+            if (caughtUp || catchingUp) {
+                return;
+            }
+            if (sync.status === 'connected' && sync.workspace) {
+                void catchUpFromGitHub();
+            }
+        });
+
+        /**
+         * Connect first, then catch up. A failed connection is reported by the
+         * sync service itself, so it must not stop the rest of the page.
+         */
+        async function startSync() {
+            if (!CONFIG.clientId) {
+                await refreshVaultProjects();
+                return;
+            }
+
+            let connected = false;
+            try {
+                await sync.connect();
+                connected = true;
+            } catch {
+                // The status control already explains what went wrong.
+            }
+
+            await refreshVaultProjects();
+
+            if (connected) {
+                await catchUpFromGitHub();
+            }
+        }
+
+        void startSync();
 
         initWorker();
     </script>

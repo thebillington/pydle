@@ -20,6 +20,8 @@
  * `textContent`, never `innerHTML`.
  */
 
+import { mountConflict } from './conflict.js';
+
 /** Above this many files the list earns a select-all control. */
 const SELECT_ALL_THRESHOLD = 4;
 
@@ -199,6 +201,17 @@ export function mountCommit(root, sync, handlers = {}) {
     let returnFocus = null;
     /** @type {((outcome: string) => void) | null} */
     let resolveOpen = null;
+
+    /**
+     * The "which copy?" dialog, mounted on first need. It lives in its own
+     * element on `document.body` so that showing it does not destroy this
+     * dialog underneath.
+     *
+     * @type {ReturnType<typeof mountConflict> | null}
+     */
+    let conflictDialog = null;
+    /** @type {HTMLElement | null} */
+    let conflictHost = null;
 
     /* Rebuilt on every render; the state above holds anything worth keeping. */
     /** @type {HTMLInputElement | null} */
@@ -616,6 +629,33 @@ export function mountCommit(root, sync, handlers = {}) {
         }
     }
 
+    /**
+     * Mount the conflict dialog outside this dialog's container, once.
+     *
+     * @returns {ReturnType<typeof mountConflict>}
+     */
+    function ensureConflictDialog() {
+        if (conflictDialog) {
+            return conflictDialog;
+        }
+        conflictHost = el('div', 'conflict-root');
+        document.body.appendChild(conflictHost);
+        conflictDialog = mountConflict(conflictHost, {});
+        return conflictDialog;
+    }
+
+    /**
+     * Restore the commit dialog's controls after an error or a cancelled
+     * conflict prompt, with the caret on the primary action.
+     */
+    function focusAfterProblem() {
+        if (submitBtn) {
+            submitBtn.focus({ preventScroll: true });
+        } else {
+            content.focus({ preventScroll: true });
+        }
+    }
+
     /** Commit the ticked files. */
     async function submit() {
         if (state.busy || !state.open || !readyToSubmit()) {
@@ -640,15 +680,57 @@ export function mountCommit(root, sync, handlers = {}) {
             if (!state.open) {
                 return;
             }
-            state.busy = false;
-            state.error = toError(error);
-            render();
-            if (submitBtn) {
-                submitBtn.focus({ preventScroll: true });
-            } else {
+
+            const problem = toError(error);
+            const conflicts = Array.isArray(problem.conflicts) ? problem.conflicts : [];
+
+            if (problem.kind === 'conflict' && conflicts.length > 0) {
+                // Reconciliation found files that moved on both sides. Ask for
+                // a choice, then retry the same commit once with the answer.
+                state.busy = false;
+                state.error = null;
+                render();
+
+                const dialog = ensureConflictDialog();
+                const resolutions = await dialog.open({ project, conflicts });
+
+                if (!state.open) {
+                    return;
+                }
+
+                if (resolutions === null) {
+                    // Cancelling changes nothing: the selection and message are
+                    // still here, so the commit can be attempted again later.
+                    focusAfterProblem();
+                    return;
+                }
+
+                state.busy = true;
+                state.error = null;
+                render();
                 content.focus({ preventScroll: true });
+
+                try {
+                    result = await sync.commit({ project, paths, message, resolutions });
+                } catch (retryError) {
+                    if (!state.open) {
+                        return;
+                    }
+                    // One retry only. A second block is reported inline, so the
+                    // dialog cannot reopen itself in a loop.
+                    state.busy = false;
+                    state.error = toError(retryError);
+                    render();
+                    focusAfterProblem();
+                    return;
+                }
+            } else {
+                state.busy = false;
+                state.error = problem;
+                render();
+                focusAfterProblem();
+                return;
             }
-            return;
         }
 
         if (!state.open) {
@@ -771,6 +853,14 @@ export function mountCommit(root, sync, handlers = {}) {
         state.open = false;
         state.token += 1;
         resolveOpen = null;
+        if (conflictDialog) {
+            conflictDialog.destroy();
+            conflictDialog = null;
+        }
+        if (conflictHost) {
+            conflictHost.remove();
+            conflictHost = null;
+        }
         overlay.remove();
     }
 
