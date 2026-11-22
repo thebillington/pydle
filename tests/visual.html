@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>sync UI states</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../css/sync.css">
+<style>
+    body { margin: 0; padding: 24px; background: var(--bg-primary); }
+    /* Use the real overlay positioning, so this fixture shows what users see. */
+</style>
+</head>
+<body>
+<!--
+    Visual fixture for the sync UI. Each connect/status/project state can be
+    rendered without touching GitHub, so the panel can be looked at rather than
+    only syntax-checked.
+
+        serve the repo root, then open
+        tests/visual.html?state=idle|code|waiting|workspace|connected|error|projects
+                              &theme=light|dark
+-->
+<div class="stage">
+    <div id="status-slot"></div>
+    <div class="overlay">
+        <div class="overlay-content">
+            <div class="overlay-header"><h2>Your work</h2></div>
+            <div id="connect-slot"></div>
+            <div class="sync-projects"><h3>Saved on this device</h3><div id="projects-slot"></div></div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { mountConnect } from '../js/ui/connect.js';
+    import { mountStatus } from '../js/ui/status.js';
+    import { mountProjects } from '../js/ui/projects.js';
+
+    /** Minimal stand-in for the real sync service. */
+    function stub(state) {
+        const listeners = new Set();
+        const api = {
+            status: 'signed-out',
+            identity: null,
+            workspace: null,
+            error: null,
+            onStatus(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+            beginSignIn({ onCode }) {
+                onCode({
+                    userCode: 'WDJB-MJHT',
+                    verificationUri: 'https://github.com/login/device',
+                    expiresIn: 900,
+                });
+                return new Promise(() => {});
+            },
+            cancelSignIn() {},
+            async connect() {},
+            async createWorkspace() {},
+            async disconnect() {},
+            async listProjects() {
+                return [
+                    { name: 'spiral', updatedAt: Date.now() },
+                    { name: 'shapes', updatedAt: Date.now() - 86_400_000 },
+                ];
+            },
+            set(patch) {
+                Object.assign(api, patch);
+                for (const fn of listeners) fn(api);
+            },
+        };
+        Object.assign(api, state);
+        return api;
+    }
+
+    const wanted = new URLSearchParams(location.search).get('state') || 'idle';
+    const wantedTheme = new URLSearchParams(location.search).get('theme');
+    if (wantedTheme === 'light' || wantedTheme === 'dark') {
+        document.documentElement.dataset.theme = wantedTheme;
+    }
+    const states = {
+        idle: { status: 'signed-out' },
+        code: { status: 'connecting' },
+        workspace: { status: 'connected', identity: { login: 'p0142', name: 'p0142' } },
+        connected: {
+            status: 'connected',
+            identity: { login: 'p0142', name: 'p0142' },
+            workspace: { owner: 'p0142', repo: 'pydle' },
+        },
+        error: {
+            status: 'error',
+            identity: { login: 'p0142' },
+            error: { kind: 'auth', message: 'GitHub rejected the sign-in.' },
+        },
+        offline: {
+            status: 'offline',
+            identity: { login: 'p0142' },
+            workspace: { owner: 'p0142', repo: 'pydle' },
+        },
+    };
+
+    const sync = stub(states[wanted] || states.idle);
+    mountStatus(document.getElementById('status-slot'), sync);
+    const connect = mountConnect(document.getElementById('connect-slot'), sync);
+    mountProjects(document.getElementById('projects-slot'), sync, {
+        onOpen: () => {},
+        onDelete: () => {},
+    });
+
+    // Drive the panel into its code state once mounted.
+    if (wanted === 'code') {
+        connect.update();
+        sync.set({ status: 'connecting' });
+        const btn = document.querySelector('#connect-slot button');
+        if (btn) btn.click();
+    }
+
+    document.documentElement.dataset.ready = 'true';
+</script>
+</body>
+</html>
