@@ -132,8 +132,14 @@ ever be entered for a screen you are looking at.
 ## 3. Finding or creating the repo
 
 ```
-GET /repos/{login}/pydle
+GET /repos/{login}/pydle-workspace
 ```
+
+The name is not `pydle` on purpose: an account is very likely to already hold a
+repository with the project's own name, and adopting that would commit into someone
+else's source repository. A repository that merely shares the name is not adopted
+either. It must be empty or contain `pydle.json`; anything else is refused rather
+than written to.
 
 - **Exists and looks like a vault** → connect.
 - **Doesn't exist** → offer *"Create my workspace"*. `POST /user/repos` with

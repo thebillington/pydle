@@ -22,8 +22,18 @@ import * as vault from './vault/fs.js';
 import { normalizeProjectName, safeJoin } from './vault/paths.js';
 import { planMerge } from './reconcile.js';
 
-/** Repo name inside the user's own account. One workspace per person. */
-export const REPO_NAME = 'pydle';
+/**
+ * Repository name inside the user's own account. One workspace per person.
+ *
+ * Deliberately not `pydle`: a GitHub account is very likely to already contain a
+ * repository with the project's own name, and adopting that would commit into
+ * somebody's source repository. `pydle-workspace` says what it is, and collides
+ * with nothing.
+ */
+export const REPO_NAME = 'pydle-workspace';
+
+/** Marker file that proves a repository is a pydle workspace. */
+const WORKSPACE_MARKER = 'pydle.json';
 
 /** Directory inside the repo that holds program projects. */
 const WORK_ROOT = 'work';
@@ -385,9 +395,17 @@ export function createSync({ onChange } = {}) {
                 const repo = await withToken((token) =>
                     getRepo({ token, owner: user.login, repo: REPO_NAME }),
                 );
-                workspace = repo
-                    ? { owner: user.login, repo: REPO_NAME, branch: repo.default_branch }
-                    : null;
+
+                if (!repo) {
+                    workspace = null;
+                } else {
+                    const usable = await withToken((token) =>
+                        isWorkspaceRepo(token, user.login, REPO_NAME, repo.default_branch, repo.size),
+                    );
+                    workspace = usable
+                        ? { owner: user.login, repo: REPO_NAME, branch: repo.default_branch }
+                        : null;
+                }
             } catch (error) {
                 const syncError = asSyncError(error);
                 if (syncError.kind === 'auth') {
@@ -408,6 +426,39 @@ export function createSync({ onChange } = {}) {
     }
 
     /**
+     * Whether a repository is a pydle workspace.
+     *
+     * A repository that merely shares the name is not one, and adopting it would
+     * write `work/` into somebody else's project. The marker file decides, and an
+     * empty repository counts as fair game because it holds nothing to damage.
+     *
+     * @param {string} token
+     * @param {string} owner
+     * @param {string} repo
+     * @param {string} branch
+     * @param {number} size Repository size in KB, from the repo object.
+     * @returns {Promise<boolean>}
+     */
+    async function isWorkspaceRepo(token, owner, repo, branch, size) {
+        if (!size) {
+            return true;
+        }
+        try {
+            await ghFetch(
+                `/repos/${owner}/${repo}/contents/${WORKSPACE_MARKER}` +
+                    `?ref=${encodeURIComponent(branch)}`,
+                { token },
+            );
+            return true;
+        } catch (error) {
+            if (error instanceof GitHubError && (error.status === 404 || error.status === 403)) {
+                return false;
+            }
+            throw error;
+        }
+    }
+
+    /**
      * Create the workspace repo and write the scaffold commit.
      *
      * @returns {Promise<void>}
@@ -421,7 +472,19 @@ export function createSync({ onChange } = {}) {
         }
 
         try {
-            const repo = await withToken((token) => createRepo({ token, name: REPO_NAME }));
+            let repo;
+            try {
+                repo = await withToken((token) => createRepo({ token, name: REPO_NAME }));
+            } catch (error) {
+                if (error instanceof GitHubError && error.status === 422) {
+                    throw new SyncError(
+                        'config',
+                        `Your GitHub account already has a repository called ${REPO_NAME}, and it is not a pydle workspace. Rename or delete it, then try again.`,
+                        { cause: error },
+                    );
+                }
+                throw error;
+            }
             workspace = { owner: user.login, repo: REPO_NAME, branch: repo.default_branch };
 
             await withToken((token) =>

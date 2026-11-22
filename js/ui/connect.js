@@ -652,7 +652,7 @@ export function mountConnect(element, sync) {
             el(
                 'p',
                 'sync-text',
-                'There is no repository called pydle in your account yet. pydle can create one for you. It is private, so only you can see it, and you can delete it whenever you like.',
+                'There is no repository called pydle-workspace in your account yet. pydle can create one for you. It is private, so only you can see it, and you can delete it whenever you like.',
             ),
         );
 
