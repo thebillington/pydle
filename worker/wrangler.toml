@@ -1,0 +1,9 @@
+name = "pydle-auth"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+# Plain vars, not secrets: the allowlist is public and the client id is public.
+# CLIENT_ID is the pydle GitHub OAuth App id; leave it empty to skip the pin.
+[vars]
+ALLOWED_ORIGINS = "https://pydle.uk,https://www.pydle.uk,http://localhost:8080,http://127.0.0.1:8080"
+CLIENT_ID = ""

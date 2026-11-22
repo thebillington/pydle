@@ -1,0 +1,325 @@
+/*
+ * Sync UI: the toolbar indicator, the sign-in panel, and the project list.
+ *
+ * Colours, radii and font stacks come from the variables in style.css so this
+ * reads as part of the same tool rather than a separate widget.
+ */
+
+/* Toolbar indicator ------------------------------------------------------- */
+
+.sync-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sync-status-dot {
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--text-secondary);
+}
+
+.sync-status-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sync-status[data-state='signed-out'] .sync-status-dot {
+    background: transparent;
+    border: 1px solid var(--border);
+}
+
+.sync-status[data-state='connecting'] .sync-status-dot {
+    background: var(--accent-yellow);
+}
+
+.sync-status[data-state='connected'] .sync-status-dot {
+    background: var(--accent-green);
+}
+
+.sync-status[data-state='offline'] .sync-status-dot {
+    background: var(--accent-yellow);
+}
+
+.sync-status[data-state='error'] .sync-status-dot {
+    background: var(--accent-red);
+}
+
+.sync-status[data-state='connected'] .sync-status-label {
+    color: var(--text-primary);
+}
+
+.sync-status[data-state='error'] .sync-status-label {
+    color: var(--accent-red);
+}
+
+/* Sign-in panel ----------------------------------------------------------- */
+
+.sync-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-primary);
+}
+
+.sync-panel:focus {
+    outline: none;
+}
+
+.sync-lede {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.sync-muted {
+    color: var(--text-secondary);
+}
+
+.sync-small {
+    font-size: 12px;
+}
+
+.sync-error {
+    color: var(--accent-red);
+}
+
+.sync-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.sync-actions-between {
+    justify-content: space-between;
+}
+
+/* Buttons ----------------------------------------------------------------- */
+
+.sync-btn {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s, transform 0.1s;
+}
+
+.sync-btn:active {
+    transform: scale(0.97);
+}
+
+.sync-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.sync-btn-primary {
+    background: var(--accent-green);
+    color: var(--bg-primary);
+}
+
+.sync-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.06);
+}
+
+.sync-btn-quiet {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+.sync-btn-quiet:hover:not(:disabled) {
+    background: var(--bg-tertiary);
+}
+
+.sync-btn-danger {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--accent-red);
+}
+
+.sync-btn-danger:hover:not(:disabled) {
+    background: var(--accent-red);
+    border-color: var(--accent-red);
+    color: #ffffff;
+}
+
+.sync-btn-small {
+    font-size: 12px;
+    padding: 4px 10px;
+}
+
+.sync-btn:focus-visible,
+.sync-link:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 2px;
+}
+
+/* The code ---------------------------------------------------------------- */
+
+.sync-code-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.sync-code {
+    display: inline-block;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    user-select: all;
+}
+
+.sync-copy-message:empty {
+    display: none;
+}
+
+.sync-link {
+    align-self: flex-start;
+    color: var(--accent-green);
+    font-size: 13px;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.sync-countdown {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sync-waiting {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.sync-workspace {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-primary);
+}
+
+.sync-workspace code {
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+/* Project list ------------------------------------------------------------ */
+
+.sync-projects {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.sync-empty {
+    padding: 10px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.sync-project-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sync-project {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+
+.sync-project:hover {
+    background: var(--bg-tertiary);
+}
+
+.sync-project-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.sync-project-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
+
+.sync-project-state {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.sync-project-state-ok {
+    color: var(--accent-green);
+}
+
+.sync-project-state-busy {
+    color: var(--accent-yellow);
+}
+
+.sync-project-state-local {
+    color: var(--text-secondary);
+}
+
+.sync-project-state-error {
+    color: var(--accent-red);
+}
+
+.sync-project-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+}
+
+@media (max-width: 560px) {
+    .sync-project {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .sync-code {
+        font-size: 19px;
+    }
+}

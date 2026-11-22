@@ -1,0 +1,9 @@
+{
+  "name": "pydle",
+  "private": true,
+  "type": "module",
+  "description": "Browser Python playground. This file exists only so Node treats .js files as ES modules for tests; there is no build step.",
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}
