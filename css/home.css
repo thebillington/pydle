@@ -451,3 +451,21 @@ main.is-home > .console-panel {
     display: flex;
     align-items: center;
 }
+
+/* A one-off message above the project list, such as a link to a project that
+   is not on this device. */
+.home-notice {
+    margin: 0 0 14px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-yellow);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+}
+
+.home-notice[hidden] {
+    display: none;
+}

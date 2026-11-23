@@ -152,6 +152,7 @@
     <link rel="stylesheet" href="css/editor-files.css">
     <link rel="stylesheet" href="css/dialog.css">
     <link rel="stylesheet" href="css/repl.css">
+    <link rel="stylesheet" href="css/theme-switch.css">
 </head>
 <body>
     <header>
@@ -162,13 +163,13 @@
                 <span class="sync-btn-dot" aria-hidden="true"></span>
                 <span>GitHub</span>
             </button>
-            <span id="theme-toggle" class="theme-toggle-slot"></span>
             <a id="turtle-btn" class="btn btn-turtle" href="/turtle/" title="Switch to the turtle editor">Switch to turtle</a>
             <button id="instructions-btn" class="btn btn-instr">Help</button>
             <a href="https://github.com/thebillington/pydle/issues/new" target="_blank" rel="noopener noreferrer" class="btn btn-issue">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                 Raise an Issue
             </a>
+            <span id="theme-toggle" class="theme-toggle-slot"></span>
         </div>
     </header>
 
@@ -495,7 +496,6 @@ print("Hello, World!")</textarea>
         const STORAGE_PREFIX = 'pydle_file_';
 
         /** Remembers the project to reopen on the next visit. */
-        const LAST_PROJECT_KEY = 'pydle_last_project';
         /** Prefix for the last file used inside one project. */
         const LAST_FILE_PREFIX = 'pydle_last_file_';
 
@@ -1199,30 +1199,6 @@ print("Hello, World!")</textarea>
             void refreshCommitState();
         }
 
-        function rememberProject(name) {
-            try {
-                localStorage.setItem(LAST_PROJECT_KEY, name);
-            } catch {
-                // A blocked storage partition just means Home opens next time.
-            }
-        }
-
-        function forgetProject() {
-            try {
-                localStorage.removeItem(LAST_PROJECT_KEY);
-            } catch {
-                // Nothing to undo.
-            }
-        }
-
-        function readLastProject() {
-            try {
-                return localStorage.getItem(LAST_PROJECT_KEY);
-            } catch {
-                return null;
-            }
-        }
-
         /** True when the remembered project still exists, in the vault or legacy storage. */
         function projectExists(name) {
             if (vaultProjects.includes(name)) {
@@ -1321,7 +1297,6 @@ print("Hello, World!")</textarea>
             clearErrorLine();
             clearConsole();
 
-            rememberProject(name);
             if (chosen !== null) {
                 rememberLastFile(name, chosen);
             }
@@ -1517,7 +1492,6 @@ print("Hello, World!")</textarea>
             clearErrorLine();
             clearConsole();
 
-            forgetProject();
             paintCommitState(0);
             updateFileIndicator();
             void refreshRail();
@@ -2385,6 +2359,51 @@ print("Hello, World!")</textarea>
          * A remembered name that no longer exists is forgotten quietly, never
          * reported: Home is a perfectly good answer.
          */
+        /**
+         * Open the project named by `?project=` in the address, if there is one.
+         *
+         * The name is normalised the same way a typed name is, and then checked
+         * against what this device actually holds, so a link can never ask for a
+         * path. A name that is not here says so and leaves the project page up,
+         * rather than silently doing nothing.
+         *
+         * @returns {Promise<boolean>} True when a project was opened.
+         */
+        async function openRequestedProject() {
+            let raw = null;
+            try {
+                raw = new URLSearchParams(window.location.search).get('project');
+            } catch {
+                return false;
+            }
+            if (raw === null || raw.trim() === '') {
+                return false;
+            }
+
+            let name = raw.trim();
+            try {
+                name = normalizeProjectName(name);
+            } catch {
+                // Leave the name as written; projectExists decides.
+            }
+
+            if (!projectExists(name)) {
+                // On the project page, not in the toolbar: the status line is
+                // replaced by "Ready" as soon as the runtime starts, so a message
+                // left there would flash and vanish.
+                home.setNotice(
+                    'There is no project called “' +
+                        raw.trim() +
+                        '” on this device. These are the projects it has.',
+                );
+                return false;
+            }
+
+            home.setNotice('');
+
+            return await loadFile(name);
+        }
+
         async function boot() {
             // Both migrations run before the project list is read, so Home only
             // ever shows canonical names: first the rename of anything stored
@@ -2399,14 +2418,12 @@ print("Hello, World!")</textarea>
             await importLegacyFiles();
             await refreshVaultProjects();
 
-            const last = readLastProject();
-            if (last !== null && projectExists(last)) {
-                await loadFile(last);
-            } else if (last !== null) {
-                forgetProject();
-            }
-
-            if (currentFileName === null) {
+            // A link can name the project to open, which is what makes a project
+            // sendable to a student or bookmarkable by them. Without one, the
+            // project page is the resting state: the app never guesses which
+            // project to open from this device's history.
+            const opened = await openRequestedProject();
+            if (!opened) {
                 showHome();
             }
 

@@ -381,6 +381,10 @@ export function mountHome(root, options) {
     newBtn.type = 'button';
     toolbar.append(searchWrap, newBtn);
 
+    const notice = el('p', 'home-notice');
+    notice.hidden = true;
+    notice.setAttribute('role', 'status');
+
     const panel = el('div', 'home-panel');
     const list = el('ul', 'home-list');
     list.setAttribute('aria-label', 'Projects');
@@ -400,7 +404,7 @@ export function mountHome(root, options) {
     const footer = el('div', 'home-foot');
     footer.appendChild(githubRow);
 
-    inner.append(head, toolbar, panel, footer);
+    inner.append(head, notice, toolbar, panel, footer);
     root.appendChild(inner);
 
     /* Rendering --------------------------------------------------------- */
@@ -736,6 +740,19 @@ export function mountHome(root, options) {
     return {
         update,
         focus,
+        /**
+         * A message about why the project page was shown, or '' to clear it.
+         *
+         * Kept on the page rather than in the toolbar status, because the status
+         * line is replaced by "Ready" as soon as the runtime starts.
+         *
+         * @param {string} text
+         */
+        setNotice(text) {
+            const value = typeof text === 'string' ? text : '';
+            notice.textContent = value;
+            notice.hidden = value === '';
+        },
         destroy() {
             if (destroyed) {
                 return;
