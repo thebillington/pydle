@@ -76,3 +76,52 @@
     background: color-mix(in srgb, var(--accent-red) 28%, transparent);
     border-radius: 2px;
 }
+
+/* The error block: Python's sentence, the offending line with the fault marked,
+   any notes, and the traceback folded away. */
+.console-error {
+    padding: 4px 0 10px;
+}
+
+.console-error-summary {
+    color: var(--accent-red);
+    font-weight: 600;
+    margin: 0 0 6px;
+}
+
+.console-error-source {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 6px;
+}
+
+.console-error-line {
+    flex-shrink: 0;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.console-error-source code {
+    font-family: var(--font-mono);
+}
+
+/* The pointer: the exact characters, not a row of carets. */
+.console-error-mark {
+    background: color-mix(in srgb, var(--accent-red) 30%, transparent);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+    text-decoration: underline wavy var(--accent-red);
+    text-underline-offset: 3px;
+}
+
+.console-error-note {
+    margin: 0 0 6px;
+    color: var(--text-secondary);
+}
+
+.console-error .console-details {
+    border-top: 1px solid var(--border);
+    margin-top: 6px;
+}

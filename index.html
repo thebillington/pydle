@@ -312,6 +312,7 @@ print("Hello, World!")</textarea>
         import { CONFIG } from './js/config.js';
         import { lineFromTraceback } from './js/traceback.js';
         import { errorLocation, errorNotes } from './js/error-report.js';
+        import { buildErrorBlock, normaliseSource } from './js/error-block.js';
         import { createSync } from './js/sync.js';
         import { mountConnect } from './js/ui/connect.js';
         import { mountStatus } from './js/ui/status.js';
@@ -995,40 +996,18 @@ print("Hello, World!")</textarea>
         });
 
         /**
-         * Print one error line, with the full traceback folded away beneath it.
+         * Add the error block under whatever has been printed so far.
          *
-         * @param {string} summary The last line Python printed, which is the useful one.
-         * @param {string} detail The complete traceback, shown only when asked for.
+         * @param {{ summary: string, notes: string[], detail: string, sourceLine: string, location: object | null }} input
          */
-        function showError(summary, detail, notes) {
-            const wrapper = document.querySelector('.console-wrapper');
-            const previous = document.getElementById('console-details');
+        function appendErrorBlock(input) {
+            const previous = document.getElementById('console-error');
             if (previous) previous.remove();
 
-            log(summary);
-
-            for (const note of Array.isArray(notes) ? notes : []) {
-                log('  ' + note);
-            }
-
-            if (!detail || !wrapper) {
-                return;
-            }
-
-            const details = document.createElement('details');
-            details.id = 'console-details';
-            details.className = 'console-details';
-
-            const toggle = document.createElement('summary');
-            toggle.textContent = 'Show the full traceback';
-
-            const body = document.createElement('pre');
-            body.className = 'console-details-body';
-            body.textContent = detail;
-
-            details.append(toggle, body);
-            wrapper.append(details);
-            wrapper.scrollTop = wrapper.scrollHeight;
+            const block = buildErrorBlock(input);
+            block.id = 'console-error';
+            consoleEl.append(block);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
         }
 
         function log(msg) {
@@ -1076,45 +1055,54 @@ print("Hello, World!")</textarea>
                         break;
 
                     case 'error': {
-                        // One line. The full traceback is available on request and
-                        // never printed by default: Pyodide's internal frames are
-                        // noise to a student.
                         const summary = e.data.summary || 'Python stopped on an error.';
                         const detail = e.data.detail || '';
-                        // Python's own words, including any "did you mean" and any
-                        // notes it attached. No invented advice.
-                        showError(summary, detail, errorNotes({ structured: e.data.structured }));
+                        const notes = errorNotes({ structured: e.data.structured });
+
                         showStatus('Error', 'error');
                         runBtn.disabled = false;
                         stopBtn.disabled = true;
+
                         try {
                             const line = lineFromTraceback(detail + '\n' + summary);
+                            const location = line === null
+                                ? null
+                                : errorLocation({ structured: e.data.structured, detail });
+
+                            // Prefer Python's own copy of the line; fall back to the
+                            // editor's, which is the same text unless it has been
+                            // edited since the run.
+                            const reported = e.data.structured && e.data.structured.source;
+                            const rawLine =
+                                typeof reported === 'string' && reported.trim() !== ''
+                                    ? reported
+                                    : location
+                                      ? editor.getLine(location.line - 1) || ''
+                                      : '';
+
+                            // Trimming the line for display moves the highlight with
+                            // it; Python's offset counts the indentation.
+                            const shown = normaliseSource(rawLine, location);
+                            const sourceLine = shown.sourceLine;
+                            const displayLocation = shown.location;
+
+                            clearErrorLine();
                             if (line !== null) {
-                                let location = errorLocation({
-                                    structured: e.data.structured,
-                                    detail,
-                                });
-
-                                // Sanity check: if Python's source line does not
-                                // match the editor's, the structured data is stale
-                                // and pointing at it would mark the wrong characters.
-                                const reported = e.data.structured && e.data.structured.source;
-                                if (
-                                    location &&
-                                    typeof reported === 'string' &&
-                                    reported.trim() !== ''
-                                ) {
-                                    const actual = editor.getLine(location.line - 1) || '';
-                                    if (actual.trim() !== reported.trim()) {
-                                        location = { line: location.line, column: 0, length: 0 };
-                                    }
-                                }
-
-                                markErrorLine(line, summary, location);
+                                markErrorLine(line, summary, displayLocation);
                             }
-                        } catch (markFailure) {
-                            // Marking is a convenience: never break the error path.
+
+                            appendErrorBlock({
+                                summary,
+                                notes,
+                                detail,
+                                sourceLine,
+                                location: displayLocation,
+                            });
+                        } catch (renderFailure) {
+                            // Reporting an error must never itself fail.
+                            appendErrorBlock({ summary, notes, detail, sourceLine: '', location: null });
                         }
+
                         break;
                     }
 
