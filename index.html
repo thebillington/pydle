@@ -833,7 +833,7 @@ print("Hello, World!")</textarea>
             // not, it says plainly that the work is only on this device.
             const connected = Boolean(sync.workspace);
             if (connected && !document.querySelector('.commit-overlay:not(.hidden)')) {
-                showStatus('Saved on this device. Add a message to put it in GitHub.', 'ready');
+                commitSettled = false;
                 void commitDialog.open(currentFileName);
                 return;
             }
@@ -841,7 +841,7 @@ print("Hello, World!")</textarea>
             showStatus(
                 connected
                     ? 'Saved: ' + currentFileName + '/' + currentPath
-                    : 'Saved on this device only. Not in GitHub.',
+                    : 'Saved on this device. Not in GitHub yet.',
                 'ready',
             );
         }
@@ -1567,8 +1567,12 @@ print("Hello, World!")</textarea>
             paintCommitState(report && Number.isFinite(report.count) ? report.count : 0);
         }
 
+        /** Whether the commit dialog ended in a commit, so the status is not misleading. */
+        let commitSettled = false;
+
         const commitDialog = mountCommit(document.getElementById('commit-root'), sync, {
             onCommitted: (result) => {
+                commitSettled = true;
                 const count = result.paths.length;
                 showStatus(
                     'Saved ' + count + (count === 1 ? ' file' : ' files') + ' to GitHub',
@@ -1578,6 +1582,12 @@ print("Hello, World!")</textarea>
             },
             onClose: () => {
                 void refreshCommitState();
+                // Declining leaves the work saved on the device, which is worth
+                // saying once the dialog has gone, in the place status lives.
+                if (!commitSettled) {
+                    showStatus('Saved on this device. Not in GitHub yet.', 'ready');
+                }
+                commitSettled = false;
             },
         });
 
