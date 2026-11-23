@@ -150,9 +150,9 @@ function normaliseChange(entry) {
  * Build the diff once per changed file.
  *
  * An added file diffs from nothing and a deleted file diffs to nothing, which
- * are both genuine. A modified file whose earlier copy was never stored is not:
- * pretending it was empty would paint the whole file as new, which is a lie
- * about what the commit contains. That case is reported instead.
+ * are both genuine. A modified file with no earlier copy is not: pretending it
+ * was empty would paint the whole file as new, which is a lie about what the
+ * commit contains. That case is reported instead, without guessing why.
  *
  * @param {Change} change
  * @returns {ChangeDiff}
@@ -667,8 +667,8 @@ export function mountCommit(root, sync, handlers = {}) {
         if (!diff.available) {
             const reason =
                 diff.reason === 'before-missing'
-                    ? 'The earlier copy of this file was saved before pydle kept file contents, ' +
-                      'so there is nothing to compare it with.' +
+                    ? 'The earlier copy of this file could not be read, so there is nothing ' +
+                      'to compare it with here.' +
                       (entry.status === 'deleted'
                           ? ' It will still be deleted when you save.'
                           : ' The version below is what will be saved.')
@@ -762,7 +762,7 @@ export function mountCommit(root, sync, handlers = {}) {
             const stats = el('span', 'commit-file-stats commit-file-stats-none', 'no diff');
             stats.title =
                 diff.reason === 'before-missing'
-                    ? 'The earlier copy was saved before pydle kept file contents.'
+                    ? 'The earlier copy could not be read.'
                     : 'The current copy could not be read.';
             meta.append(stats);
         }

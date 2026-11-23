@@ -1375,8 +1375,26 @@ export function createSync({ onChange } = {}) {
         let reconciled;
         try {
             reconciled = await preflight(project, resolutions, kind);
-        } catch {
-            return localOnly();
+        } catch (error) {
+            // Reconciling failed, but that does not mean the repository cannot be
+            // read. Ask it directly where HEAD is, so the diff is still measured
+            // against what GitHub holds rather than against this device's memory.
+            // Only if that fails too is the local copy the best available answer.
+            console.warn('[pydle] preview could not reconcile', error);
+            try {
+                const head = await withToken((token) =>
+                    getRef({
+                        token,
+                        owner: workspace.owner,
+                        repo: workspace.repo,
+                        branch: workspace.branch,
+                    }),
+                );
+                reconciled = { applied: [], conflicts: [], headSha: head ? head.sha : null };
+            } catch (headError) {
+                console.warn('[pydle] preview could not read the repository', headError);
+                return localOnly();
+            }
         }
 
         const list = await dirty(project, kind);
