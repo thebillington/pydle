@@ -161,7 +161,7 @@
                 <tr><td>How you see the work</td><td>On screen, or a downloaded <code>.py</code></td><td>Their repository, if they invite you or share it</td></tr>
             </tbody>
         </table>
-        <p>Most classes should start in the first column. GitHub adds durability and a version history, not convenience for you.</p>
+        <p>From year 9, GitHub should be the default. It is the difference between work that survives the device and work that does not. It does not make anything easier for you.</p>
 
         <h2>GitHub accounts are 13+, so year 9 and up</h2>
         <p>GitHub's terms require users to be at least 13 years old. In England that means year 9 and above; a year 9 student may still be 13 or may have just turned 14, so check the year group rather than the timetable.</p>
@@ -174,12 +174,12 @@
         <p class="note">If your school wants under-13s on GitHub, that is a policy and data-protection conversation, not a workaround. pydle works without it.</p>
 
         <h2>Why not to do the GitHub setup in a lesson</h2>
-        <p>Every reason below is a ten-minute problem when it happens to one student at home, and a lost lesson when it happens to thirty students at once.</p>
+        <p class="note"><strong>Thirty sign-ups from one school address look like abuse.</strong> GitHub rate-limits account creation by source address, and a class behind a school filter shares one. In August 2026, a class of twelve hit <em>Too Many Requests</em> trying to sign up from their school filter, and the advice in GitHub Classroom's own discussion forum was to have students create accounts at home or to stagger them. One documented school case went further: the accounts were created, then suspended days later, and restoring them took four appeals over three weeks. This is current behaviour, not a historical quirk: sign-ups from an unfamiliar or heavily shared address can also trigger extra verification on the spot.</p>
+        <p>Everything below is a ten-minute problem when it happens to one student at home, and a lost lesson when it happens to thirty students at once.</p>
         <ul>
             <li><strong>Filtering.</strong> <code>github.com</code> is blocked or partly blocked on many school networks. Sign-in also needs <code>api.github.com</code>, and the editor needs <code>cdn.jsdelivr.net</code> for the Python runtime. You will discover the gaps on a class set of devices, not on yours.</li>
             <li><strong>Email verification.</strong> GitHub will not activate an account until the email is confirmed. School mail filters frequently quarantine those messages, and some domains refuse external sign-ups altogether. A student who cannot receive the mail cannot finish, and there is nothing you can do from the front of the room.</li>
             <li><strong>It is two steps, not one.</strong> pydle signs in with GitHub's device flow: the student reads an eight-character code off the screen and types it into <code>github.com/login/device</code>, then approves pydle. The code lasts fifteen minutes. Circulating to help thirty students type it is most of a lesson.</li>
-            <li><strong>Rate limits and repetition.</strong> Sign-up is not designed for thirty new accounts from one IP address in one hour. Some students will get through and some will wait, and the ones waiting are the ones who need you.</li>
             <li><strong>Nobody is blocked by not doing it.</strong> The lesson does not need GitHub. It only needs the browser.</li>
         </ul>
 
