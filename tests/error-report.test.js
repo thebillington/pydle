@@ -108,3 +108,25 @@ test('builds a headline from structured data when no summary is given', () => {
 test('has a last resort', () => {
     assert.equal(errorHeadline({}), 'Python stopped on an error.');
 });
+
+test('ignores carets belonging to Pyodide’s own frames', () => {
+    // The real chained traceback: Python 3.11 annotates the internal frames too,
+    // and taking the first caret block marked line 597 of _base.py instead of the
+    // student's line 6.
+    const detail = [
+        'Traceback (most recent call last):',
+        '  File "/lib/python312.zip/_pyodide/_base.py", line 597, in eval_code_async',
+        '    await CodeRunner(',
+        '          ^^^^^^^^^^^',
+        '  File "<exec>", line 6, in <module>',
+        "    print f`Hi {name}! You're invited!`",
+        '                          ^',
+        'SyntaxError: unterminated string literal (detected at line 6)',
+    ].join('\n');
+
+    const location = errorLocation({ structured: null, detail });
+    assert.ok(location, 'expected a location');
+    assert.equal(location.line, 6);
+    assert.equal(location.column, 22);
+    assert.equal(location.length, 1);
+});

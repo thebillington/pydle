@@ -30,12 +30,35 @@
  * @param {string} text The formatted traceback.
  * @returns {ErrorSpan | null}
  */
+/**
+ * Whether a frame belongs to the interpreter rather than to the student's code.
+ *
+ * Python 3.11 and later annotate internal frames with carets too, so the first
+ * caret block in a traceback is usually Pyodide's own machinery. Picking it marked
+ * line 597 of `_base.py` instead of the student's line.
+ *
+ * @param {string} file
+ * @returns {boolean}
+ */
+function isInternalFile(file) {
+    return (
+        /^<frozen/.test(file) ||
+        /\/lib\/python[\d.]*/.test(file) ||
+        /\/site-packages\//.test(file) ||
+        /\/dist-packages\//.test(file) ||
+        /_pyodide/.test(file) ||
+        /pyodide[\w.-]*\.js/.test(file)
+    );
+}
+
 export function syntaxErrorSpan(text) {
     if (typeof text !== 'string' || text === '') {
         return null;
     }
 
     const lines = text.split('\n');
+
+    let found = null;
 
     for (let index = 0; index < lines.length; index += 1) {
         const caretLine = lines[index];
@@ -63,17 +86,20 @@ export function syntaxErrorSpan(text) {
             continue;
         }
 
-        // Walk back for the nearest frame header to get the line number.
+        // Walk back for the nearest frame header: its line number, and the file it
+        // belongs to, so internal frames can be skipped.
         let lineNumber = null;
+        let file = '';
         for (let back = index - 1; back >= 0; back -= 1) {
-            const match = /line\s+(\d+)/.exec(lines[back]);
-            if (match) {
-                lineNumber = Number(match[1]);
+            const header = /File\s+"([^"]*)",\s*line\s+(\d+)/.exec(lines[back]);
+            if (header) {
+                file = header[1];
+                lineNumber = Number(header[2]);
                 break;
             }
         }
 
-        if (!Number.isInteger(lineNumber) || lineNumber < 1) {
+        if (!Number.isInteger(lineNumber) || lineNumber < 1 || isInternalFile(file)) {
             continue;
         }
 
@@ -82,7 +108,8 @@ export function syntaxErrorSpan(text) {
         const indent = source.length - source.trimStart().length;
         const column = Math.max(0, first - indent);
 
-        return {
+        // Keep looking: the last caret block belonging to the student wins.
+        found = {
             line: lineNumber,
             column,
             length: Math.max(1, length),
@@ -90,5 +117,5 @@ export function syntaxErrorSpan(text) {
         };
     }
 
-    return null;
+    return found;
 }
