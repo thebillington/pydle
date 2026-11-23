@@ -1,33 +1,41 @@
 # og/
 
-The Open Graph card for pydle.uk/og-image.png at the repository root.
+The Open Graph cards for pydle.uk. One design, one card per page.
 
-- `card.html` — the design. Ordinary HTML and CSS, no image generation.
-- `assets/` — what the card draws: the screenshots and fonts it needs.
+- `card.html` — the design. Ordinary HTML and CSS, no image generation. Three
+  placeholders (`{{EYEBROW}}`, `{{HEADLINE}}`, `{{HEADLINE_SIZE}}`, `{{BODY}}`)
+  are filled per card.
+- `assets/` — what the card draws: the turtle drawing and the two fonts.
 - `capture.py` — runs the turtle editor in this repository and screenshots the
   canvas, so `assets/drawing.png` is the app's own output.
 - `spiral.py` — the program that drew it.
-- `render.py` — renders `card.html` at 1200x630 and writes the image.
+- `render.py` — renders every card at 1200x630 and writes them to the repository
+  root, where the pages expect them.
+
+| Card | Used by |
+|---|---|
+| `og-image.png` | `/`, `/turtle/` |
+| `og-teachers.png` | `/teachers/`, `/teachers/setup-sheet/` |
+| `og-turtle.png` | `/python-turtle-online/` |
+| `og-trinket.png` | `/trinket-alternative/` |
 
 ## Rebuilding
 
-```bash
-pip install playwright pillow
-playwright install chromium
-
-python3 og/render.py          # write the image
-python3 og/render.py --check  # fail if the committed image is stale
-```
-
-`--check` renders the card again and compares it with the committed PNG, so a
-change to the card that never made it into the image fails rather than ships.
-
-If Playwright cannot download a browser, point it at one already installed:
+Chromium must be on `PATH`, and Pillow is needed for the resize:
 
 ```bash
-python3 og/render.py --browser /path/to/chrome
+pip install pillow
+
+python3 og/render.py                       # write every card
+python3 og/render.py --check               # fail if a committed card is stale
+python3 og/render.py --browser /usr/bin/chromium
 ```
+
+`--check` renders each card again and compares it with the committed PNG, so a
+change to the copy that never made it into the image fails rather than ships.
 
 ## Notes
 
-The image is 1200x630 with no alpha channel and it is written to the repository root, where the pages expect it.
+Each image is 1200x630 with no alpha channel. Text is kept short enough to wrap
+inside the left column; a headline that reaches the code window means the size
+in `render.py` is too large for its length.
