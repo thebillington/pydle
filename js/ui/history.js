@@ -628,7 +628,14 @@ export function mountHistory(root, sync, { onLoadVersion } = {}) {
                         return;
                     }
 
-                    const content = await sync.fileAt(project, file.path, commit.sha);
+                    // `file.path` is `<project>/<file>`: the commit's file list is
+                    // repository paths with only the namespace stripped. `fileAt`
+                    // wants a path *inside* the project, so the folder goes.
+                    const inside = file.path.startsWith(project + '/')
+                        ? file.path.slice(project.length + 1)
+                        : file.path;
+
+                    const content = await sync.fileAt(project, inside, commit.sha);
                     if (content === null || content === undefined) {
                         paint({ status: 'unavailable' });
                         return;
@@ -637,7 +644,7 @@ export function mountHistory(root, sync, { onLoadVersion } = {}) {
                     try {
                         await loadVersion({
                             project,
-                            path: file.path,
+                            path: inside,
                             sha: commit.sha,
                             content,
                             date: commit.date,

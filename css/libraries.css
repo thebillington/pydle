@@ -1,0 +1,199 @@
+/*
+ * The Libraries section and its picker.
+ *
+ * The rail keeps reporting what requirements.txt declares; the Add button is
+ * the only new control there, and it is deliberately as quiet as the heading
+ * beside it. The dialog reuses the shell classes from css/dialog.css (overlay,
+ * panel, header, footer, buttons) and adds only the rows for the catalogue.
+ * Every colour is a token from style.css, so both themes are the same rules.
+ */
+
+/* Rail -------------------------------------------------------------------- */
+
+.file-rail-libraries-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 0 6px 5px 0;
+}
+
+.file-rail-libraries-head .file-rail-section {
+    flex: 1;
+    min-width: 0;
+    padding: 0 0 0 10px;
+}
+
+.file-rail-add-library {
+    flex-shrink: 0;
+    padding: 1px 5px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.file-rail-add-library:hover {
+    border-color: var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.file-rail-add-library:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: -2px;
+}
+
+/* Dialog ------------------------------------------------------------------ */
+
+.libraries-overlay[hidden] {
+    display: none;
+}
+
+.libraries-panel {
+    max-width: 520px;
+}
+
+.libraries-body {
+    gap: 12px;
+}
+
+.libraries-note {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+.libraries-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.libraries-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 6px;
+    border-radius: 6px;
+}
+
+.libraries-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.libraries-check {
+    display: inline-grid;
+    place-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin: 2px 0 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg-primary);
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.libraries-check::before {
+    content: '';
+    width: 9px;
+    height: 9px;
+    transform: scale(0);
+    background: var(--bg-primary);
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.libraries-check:checked {
+    border-color: var(--accent-green);
+    background: var(--accent-green);
+}
+
+.libraries-check:checked::before {
+    transform: scale(1);
+}
+
+.libraries-check:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 2px;
+}
+
+.libraries-check:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.libraries-row {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.libraries-check:disabled + .libraries-row {
+    cursor: default;
+}
+
+.libraries-row-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.libraries-name {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.libraries-size {
+    flex-shrink: 0;
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.libraries-summary {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+/* The live region: empty until a write fails, which is the only thing the
+   dialog needs to say out loud. */
+.libraries-status {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.libraries-status.is-error {
+    color: var(--accent-red);
+}
+
+@media (max-width: 520px) {
+    .libraries-item {
+        gap: 8px;
+        padding-left: 0;
+        padding-right: 0;
+    }
+}

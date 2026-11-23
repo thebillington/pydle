@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>seed</title></head>
+<body>
+<pre id="out">seeding</pre>
+<script type="module">
+import * as vault from '../js/vault/fs.js';
+
+const out = document.getElementById('out');
+try {
+    await vault.writeFile('rail_demo', 'main.py', 'print("hello")\n');
+    await vault.writeFile('rail_demo', 'requirements.txt', '# demo\nnumpy\npandas\n');
+    localStorage.setItem('pydle_last_project', 'rail_demo');
+    localStorage.setItem('pydle_last_file_rail_demo', 'main.py');
+    localStorage.setItem('pydle_theme', 'dark');
+    out.textContent = 'seeded';
+} catch (error) {
+    out.textContent = 'seed failed: ' + error + ' ' + error.stack;
+}
+</script>
+</body>
+</html>

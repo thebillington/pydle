@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>pydle libraries fixture</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../css/dialog.css">
+<link rel="stylesheet" href="../css/libraries.css">
+<link rel="stylesheet" href="../css/editor-files.css">
+<script>
+    // The real page sets this in <head>; the fixture takes it from the query so
+    // both palettes can be captured without touching local storage.
+    (function () {
+        var theme = new URLSearchParams(window.location.search).get('theme');
+        if (theme === 'light' || theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', theme);
+        }
+    })();
+</script>
+<style>
+    body {
+        padding: 0;
+    }
+</style>
+</head>
+<body>
+<!--
+    Visual fixture for the library picker. It mounts the real module against a
+    small in-memory requirements.txt so the dialog can be looked at, rather than
+    only checked for syntax.
+
+        serve the repo root, then open
+        tests/libraries.html?theme=light|dark&available=0
+-->
+<div id="host"></div>
+<script type="module">
+    import { mountLibraries } from '../js/ui/libraries.js';
+    import { addPackage, parseRequirements, removePackage } from '../js/packages.js';
+
+    const params = new URLSearchParams(window.location.search);
+
+    /** A requirements.txt held in memory, standing in for the vault. */
+    let text = '# this project needs numbers and charts\nnumpy\nmatplotlib\n';
+
+    const dialog = mountLibraries(document.getElementById('host'), {
+        available: params.get('available') !== '0',
+        async list() {
+            return parseRequirements(text);
+        },
+        async add(name) {
+            text = addPackage(text, name);
+        },
+        async remove(name) {
+            text = removePackage(text, name);
+        },
+    });
+
+    dialog.open();
+
+    // Handy while poking at the fixture by hand; not used by the page.
+    window.librariesFixture = {
+        text: () => text,
+        dialog,
+    };
+</script>
+</body>
+</html>

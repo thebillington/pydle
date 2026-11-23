@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>pydle libraries smoke test</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../css/dialog.css">
+<link rel="stylesheet" href="../css/libraries.css">
+<style>
+    body { padding: 24px; background: var(--bg-primary); color: var(--text-primary); }
+    pre { font-family: var(--font-mono); font-size: 13px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<button id="trigger" type="button">Add a library</button>
+<div id="host"></div>
+<pre id="out">running</pre>
+<script type="module">
+/*
+ * Checks the picker's promises, which the pure tests cannot reach: that a tick
+ * writes, that a refused write puts the tick back, and that Escape restores
+ * focus. Run with:
+ *
+ *   chromium --headless --dump-dom \
+ *     "http://127.0.0.1:8090/tests/libraries-smoke.html"
+ */
+import {
+    CATALOGUE,
+    addPackage,
+    hasPackage,
+    parseRequirements,
+    removePackage,
+} from '../js/packages.js';
+import { mountLibraries } from '../js/ui/libraries.js';
+import { mountFileRail } from '../js/ui/files.js';
+
+const out = document.getElementById('out');
+const lines = [];
+let failures = 0;
+
+function flush() {
+    out.textContent = lines.join('\n');
+}
+
+function check(name, condition, detail) {
+    if (condition) {
+        lines.push('PASS  ' + name);
+    } else {
+        failures += 1;
+        lines.push('FAIL  ' + name + (detail ? '  (' + detail + ')' : ''));
+    }
+    flush();
+}
+
+function tick(ms = 60) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const trigger = document.getElementById('trigger');
+const host = document.getElementById('host');
+
+let text = 'numpy\nmatplotlib\n';
+let fail = false;
+
+const dialog = mountLibraries(host, {
+    available: true,
+    async list() {
+        return parseRequirements(text);
+    },
+    async add(name) {
+        if (fail) {
+            throw new Error('The vault is unavailable.');
+        }
+        text = addPackage(text, name);
+    },
+    async remove(name) {
+        if (fail) {
+            throw new Error('The vault is unavailable.');
+        }
+        text = removePackage(text, name);
+    },
+});
+
+/** @param {string} id */
+function box(id) {
+    return host.querySelector('.libraries-check[data-package="' + id + '"]');
+}
+
+const status = host.querySelector('.libraries-status');
+
+trigger.focus();
+dialog.open();
+await tick(150);
+
+const overlay = host.querySelector('.libraries-overlay');
+
+check('the dialog opens', overlay instanceof HTMLElement && overlay.hidden === false);
+check(
+    'every catalogue package has a checkbox',
+    host.querySelectorAll('.libraries-check').length === CATALOGUE.length,
+    String(host.querySelectorAll('.libraries-check').length),
+);
+check('an existing requirement starts ticked', box('numpy').checked === true);
+check('a missing requirement starts unticked', box('pandas').checked === false);
+
+// Tab from the last control comes back to the first checkbox.
+const done = host.querySelector('.dialog-btn-primary');
+done.focus();
+done.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+check('Tab stays inside the card', document.activeElement === box('numpy'), document.activeElement?.id);
+
+// Ticking writes through the callback and stays ticked.
+box('pandas').click();
+await tick(80);
+check('ticking writes, adding the package', hasPackage(text, 'pandas'), text);
+check('a successful tick stays ticked', box('pandas').checked === true);
+
+// Unticking removes from the file.
+box('numpy').click();
+await tick(80);
+check('unticking removes the package', hasPackage(text, 'numpy') === false, text);
+check('a successful untick stays unticked', box('numpy').checked === false);
+
+// A refused add reverts the tick and says why.
+fail = true;
+box('scipy').click();
+await tick(80);
+check('a failed add puts the tick back', box('scipy').checked === false);
+check('a failed add explains itself', status.textContent.includes('Could not add scipy'), status.textContent);
+
+// A refused remove does the same in the other direction.
+fail = false;
+box('scipy').click();
+await tick(80);
+fail = true;
+box('scipy').click();
+await tick(80);
+check('a failed remove puts the tick back', box('scipy').checked === true);
+check('a failed remove explains itself', status.textContent.includes('Could not remove scipy'), status.textContent);
+fail = false;
+
+// Escape closes and focus goes back to whatever opened the dialog.
+box('matplotlib').focus();
+box('matplotlib').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+await tick(40);
+check('Escape closes the dialog', overlay.hidden === true);
+check('focus returns to the trigger', document.activeElement === trigger, document.activeElement?.tagName);
+
+// Without libraries in this build the boxes are disabled, not merely empty.
+const otherHost = document.createElement('div');
+document.body.appendChild(otherHost);
+const unavailable = mountLibraries(otherHost, {
+    available: false,
+    async list() {
+        return ['numpy'];
+    },
+});
+unavailable.open();
+await tick(100);
+const boxes = [...otherHost.querySelectorAll('.libraries-check')];
+check('an unavailable build disables every checkbox', boxes.length > 0 && boxes.every((item) => item.disabled));
+check(
+    'an unavailable build says so plainly',
+    otherHost.querySelector('.libraries-note').textContent.includes('does not include any libraries'),
+);
+unavailable.close();
+
+// The rail's own affordance: a quiet Add beside the heading, wired to the page.
+const railHost = document.createElement('div');
+railHost.style.width = '200px';
+document.body.appendChild(railHost);
+
+let addClicks = 0;
+const rail = mountFileRail(railHost, {
+    onAddLibrary() {
+        addClicks += 1;
+    },
+});
+rail.setState({
+    project: 'demo',
+    files: ['main.py'],
+    current: 'main.py',
+    libraries: ['numpy'],
+    hasRequirements: true,
+});
+
+const addButton = railHost.querySelector('.file-rail-add-library');
+check(
+    'the rail renders an Add button beside Libraries',
+    addButton instanceof HTMLButtonElement && addButton.textContent === 'Add',
+);
+addButton.click();
+check('the rail Add button calls onAddLibrary', addClicks === 1, String(addClicks));
+rail.destroy();
+
+lines.push(failures === 0 ? 'ALL PASS' : failures + ' FAILURE(S)');
+flush();
+</script>
+</body>
+</html>

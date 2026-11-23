@@ -506,3 +506,31 @@
 .file-rail-body .file-rail-new {
     margin: 2px 0 6px;
 }
+
+/* Explains the commit mechanism, beside the action it explains. */
+.file-rail-info {
+    width: 18px;
+    height: 18px;
+    margin-left: auto;
+    margin-right: 4px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: none;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-style: italic;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.file-rail-info:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+
+.file-rail-info:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}

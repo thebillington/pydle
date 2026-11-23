@@ -233,10 +233,12 @@ print("Hello, World!")</textarea>
                 <p>The rail also lists any libraries that the project's <strong>requirements.txt</strong> declares. This is a read-only reminder for now.</p>
                 <p><strong>Save</strong> keeps the file you are working on safe on this device.</p>
 
-                <h3>Saving your work</h3>
-                <p>Press <strong>Ctrl+S</strong>, or the save button, to save. That always keeps your work on this device, so nothing is lost if the connection drops.</p>
-                <p>If you are signed in to GitHub, saving also asks for a short message and gives you a list of the files that changed. Press commit and a copy goes into your own GitHub repository. That copy is what follows you to another computer.</p>
-                <p>If you are not signed in, saving only keeps the work on this device. The save button shows a small dot until your work is in GitHub, and the button in the header connects you.</p>
+                <h3 id="help-commit">Saving and committing</h3>
+                <p><strong>Saving</strong> happens automatically, and on <strong>Ctrl+S</strong>. Your work is kept on this device, so nothing is lost if the connection drops or you close the tab.</p>
+                <p><strong>Committing</strong> is the separate step that puts a copy in your own GitHub repository, with a short message saying what changed. A commit is a saved version you can return to.</p>
+                <p>You do not have to remember to commit. pydle asks when you leave a project, and shows <strong>Commit</strong> under the file list while there is something to put in GitHub. Both only appear when GitHub is connected.</p>
+                <p>Before a commit, pydle shows exactly which files are going and what changed in each one, so nothing is saved by accident.</p>
+                <p>If you are not signed in, work stays on this device only. The button in the header connects GitHub, and nothing is shared with anyone else.</p>
                 <h3>Your GitHub copy</h3>
                 <p>To commit, sign in from the <strong>GitHub</strong> button in the header. pydle stores your projects in a repository that belongs to your account, and you can change your mind and stop at any time.</p>
                 <p>Nothing is shared with anyone else. The repository is yours: you can look at it, change it or delete it whenever you like.</p>
@@ -567,6 +569,13 @@ print("Hello, World!")</textarea>
             onRename: (from, to) => renameFile(from, to),
             onDelete: (path) => removeFile(path),
             onHome: () => { void goHome(); },
+            onCommitHelp: () => {
+                helpOverlay.classList.remove('hidden');
+                const section = document.getElementById('help-commit');
+                if (section) {
+                    section.scrollIntoView({ block: 'start' });
+                }
+            },
             onCommit: () => {
                 if (currentFileName === null) {
                     return;

@@ -258,6 +258,7 @@ function storeCollapsed(collapsed) {
  *   onRename?: (from: string, to: string) => void | Promise<void>,
  *   onDelete?: (path: string) => void | Promise<void>,
  *   onHome?: () => void,
+ *   onAddLibrary?: () => void,
  * }} [handlers]
  */
 export function mountFileRail(root, handlers = {}) {
@@ -303,16 +304,25 @@ export function mountFileRail(root, handlers = {}) {
 
     /* Libraries ---------------------------------------------------------- */
     //
-    // Read-only: the rail shows what requirements.txt declares so the project's
-    // dependencies are visible beside its files. Installed packages are not
-    // tracked yet, so there is deliberately nothing to tick or install here.
+    // The list reports what requirements.txt declares. Choosing what goes into
+    // that file is the picker's job; the page mounts it and hands it over through
+    // onAddLibrary, so this module still does no storage work.
 
     const libraries = el('section', 'file-rail-libraries');
-    const librariesHead = el('h2', 'file-rail-section', 'Libraries');
+    const librariesHead = el('div', 'file-rail-libraries-head');
+    const librariesTitle = el('h2', 'file-rail-section', 'Libraries');
+    const addLibraryBtn = el('button', 'file-rail-add-library', 'Add');
+    addLibraryBtn.type = 'button';
+    addLibraryBtn.title = 'Add a library to this project';
+    addLibraryBtn.addEventListener('click', () => {
+        run(() => handlers.onAddLibrary && handlers.onAddLibrary());
+    });
+    librariesHead.append(librariesTitle, addLibraryBtn);
+
     const librariesList = el('ul', 'file-rail-library-list');
     librariesList.setAttribute('aria-label', 'Libraries in this project');
     const librariesEmpty = el('p', 'file-rail-library-empty', 'No libraries in this project');
-    const librariesNote = el('p', 'file-rail-library-note', 'Libraries are added when a project needs them.');
+    const librariesNote = el('p', 'file-rail-library-note', 'Use Add to choose a library for this project.');
     libraries.append(librariesHead, librariesList, librariesEmpty, librariesNote);
 
     const notice = el('p', 'file-rail-notice');
@@ -337,12 +347,25 @@ export function mountFileRail(root, handlers = {}) {
         el('span', 'file-rail-commit-count'),
     );
     commitBtn.hidden = true;
+
+    // Sits beside Commit, and only while Commit is showing: the explanation is
+    // about the action, so it has no business being visible when there is none.
+    const commitInfo = el('button', 'file-rail-info', 'i');
+    commitInfo.type = 'button';
+    commitInfo.hidden = true;
+    commitInfo.title = 'What does committing do?';
+    commitInfo.setAttribute('aria-label', 'What does committing do?');
+    commitInfo.addEventListener('click', () => {
+        if (typeof handlers.onCommitHelp === 'function') {
+            run(() => handlers.onCommitHelp());
+        }
+    });
     commitBtn.addEventListener('click', () => {
         if (typeof handlers.onCommit === 'function') {
             run(() => handlers.onCommit());
         }
     });
-    foot.append(commitBtn);
+    foot.append(commitInfo, commitBtn);
 
     // Under the files it adds to, so the two read as one thing.
     body.appendChild(newBtn);
@@ -560,8 +583,11 @@ export function mountFileRail(root, handlers = {}) {
      */
     function renderCommit() {
         const count = state.uncommitted;
+        // Nothing to commit, or nowhere to commit to: no button, and no
+        // explanation of a button that is not there.
         const show = state.canCommit && count > 0 && state.project !== null;
         commitBtn.hidden = !show;
+        commitInfo.hidden = !show;
         if (!show) {
             return;
         }
