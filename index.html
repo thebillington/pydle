@@ -1592,10 +1592,28 @@ print("Hello, World!")</textarea>
          *
          * @returns {Promise<boolean>}
          */
-        async function confirmLeaveProject() {
+        async function confirmLeaveProject({ hadUnsavedEdits = false } = {}) {
             if (currentFileName === null) {
                 return true;
             }
+
+            // Signed out: there is no repository to commit to, so the only question
+            // that matters is whether anything would be lost. Once the buffer is
+            // flushed it is on the device, and leaving loses nothing. Only mention
+            // it when the student actually typed something.
+            if (!sync.workspace) {
+                if (!hadUnsavedEdits) {
+                    return true;
+                }
+                return confirmAction({
+                    title: 'Leave this project?',
+                    message:
+                        'Your latest changes are saved on this device, so nothing is lost. ' +
+                        'They are not in GitHub, because you are not signed in.',
+                    confirmLabel: 'Leave',
+                });
+            }
+
             let uncommitted = uncommittedNow;
             try {
                 uncommitted = await sync.hasUncommitted(currentFileName);
@@ -1605,19 +1623,6 @@ print("Hello, World!")</textarea>
             if (!uncommitted) {
                 return true;
             }
-            // With no repository there is nothing to commit to, so a commit dialog
-            // would be a dead end with a disabled primary button. Ask plainly.
-            if (!sync.workspace) {
-                return confirmAction({
-                    title: 'Unsaved changes',
-                    message:
-                        'This project has changes that are not saved as a commit. ' +
-                        'Leave them and carry on? Nothing is deleted, and your work stays on this device.',
-                    confirmLabel: 'Leave without committing',
-                    danger: true,
-                });
-            }
-
             const outcome = await commitDialog.open(currentFileName, { leaving: true });
             return outcome !== 'cancelled';
         }
@@ -1631,10 +1636,15 @@ print("Hello, World!")</textarea>
          * @returns {Promise<boolean>} True when it is safe to go.
          */
         async function readyToLeave() {
+            // Whether the buffer held anything not yet written to the device. That
+            // is a different question from "is it in GitHub", and the leaving prompt
+            // should say which one it is about.
+            const hadUnsavedEdits = dirty;
+
             if (!(await flushCurrent())) {
                 return false;
             }
-            return confirmLeaveProject();
+            return confirmLeaveProject({ hadUnsavedEdits });
         }
 
         /**

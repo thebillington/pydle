@@ -389,14 +389,14 @@ export function mountCommit(root, sync, handlers = {}) {
             // without committing deletes nothing, so it should not be styled as a
             // destructive action.
             const guard = el('p', 'commit-guard');
-            guard.append(aroundProjectName('', ' has unsaved changes. Save them before you go, or '));
-            const leave = el('button', 'commit-guard-link', 'leave without saving');
+            guard.append(aroundProjectName('', ' has changes that are not in GitHub yet. Save them before you go, or '));
+            const leave = el('button', 'commit-guard-link', 'leave without committing');
             leave.type = 'button';
             leave.disabled = Boolean(state.busy);
             leave.title = 'Your files stay on this device. Nothing is deleted.';
             leave.setAttribute(
                 'aria-label',
-                'Leave without saving. Your files stay on this device.',
+                'Leave without committing. Your files stay saved on this device.',
             );
             leave.addEventListener('click', () => finish('discarded'));
             guard.append(leave, document.createTextNode(' and carry on.'));
