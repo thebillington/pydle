@@ -75,6 +75,7 @@
     </script>
 
     <link rel="stylesheet" href="../pages.css">
+    <link rel="stylesheet" href="../css/theme-switch.css">
     <link rel="icon" href="../favicon.svg" type="image/svg+xml">
     <link rel="icon" href="../favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="../apple-touch-icon.png">
@@ -144,6 +145,7 @@
             <a href="/trinket-alternative/" aria-current="page">Trinket alternative</a>
             <a href="https://github.com/sponsors/thebillington" rel="noopener">Sponsor the project</a>
         </nav>
+        <span class="theme-toggle-slot" id="theme-toggle"></span>
     </header>
 
     <main>
@@ -209,5 +211,10 @@
         <p><a class="repo" href="https://github.com/thebillington/pydle" rel="noopener">pydle</a> is an <a href="https://github.com/thebillington/pydle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT-licensed</a> project built and maintained by <a href="https://github.com/thebillington" rel="noopener">thebillington</a></p>
         <p><a href="/">python REPL</a> · <a href="/turtle/">turtle REPL</a> · <a href="/teachers/">for teachers</a> · <a href="/trinket-alternative/">trinket alternative</a> · <a href="https://github.com/sponsors/thebillington" rel="noopener">sponsor the project</a></p>
     </footer>
+
+    <script type="module">
+        import { mountThemeToggle } from '/js/ui/theme.js';
+        mountThemeToggle(document.getElementById('theme-toggle'));
+    </script>
 </body>
 </html>

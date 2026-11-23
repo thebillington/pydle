@@ -66,10 +66,35 @@ export function getResolvedTheme() {
 }
 
 /**
- * Mount the header theme control: a real button that cycles
- * auto -> light -> dark -> auto and persists the choice.
+ * Icons for the three modes. Static markup, so no user content is involved.
+ */
+const ICONS = {
+    auto: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+        + '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/>'
+        + '<path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor"/></svg>',
+    light: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+        + '<circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/>'
+        + '<g stroke="currentColor" stroke-width="2" stroke-linecap="round">'
+        + '<path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>'
+        + '</g></svg>',
+    dark: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+        + '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="none" '
+        + 'stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+};
+
+const TITLES = {
+    auto: 'Auto: follow your device',
+    light: 'Light',
+    dark: 'Dark',
+};
+
+/**
+ * Mount the header theme control: three buttons (auto, light, dark), one of
+ * which is pressed, that persist the choice and apply it immediately.
  *
- * @param {Element} element Container to append the button to.
+ * Auto re-resolves when the operating system changes appearance.
+ *
+ * @param {Element} element Container to append the control to.
  * @param {Object} [options] Optional behaviour.
  * @param {(resolved: 'light' | 'dark', mode: 'auto' | 'light' | 'dark') => void} [options.onChange]
  *     Called whenever the resolved palette changes (including the initial mount).
@@ -84,14 +109,28 @@ export function mountThemeToggle(element, options = {}) {
     let mode = readMode();
     let resolved = resolveMode(mode);
 
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'theme-toggle';
+    const group = document.createElement('div');
+    group.className = 'theme-switch';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Theme');
 
-    const label = document.createElement('span');
-    label.className = 'theme-toggle-label';
-    button.appendChild(label);
-    element.appendChild(button);
+    const buttons = new Map();
+
+    for (const option of MODES) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.mode = option;
+        button.title = TITLES[option];
+        button.setAttribute('aria-label', TITLES[option]);
+        button.innerHTML = ICONS[option];
+        button.addEventListener('click', function () {
+            choose(option);
+        });
+        group.appendChild(button);
+        buttons.set(option, button);
+    }
+
+    element.replaceChildren(group);
 
     const query = typeof window.matchMedia === 'function'
         ? window.matchMedia('(prefers-color-scheme: light)')
@@ -106,9 +145,9 @@ export function mountThemeToggle(element, options = {}) {
             meta.setAttribute('content', THEME_COLORS[resolved]);
         }
 
-        label.textContent = LABELS[mode];
-        button.title = 'Theme: ' + mode;
-        button.setAttribute('aria-label', 'Theme: ' + mode + '. Click to change.');
+        for (const [option, button] of buttons) {
+            button.setAttribute('aria-pressed', option === mode ? 'true' : 'false');
+        }
 
         if (typeof options.onChange === 'function') {
             options.onChange(resolved, mode);
@@ -121,6 +160,15 @@ export function mountThemeToggle(element, options = {}) {
         } catch (error) {
             // The palette still changes for this visit; it just will not survive.
         }
+    }
+
+    function choose(next) {
+        if (MODES.indexOf(next) === -1) {
+            return;
+        }
+        mode = next;
+        persist(next);
+        apply();
     }
 
     function onSchemeChange() {
@@ -137,14 +185,6 @@ export function mountThemeToggle(element, options = {}) {
         apply();
     }
 
-    function onClick() {
-        const next = MODES[(MODES.indexOf(mode) + 1) % MODES.length];
-        mode = next;
-        persist(next);
-        apply();
-    }
-
-    button.addEventListener('click', onClick);
     if (query) {
         if (typeof query.addEventListener === 'function') {
             query.addEventListener('change', onSchemeChange);
@@ -164,15 +204,9 @@ export function mountThemeToggle(element, options = {}) {
             return resolved;
         },
         setMode(next) {
-            if (MODES.indexOf(next) === -1) {
-                return;
-            }
-            mode = next;
-            persist(next);
-            apply();
+            choose(next);
         },
         destroy() {
-            button.removeEventListener('click', onClick);
             if (query) {
                 if (typeof query.removeEventListener === 'function') {
                     query.removeEventListener('change', onSchemeChange);
@@ -181,7 +215,7 @@ export function mountThemeToggle(element, options = {}) {
                 }
             }
             window.removeEventListener('storage', onStorage);
-            button.remove();
+            group.remove();
         },
     };
 }

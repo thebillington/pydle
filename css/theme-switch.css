@@ -1,0 +1,60 @@
+/*
+ * The three-way theme switch, shared by the site pages and the editors.
+ *
+ * Buttons carry the icon; the mode is exposed with aria-pressed. Colours come
+ * from whichever palette stylesheet the page loaded, so the same markup works
+ * with pages.css and style.css.
+ */
+
+.theme-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-tertiary, var(--bg-inset, transparent));
+    vertical-align: middle;
+}
+
+.theme-switch button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary, var(--muted, inherit));
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.theme-switch button:hover {
+    color: var(--text-primary, var(--text));
+}
+
+.theme-switch button:focus-visible {
+    outline: 2px solid var(--accent, var(--accent-green));
+    outline-offset: 1px;
+}
+
+.theme-switch button[aria-pressed="true"] {
+    background: var(--accent, var(--accent-green));
+    color: var(--button-ink, #102016);
+}
+
+.theme-switch svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+}
+
+@media print {
+    .theme-switch,
+    .theme-toggle-slot {
+        display: none !important;
+    }
+}

@@ -22,6 +22,7 @@
     --accent-yellow: #f1fa8c;
     --accent-cyan: #8be9fd;
     --border: #44475a;
+    --button-ink: #102016;
 
     --header-height: 56px;
     --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -42,6 +43,7 @@
     --accent-yellow: #8a5a00;
     --accent-cyan: #0b6f7d;
     --border: #d7d7cb;
+    --button-ink: #ffffff;
 }
 
 body {
@@ -84,44 +86,11 @@ header h1 .subtitle {
     gap: 10px;
 }
 
-/* Theme toggle ------------------------------------------------------------ */
+/* Theme switch ----------------------------------------------------------- */
 
 .theme-toggle-slot {
     display: inline-flex;
     align-items: center;
-}
-
-.theme-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    /* Fixed width: the label changes but the header must not reflow. */
-    min-width: 78px;
-    height: 34px;
-    padding: 0 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    font-family: var(--font-sans);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-}
-
-.theme-toggle:hover {
-    border-color: var(--text-secondary);
-}
-
-.theme-toggle:focus-visible {
-    outline: 2px solid var(--accent-green);
-    outline-offset: 2px;
-}
-
-.theme-toggle-label {
-    pointer-events: none;
 }
 
 .btn {
