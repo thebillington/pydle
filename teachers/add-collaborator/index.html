@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en-GB" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add your teacher to your pydle repository</title>
+    <meta name="description" content="Step by step instructions for adding a teacher as a collaborator on your pydle repository, so they can see your commits.">
+    <meta name="robots" content="noindex, follow">
+    <link rel="canonical" href="https://pydle.uk/teachers/add-collaborator/">
+    <link rel="stylesheet" href="../../pages.css">
+    <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="../../favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+    <style>
+        /* Light only: this page exists to be printed, and a print stylesheet
+           cannot re-theme a dark page reliably. */
+        html,
+        body {
+            background: #fff;
+            color: #1f2030;
+        }
+
+        main.sheet {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 32px 24px 48px;
+        }
+
+        .sheet-head {
+            border-bottom: 2px solid #1f2030;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+        }
+
+        .sheet-head .kicker {
+            margin: 0;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #4f5a78;
+        }
+
+        .sheet-head h1 {
+            margin: 6px 0 4px;
+            font-size: 1.9rem;
+            letter-spacing: -0.02em;
+        }
+
+        .sheet-head p {
+            margin: 0;
+            color: #4f5a78;
+        }
+
+        .who {
+            margin: 0 0 16px;
+            padding: 10px 14px;
+            border: 2px solid #1f2030;
+            border-radius: 6px;
+        }
+
+        .who p {
+            margin: 0;
+        }
+
+        .who .name {
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-weight: 700;
+        }
+
+        .picker {
+            margin: 0 0 18px;
+            padding: 12px 14px;
+            background: #f7f7f2;
+            border-left: 3px solid #1f2030;
+        }
+
+        .picker[hidden] {
+            display: none;
+        }
+
+        .picker label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .picker .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .picker input {
+            flex: 1 1 200px;
+            padding: 8px 10px;
+            font: inherit;
+            border: 1px solid #9a9a8c;
+            border-radius: 6px;
+            background: #fff;
+            color: #1f2030;
+        }
+
+        .picker button,
+        .print-btn {
+            padding: 8px 14px;
+            font: inherit;
+            font-weight: 700;
+            border: 0;
+            border-radius: 6px;
+            background: #1f2030;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .picker .error {
+            margin: 8px 0 0;
+            color: #8a1f1f;
+        }
+
+        h2 {
+            margin: 20px 0 8px;
+            font-size: 1.05rem;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #d7d7cb;
+        }
+
+        ol.steps {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+            counter-reset: step;
+        }
+
+        ol.steps li {
+            counter-increment: step;
+            position: relative;
+            margin: 0 0 8px;
+            padding-left: 30px;
+            max-width: none;
+        }
+
+        ol.steps li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 1px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #1f2030;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 20px;
+            text-align: center;
+        }
+
+        code {
+            background: #f0f0e8;
+            border: 1px solid #d7d7cb;
+            white-space: nowrap;
+        }
+
+        .rules {
+            margin: 16px 0 0;
+            padding: 10px 14px;
+            border-left: 3px solid #1f2030;
+            background: #f7f7f2;
+        }
+
+        .rules p {
+            margin: 0;
+        }
+
+        .small {
+            color: #4f5a78;
+            font-size: 13px;
+        }
+
+        .sheet-foot {
+            margin-top: 20px;
+            padding-top: 8px;
+            border-top: 1px solid #d7d7cb;
+            color: #4f5a78;
+            font-size: 12px;
+        }
+
+        .screen-only {
+            margin: 0 0 18px;
+        }
+
+        @page {
+            size: A4;
+            margin: 12mm 14mm 10mm;
+        }
+
+        @media print {
+            body {
+                font-size: 10.5pt;
+                line-height: 1.38;
+            }
+
+            main.sheet {
+                max-width: none;
+                padding: 0;
+            }
+
+            .screen-only,
+            .picker {
+                display: none !important;
+            }
+
+            .sheet-head {
+                padding-bottom: 7px;
+                margin-bottom: 10px;
+            }
+
+            .sheet-head h1 {
+                font-size: 17pt;
+                margin: 4px 0 2px;
+            }
+
+            h2 {
+                margin: 12px 0 5px;
+                font-size: 10.5pt;
+                break-after: avoid;
+            }
+
+            ol.steps li {
+                margin-bottom: 5px;
+                font-size: 10pt;
+            }
+
+            ol.steps li,
+            .who,
+            .rules,
+            table {
+                break-inside: avoid;
+            }
+
+            a {
+                color: inherit;
+                text-decoration: none;
+            }
+
+            code {
+                background: none;
+                border: 0;
+                padding: 0;
+                font-weight: 600;
+            }
+
+            .sheet-foot {
+                margin-top: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="sheet">
+        <p class="screen-only no-print"><button type="button" class="print-btn" id="print-btn">Print or save as PDF</button></p>
+
+        <header class="sheet-head">
+            <p class="kicker">pydle · student sheet</p>
+            <h1 id="page-title">Add your teacher to your repository</h1>
+            <p id="page-subtitle">Your teacher needs to see your pydle work. It takes about a minute.</p>
+        </header>
+
+        <div class="who">
+            <p>Add this GitHub account as a collaborator: <span class="name" id="who-name">your teacher</span></p>
+        </div>
+
+        <form class="picker" id="picker" hidden>
+            <label for="teacher">Teacher's GitHub username</label>
+            <div class="row">
+                <input id="teacher" name="username" type="text" placeholder="e.g. thebillington" autocomplete="off" spellcheck="false">
+                <button type="submit">Make the sheet</button>
+            </div>
+            <p class="error" id="picker-error" hidden></p>
+        </form>
+
+        <ol class="steps">
+            <li>Sign in to <strong>github.com</strong>.</li>
+            <li>Open <strong>github.com/<em>your-username</em>/pydle-workspace</strong>. That is the repository pydle made for you.</li>
+            <li>Click <strong>Settings</strong> across the top of the repository. If you cannot see it, you are not signed in as the owner.</li>
+            <li>In the sidebar on the left, click <strong>Collaborators</strong>.</li>
+            <li>Click <strong>Add people</strong>.</li>
+            <li>Type <strong id="step-teacher">your teacher's username</strong> and pick the right account from the list.</li>
+            <li>Click <strong>Add</strong> to send the invitation.</li>
+        </ol>
+
+        <div class="rules">
+            <p><strong>The invitation has to be accepted.</strong> GitHub emails the invitation, and your teacher has to click the link in it before the repository appears for them. If it does not arrive, check the username is spelled correctly and ask them to look in junk.</p>
+        </div>
+
+        <h2>If something goes wrong</h2>
+        <table>
+            <thead>
+                <tr><th>What you see</th><th>What to do</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>There is no <strong>Settings</strong> tab</td><td>You are not signed in as the owner of the repository, or you are looking at someone else's. Sign in and open your own <code>pydle-workspace</code>.</td></tr>
+                <tr><td><strong>Add people</strong> is greyed out</td><td>GitHub asks for your password again, or for a two-factor code, before changing access. Complete that and try again.</td></tr>
+                <tr><td>The username is not found</td><td>GitHub usernames contain no spaces. Check the spelling with your teacher.</td></tr>
+                <tr><td>Your teacher cannot see the repository</td><td>They have not accepted the invitation yet. Send them the email again or ask them to open the link.</td></tr>
+            </tbody>
+        </table>
+
+        <p class="sheet-foot" id="foot">pydle.uk · Teachers' notes at pydle.uk/teachers/ · Your repository stays yours. Adding a collaborator gives them access to that one repository only.</p>
+    </main>
+
+    <script>
+        (function () {
+            var USERNAME = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+            var params = new URLSearchParams(window.location.search);
+            var raw = params.get('username') || params.get('teacher') || params.get('u') || '';
+            var name = raw.trim().replace(/^@/, '');
+
+            var picker = document.getElementById('picker');
+            var input = document.getElementById('teacher');
+            var errorNode = document.getElementById('picker-error');
+            var whoName = document.getElementById('who-name');
+            var stepTeacher = document.getElementById('step-teacher');
+            var pageTitle = document.getElementById('page-title');
+
+            function apply(value) {
+                whoName.textContent = '@' + value;
+                stepTeacher.textContent = '@' + value;
+                pageTitle.textContent = 'Add @' + value + ' to your repository';
+                document.title = 'Add @' + value + ' to your pydle repository';
+            }
+
+            if (name) {
+                if (USERNAME.test(name)) {
+                    apply(name);
+                } else {
+                    errorNode.textContent = 'That is not a GitHub username. Check the spelling and try again.';
+                    errorNode.hidden = false;
+                    picker.hidden = false;
+                }
+            } else {
+                picker.hidden = false;
+            }
+
+            picker.addEventListener('submit', function (event) {
+                event.preventDefault();
+                var value = input.value.trim().replace(/^@/, '');
+                if (!USERNAME.test(value)) {
+                    errorNode.textContent = 'That is not a GitHub username. Check the spelling and try again.';
+                    errorNode.hidden = false;
+                    input.focus();
+                    return;
+                }
+                errorNode.hidden = true;
+                apply(value);
+                var url = new URL(window.location.href);
+                url.searchParams.set('username', value);
+                window.history.replaceState(null, '', url);
+                document.getElementById('print-btn').focus();
+            });
+
+            document.getElementById('print-btn').addEventListener('click', function () {
+                window.print();
+            });
+        })();
+    </script>
+</body>
+</html>
