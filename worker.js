@@ -75,25 +75,16 @@ async function readPackageInfo() {
 /**
  * Where to fetch a wheel from.
  *
- * The bundled copy comes first because it works offline and is the same origin,
- * which is what a school deployment needs. The Pyodide CDN is the fallback so the
- * feature works in a build that has not vendored that wheel yet.
+ * Wheels are downloaded on demand and never bundled: a project declares what it
+ * needs in `requirements.txt`, and only that is fetched, once per device. The
+ * browser caches the response, so later runs and later projects are free.
  *
  * @param {string} file
- * @returns {Promise<{ url: string, bundled: boolean }>}
+ * @returns {string}
  */
-async function wheelUrl(file) {
-    const local = PYODIDE_URL + file;
-    try {
-        const probe = await fetch(local, { method: 'HEAD' });
-        if (probe.ok) {
-            return { url: local, bundled: true };
-        }
-    } catch {
-        // Fall through to the CDN.
-    }
+function wheelUrl(file) {
     const version = pyodide.version || '0.26.4';
-    return { url: 'https://cdn.jsdelivr.net/pyodide/v' + version + '/full/' + file, bundled: false };
+    return 'https://cdn.jsdelivr.net/pyodide/v' + version + '/full/' + file;
 }
 
 /**
@@ -122,7 +113,7 @@ async function loadOne(name, seen = new Set()) {
     if (!entry) {
         self.postMessage({
             type: 'status',
-            text: name + ' is not available in this build of pydle.',
+            text: name + ' is not available for this version of Python.',
         });
         return false;
     }
@@ -131,9 +122,8 @@ async function loadOne(name, seen = new Set()) {
         await loadOne(dependency, seen);
     }
 
-    const { url, bundled } = await wheelUrl(entry.file);
     try {
-        await pyodide.loadPackage(url);
+        await pyodide.loadPackage(wheelUrl(entry.file));
     } catch {
         // Reported below; the check after the call is what decides.
     }
@@ -144,11 +134,7 @@ async function loadOne(name, seen = new Set()) {
 
     self.postMessage({
         type: 'status',
-        text:
-            name +
-            (bundled
-                ? ' could not be loaded from this copy of pydle.'
-                : '. Check your connection and try again.'),
+        text: name + ' could not be downloaded. Check your connection and try again.',
     });
     return false;
 }

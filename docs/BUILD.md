@@ -287,18 +287,21 @@ project and appears in the repository.
 
 Nothing is installed until the code runs. Before each run the worker reads
 `requirements.txt`, resolves each name against `vendor/pyodide/pyodide-lock.json`,
-and loads the wheel and its dependencies. **`numpy` is vendored** in
-`vendor/pyodide/` so it works with no network at all, which is what a school needs.
+and downloads the wheel and its dependencies from the Pyodide CDN at the exact
+version of the bundled runtime.
 
-Wheels that are not vendored are fetched from the Pyodide CDN at the same version as
-the bundled runtime, so the picker works in a build that has not vendored them yet.
-That path needs a connection the first time, and is the one to vendor away if a
-classroom is offline. To vendor a wheel, download its `file_name` from the lockfile
-at `https://cdn.jsdelivr.net/pyodide/v<version>/full/<file_name>` into
-`vendor/pyodide/`; no code change is needed, the worker prefers the local copy.
+**Wheels are never bundled.** The site ships only the lockfile, which is a few
+hundred kilobytes of metadata; a project fetches only what it declares, once per
+device, and the browser caches the response. That keeps the repository small and
+costs nothing for projects that use no libraries. The trade-off is that the first
+run of a project that imports numpy needs a connection, which is what the dialog
+says.
 
 The worker resolves the wheel explicitly rather than calling `loadPackage('<name>')`.
 With a bare name that call resolves even when the wheel cannot be fetched, leaving the
 package uninstalled and turning a missing download into a confusing `ImportError`
 later. The worker also checks `loadedPackages` after loading and reports a plain
 message when a package did not arrive.
+
+Do not add wheels to `vendor/pyodide/`. If a deployment ever needs to serve them
+itself, that is a hosting decision, not a repository one.
