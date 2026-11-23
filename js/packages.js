@@ -7,10 +7,11 @@
  * install nothing. Fetching a library for Pyodide is a separate concern.
  *
  * The catalogue is deliberately short, and every entry has to be usable inside
- * pydle. That rules out anything whose whole point is a window, a canvas or a
- * sound device: pygame needs a display surface, and there is none here. A
- * package that installs and then cannot do its job is worse than one that is
- * absent.
+ * pydle. That rules out anything whose whole point is a window, a canvas, a
+ * sound device or a picture in the output: pygame needs a display surface and
+ * matplotlib needs somewhere to draw a figure, and pydle has neither. A package
+ * that installs and then cannot do its job is worse than one that is absent,
+ * because the student concludes that they are doing it wrong.
  *
  * Sizes are the real download sizes from the vendored lockfile, rounded, because
  * the first run of a project really does wait for them.
@@ -32,12 +33,6 @@ export const CATALOGUE = [
         label: 'sympy',
         summary: 'Algebra and calculus with exact symbols',
         size: '16 MB',
-    },
-    {
-        id: 'matplotlib',
-        label: 'matplotlib',
-        summary: 'Charts and plots',
-        size: '16 MB, plus 10 MB of smaller pieces',
     },
     {
         id: 'pandas',

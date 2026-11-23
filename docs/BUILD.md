@@ -321,6 +321,13 @@ package uninstalled and turning a missing download into a confusing `ImportError
 later. The worker also checks `loadedPackages` after loading and reports a plain
 message when a package did not arrive.
 
+### What is not in the catalogue
+
+matplotlib and pygame are not offered. Both need somewhere to draw: a figure or a
+display surface. pydle is an editor and a text console, so a project that ticked
+either would download tens of megabytes and then appear to do nothing. They come
+back when there is a renderer, not before.
+
 Do not add wheels to `vendor/pyodide/`. If a deployment ever needs to serve them
 itself, that is a hosting decision, not a repository one.
 
