@@ -17,7 +17,11 @@ async function init() {
 
         self.postMessage({ type: 'ready' });
     } catch (err) {
-        self.postMessage({ type: 'error', message: 'Init failed: ' + err.message, traceback: err.stack });
+        self.postMessage({
+            type: 'error',
+            summary: 'Python could not start. Reload the page to try again.',
+            detail: String(err && err.message ? err.message : err),
+        });
     }
 }
 
@@ -31,7 +35,16 @@ async function runCode(code) {
         await pyodide.runPythonAsync(code);
     } catch (err) {
         if (err.message !== 'Execution stopped') {
-            self.postMessage({ type: 'error', message: err.message, traceback: err.stack || '' });
+            // `err.message` is Python's own formatted traceback. `err.stack` is
+            // Pyodide's JavaScript internals: meaningless to a student, and it buried
+            // the one line that matters. Pyodide's own console does the same thing,
+            // formatting a syntax error with traceback.format_exception_only.
+            const text = typeof err.message === 'string' ? err.message : String(err);
+            const lines = text.split('\n').filter((line) => line.trim() !== '');
+            const summary = lines.length > 0
+                ? lines[lines.length - 1].trim()
+                : 'Python stopped on an error.';
+            self.postMessage({ type: 'error', summary, detail: text.trim() });
         }
     } finally {
         running = false;

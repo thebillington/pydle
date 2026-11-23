@@ -351,15 +351,20 @@ print("Hello, World!")</textarea>
         // (the console), so the traceback is still readable.
         const ERROR_GUTTER = 'pydle-error-gutter';
         let errorLineHandle = null;
+        let errorTextMarker = null;
 
         function clearErrorLine() {
+            if (errorTextMarker) {
+                errorTextMarker.clear();
+                errorTextMarker = null;
+            }
             if (!errorLineHandle) return;
             editor.removeLineClass(errorLineHandle, 'background', 'pydle-error-line');
             editor.setGutterMarker(errorLineHandle, ERROR_GUTTER, null);
             errorLineHandle = null;
         }
 
-        function markErrorLine(lineNumber) {
+        function markErrorLine(lineNumber, message) {
             clearErrorLine();
             if (!Number.isInteger(lineNumber)) return;
 
@@ -369,13 +374,29 @@ print("Hello, World!")</textarea>
             const handle = editor.getLineHandle(line);
             if (!handle) return;
 
+            const text =
+                typeof message === 'string' && message !== ''
+                    ? message
+                    : 'Error on this line';
+
             errorLineHandle = handle;
             editor.addLineClass(handle, 'background', 'pydle-error-line');
+
+            // Hovering the line shows the message. markText is the documented way
+            // to hang attributes on a range, and it clears with the gutter marker.
+            errorTextMarker = editor.markText(
+                { line, ch: 0 },
+                { line, ch: Math.max(1, editor.getLine(line).length) },
+                {
+                    className: 'pydle-error-line-text',
+                    attributes: { title: text },
+                },
+            );
 
             const marker = document.createElement('div');
             marker.className = 'pydle-error-mark';
             marker.textContent = '●';
-            marker.title = 'Error on this line';
+            marker.title = text;
             editor.setGutterMarker(handle, ERROR_GUTTER, marker);
 
             editor.scrollIntoView({ line, ch: 0 }, 80);
@@ -959,6 +980,39 @@ print("Hello, World!")</textarea>
             }
         });
 
+        /**
+         * Print one error line, with the full traceback folded away beneath it.
+         *
+         * @param {string} summary The last line Python printed, which is the useful one.
+         * @param {string} detail The complete traceback, shown only when asked for.
+         */
+        function showError(summary, detail) {
+            const wrapper = document.querySelector('.console-wrapper');
+            const previous = document.getElementById('console-details');
+            if (previous) previous.remove();
+
+            log(summary);
+
+            if (!detail || !wrapper) {
+                return;
+            }
+
+            const details = document.createElement('details');
+            details.id = 'console-details';
+            details.className = 'console-details';
+
+            const toggle = document.createElement('summary');
+            toggle.textContent = 'Show the full traceback';
+
+            const body = document.createElement('pre');
+            body.className = 'console-details-body';
+            body.textContent = detail;
+
+            details.append(toggle, body);
+            wrapper.append(details);
+            wrapper.scrollTop = wrapper.scrollHeight;
+        }
+
         function log(msg) {
             consoleEl.textContent += msg + '\n';
             consoleEl.scrollTop = consoleEl.scrollHeight;
@@ -1003,21 +1057,24 @@ print("Hello, World!")</textarea>
                         stopBtn.disabled = true;
                         break;
 
-                    case 'error':
-                        log('Error: ' + message);
-                        if (traceback) log(traceback);
+                    case 'error': {
+                        // One line. The full traceback is available on request and
+                        // never printed by default: Pyodide's internal frames are
+                        // noise to a student.
+                        const summary = e.data.summary || 'Python stopped on an error.';
+                        const detail = e.data.detail || '';
+                        showError(summary, detail);
                         showStatus('Error', 'error');
                         runBtn.disabled = false;
                         stopBtn.disabled = true;
                         try {
-                            const line = lineFromTraceback(
-                                (traceback || '') + '\n' + (message || '')
-                            );
-                            if (line !== null) markErrorLine(line);
-                        } catch (e) {
+                            const line = lineFromTraceback(detail + '\n' + summary);
+                            if (line !== null) markErrorLine(line, summary);
+                        } catch (markFailure) {
                             // Marking is a convenience: never break the error path.
                         }
                         break;
+                    }
 
                     case 'stdout':
                         log(e.data.text);
