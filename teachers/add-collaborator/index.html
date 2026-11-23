@@ -325,7 +325,6 @@
     <script>
         (function () {
             var USERNAME = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
-            var STORE = 'pydle_teacher_username';
             var params = new URLSearchParams(window.location.search);
             var raw = params.get('username') || params.get('teacher') || params.get('u') || '';
             var name = raw.trim().replace(/^@/, '');
@@ -348,35 +347,13 @@
                 document.title = 'Add @' + value + ' to your pydle repository';
             }
 
-            function remember(value) {
-                try {
-                    window.localStorage.setItem(STORE, value);
-                } catch (error) {
-                    // A blocked store only costs the next visit the prompt.
-                }
-            }
-
-            function recall() {
-                try {
-                    return window.localStorage.getItem(STORE) || '';
-                } catch (error) {
-                    return '';
-                }
-            }
-
             if (name && USERNAME.test(name)) {
                 apply(name);
-                remember(name);
                 picker.remove();
             } else {
                 if (name) {
                     errorNode.textContent = 'That is not a GitHub username. Check the spelling and try again.';
                     errorNode.hidden = false;
-                }
-                var stored = recall();
-                if (stored && USERNAME.test(stored)) {
-                    apply(stored);
-                    input.value = stored;
                 }
                 picker.hidden = false;
                 input.focus();
@@ -393,7 +370,6 @@
                 }
                 errorNode.hidden = true;
                 apply(value);
-                remember(value);
                 picker.remove();
                 var url = new URL(window.location.href);
                 url.searchParams.set('username', value);
