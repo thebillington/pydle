@@ -44,7 +44,38 @@ async function runCode(code) {
             const summary = lines.length > 0
                 ? lines[lines.length - 1].trim()
                 : 'Python stopped on an error.';
-            self.postMessage({ type: 'error', summary, detail: text.trim() });
+
+            // Python knows exactly what went wrong and where. Ask it, instead of
+            // guessing from the text: SyntaxError carries lineno, offset,
+            // end_offset and the offending source line, and exceptions can carry
+            // notes (PEP 678) such as the hint Pyodide adds for a missing module.
+            // The last line of the traceback also keeps Python's own "did you
+            // mean" suggestion, which `str(exc)` alone does not include.
+            let structured = null;
+            try {
+                structured = JSON.parse(
+                    pyodide.runPython(`
+import json, sys
+exc = getattr(sys, 'last_exc', None) or getattr(sys, 'last_value', None)
+if exc is None:
+    json.dumps(None)
+else:
+    json.dumps({
+        'type': type(exc).__name__,
+        'message': getattr(exc, 'msg', None) or str(exc),
+        'line': getattr(exc, 'lineno', None),
+        'column': getattr(exc, 'offset', None),
+        'endColumn': getattr(exc, 'end_offset', None),
+        'source': getattr(exc, 'text', None),
+        'notes': list(getattr(exc, '__notes__', [])),
+    })
+`),
+                );
+            } catch {
+                structured = null;
+            }
+
+            self.postMessage({ type: 'error', summary, detail: text.trim(), structured });
         }
     } finally {
         running = false;
