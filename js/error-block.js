@@ -81,15 +81,44 @@ export function splitAround(sourceLine, location) {
  * }} input
  * @returns {HTMLElement}
  */
-export function buildErrorBlock({ summary, notes, detail, sourceLine, location }) {
+export function buildErrorBlock({ friendly, summary, notes, detail, sourceLine, location }) {
     const block = document.createElement('div');
     block.className = 'console-error';
     block.setAttribute('role', 'group');
 
+    const explained = friendly && typeof friendly === 'object' ? friendly : null;
+
     const headline = document.createElement('p');
     headline.className = 'console-error-summary';
-    headline.textContent = typeof summary === 'string' ? summary : 'Python stopped on an error.';
-    block.append(headline);
+
+    if (explained && typeof explained.title === 'string' && explained.title !== '') {
+        // The friendly explanation's own headline, which says what went wrong in
+        // words rather than repeating the exception name.
+        headline.textContent = explained.title;
+        block.append(headline);
+
+        if (typeof explained.summary === 'string' && explained.summary !== '') {
+            const lede = document.createElement('p');
+            lede.className = 'console-error-lede';
+            lede.textContent = explained.summary;
+            block.append(lede);
+        }
+
+        if (Array.isArray(explained.steps) && explained.steps.length > 0) {
+            const steps = document.createElement('ol');
+            steps.className = 'console-error-steps';
+            for (const step of explained.steps) {
+                const item = document.createElement('li');
+                item.textContent = String(step);
+                steps.append(item);
+            }
+            block.append(steps);
+        }
+    } else {
+        headline.textContent =
+            typeof summary === 'string' ? summary : 'Python stopped on an error.';
+        block.append(headline);
+    }
 
     const parts = splitAround(sourceLine, location);
     if (parts.before !== '' || parts.marked !== '' || parts.after !== '') {

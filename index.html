@@ -354,6 +354,8 @@ print("Hello, World!")</textarea>
         const ERROR_GUTTER = 'pydle-error-gutter';
         let errorLineHandle = null;
         let errorTextMarker = null;
+        /** The program most recently run, for the error explainer. */
+        let lastRunCode = '';
 
         function clearErrorLine() {
             if (errorTextMarker) {
@@ -995,6 +997,44 @@ print("Hello, World!")</textarea>
             }
         });
 
+        /** @type {Promise<any> | null} */
+        let explainerReady = null;
+
+        /**
+         * Ask the vendored explainer what the error means.
+         *
+         * Loaded on first use so the 28 KB bundle never delays the editor, and any
+         * failure here is silent: it can only make the message plainer, so it must
+         * never stop the error being shown.
+         *
+         * @param {string} detail The formatted traceback.
+         * @param {string} code The program that ran.
+         * @returns {Promise<any | null>}
+         */
+        async function explainError(detail, code) {
+            try {
+                if (explainerReady === null) {
+                    explainerReady = (async () => {
+                        const mod = await import(
+                            './vendor/python-friendly-error-messages/index.browser.js'
+                        );
+                        await mod.loadCopydeckFor(navigator.language || 'en');
+                        mod.registerAdapter('pyodide', mod.cpythonAdapter);
+                        return mod;
+                    })();
+                }
+                const mod = await explainerReady;
+                return mod.friendlyExplain({
+                    error: detail,
+                    code,
+                    runtime: 'pyodide',
+                    file: 'main.py',
+                });
+            } catch {
+                return null;
+            }
+        }
+
         /**
          * Add the error block under whatever has been printed so far.
          *
@@ -1027,7 +1067,7 @@ print("Hello, World!")</textarea>
         async function initWorker() {
             worker = new Worker('worker.js?t=' + Date.now());
 
-            worker.onmessage = function (e) {
+            worker.onmessage = async function (e) {
                 const { type, message, traceback } = e.data;
 
                 switch (type) {
@@ -1091,7 +1131,9 @@ print("Hello, World!")</textarea>
                                 markErrorLine(line, summary, displayLocation);
                             }
 
+                            const friendly = await explainError(detail, lastRunCode);
                             appendErrorBlock({
+                                friendly,
                                 summary,
                                 notes,
                                 detail,
@@ -1100,7 +1142,14 @@ print("Hello, World!")</textarea>
                             });
                         } catch (renderFailure) {
                             // Reporting an error must never itself fail.
-                            appendErrorBlock({ summary, notes, detail, sourceLine: '', location: null });
+                            appendErrorBlock({
+                                friendly: null,
+                                summary,
+                                notes,
+                                detail,
+                                sourceLine: '',
+                                location: null,
+                            });
                         }
 
                         break;
@@ -1133,6 +1182,7 @@ print("Hello, World!")</textarea>
 
             clearErrorLine();
             const code = editor.getValue();
+            lastRunCode = code;
             worker.postMessage({ type: 'run', code });
         }
 

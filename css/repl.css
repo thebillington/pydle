@@ -125,3 +125,18 @@
     border-top: 1px solid var(--border);
     margin-top: 6px;
 }
+
+.console-error-lede {
+    margin: 0 0 8px;
+    color: var(--text-primary);
+}
+
+.console-error-steps {
+    margin: 0 0 10px;
+    padding-left: 20px;
+    color: var(--text-primary);
+}
+
+.console-error-steps li {
+    margin: 0 0 3px;
+}
