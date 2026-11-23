@@ -279,8 +279,11 @@ export function mountCommit(root, sync, handlers = {}) {
     header.append(heading, closeBtn);
 
     const body = el('div', 'commit-body');
+    /** Repository news, above the file list: what was pulled, what clashes. */
+    const banner = el('div', 'commit-banner');
+    banner.hidden = true;
     const footer = el('div', 'commit-footer');
-    content.append(header, body, footer);
+    content.append(header, banner, body, footer);
     overlay.append(backdrop, content);
     root.replaceChildren(overlay);
 
@@ -296,6 +299,12 @@ export function mountCommit(root, sync, handlers = {}) {
         paths: [],
         /** @type {Map<string, ChangeDiff>} */
         diffs: new Map(),
+        /** Files pulled from the repository because only it had changed. */
+        /** @type {string[]} */
+        pulled: [],
+        /** Files changed on both sides, needing a decision. */
+        /** @type {Array<{ path: string, kind: string, remoteHash: string | null }>} */
+        conflicts: [],
         /** Files that will go into the commit. */
         /** @type {Set<string>} */
         selected: new Set(),
@@ -839,6 +848,78 @@ export function mountCommit(root, sync, handlers = {}) {
         body.append(banner);
     }
 
+    /**
+     * News about the repository, above the file list.
+     *
+     * Two things belong here and nowhere else: files pulled in because only the
+     * repository had changed them, and files both sides changed, which the student
+     * has to settle before choosing what to commit.
+     */
+    function renderBanner() {
+        banner.textContent = '';
+        banner.hidden = true;
+        banner.className = 'commit-banner';
+
+        if (state.phase !== 'ready') {
+            return;
+        }
+
+        const conflicts = Array.isArray(state.conflicts) ? state.conflicts : [];
+        const pulled = Array.isArray(state.pulled) ? state.pulled : [];
+
+        if (conflicts.length > 0) {
+            banner.hidden = false;
+            banner.classList.add('commit-banner-attention');
+            banner.setAttribute('role', 'alert');
+
+            const text = el(
+                'p',
+                'commit-banner-text',
+                conflicts.length +
+                    (conflicts.length === 1 ? ' file was' : ' files were') +
+                    ' changed on GitHub as well. Decide which copy to keep before saving.',
+            );
+
+            const decide = el('button', 'sync-btn sync-btn-primary commit-banner-action', 'Decide');
+            decide.type = 'button';
+            decide.addEventListener('click', () => {
+                void settleConflicts();
+            });
+
+            banner.append(text, decide);
+            return;
+        }
+
+        if (pulled.length > 0) {
+            banner.hidden = false;
+            const text = el(
+                'p',
+                'commit-banner-text',
+                pulled.length +
+                    (pulled.length === 1 ? ' file was' : ' files were') +
+                    ' updated from GitHub first, so you are looking at the current version.',
+            );
+            banner.append(text);
+        }
+    }
+
+    /**
+     * Settle the conflicts, then re-read so the list reflects the decision.
+     */
+    async function settleConflicts() {
+        const project = state.project;
+        const resolutions = await ensureConflictDialog().open({
+            project,
+            conflicts: state.conflicts,
+        });
+
+        if (resolutions === null || !state.open || state.project !== project) {
+            return;
+        }
+
+        await load(project, resolutions);
+    }
+
     function renderReady() {
         if (state.leaving) {
             renderGuard();
@@ -945,6 +1026,7 @@ export function mountCommit(root, sync, handlers = {}) {
     }
 
     function render() {
+        renderBanner();
         projectLine.textContent = state.project || 'This project';
         content.setAttribute('aria-busy', state.busy ? 'true' : 'false');
         closeBtn.disabled = state.busy;
@@ -1040,7 +1122,7 @@ export function mountCommit(root, sync, handlers = {}) {
      *
      * @param {string} project
      */
-    async function load(project) {
+    async function load(project, resolutions = {}) {
         const token = ++state.token;
         state.project = project;
         state.phase = 'loading';
@@ -1054,7 +1136,11 @@ export function mountCommit(root, sync, handlers = {}) {
 
         let report;
         try {
-            report = await sync.dirty(project);
+            // `previewCommit` reconciles with the repository first and diffs against
+            // what GitHub actually holds. `dirty` alone sees only this device.
+            report = typeof sync.previewCommit === 'function'
+                ? await sync.previewCommit(project, 'work', resolutions)
+                : await sync.dirty(project);
         } catch (error) {
             if (!state.open || token !== state.token) {
                 return;
@@ -1069,6 +1155,9 @@ export function mountCommit(root, sync, handlers = {}) {
         if (!state.open || token !== state.token) {
             return;
         }
+
+        state.pulled = Array.isArray(report && report.pulled) ? report.pulled : [];
+        state.conflicts = Array.isArray(report && report.conflicts) ? report.conflicts : [];
 
         const entries = Array.isArray(report && report.paths)
             ? report.paths.map(normaliseChange).filter(Boolean)

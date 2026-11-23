@@ -1250,7 +1250,7 @@ export function createSync({ onChange } = {}) {
         let slug;
         let relative;
         try {
-            slug = normalizeProjectName(project);
+            slug = storedProjectName(project);
             relative = safeJoin(path);
         } catch {
             return null;
@@ -1276,6 +1276,87 @@ export function createSync({ onChange } = {}) {
             }
             throw syncError;
         }
+    }
+
+    /**
+     * What a commit would contain, diffed against the repository rather than against
+     * this device's memory of it.
+     *
+     * The repository is canonical, so this first reconciles: anything only the
+     * repository changed is pulled into the vault, and anything changed on both
+     * sides is returned as a conflict for the student to settle before they choose
+     * files. Then the previous version of each changed file is read from the
+     * repository at HEAD, so the diff shows what GitHub actually holds, not what
+     * this device last saw.
+     *
+     * @param {string} name
+     * @param {string} [kind]
+     * @returns {Promise<{
+     *   paths: Array<{ path: string, status: string, before: string | null, after: string | null, beforeFromRepo?: boolean }>,
+     *   conflicts: Array<{ path: string, kind: string, remoteHash: string | null }>,
+     *   pulled: string[],
+     *   headSha: string | null,
+     *   lastCommit: string | null,
+     * }>}
+     */
+    async function previewCommit(name, kind = 'work', resolutions = {}) {
+        let project;
+        try {
+            project = storedProjectName(name);
+        } catch {
+            throw new SyncError('config', 'That project does not exist.');
+        }
+
+        // No repository, or no connection: fall back to what this device knows, so
+        // the dialog still works with nothing behind it.
+        const localOnly = async () => {
+            const only = await dirty(name, kind);
+            return { ...only, conflicts: [], pulled: [], headSha: null };
+        };
+
+        if (!workspace) {
+            return localOnly();
+        }
+
+        let reconciled;
+        try {
+            reconciled = await preflight(project, resolutions, kind);
+        } catch {
+            return localOnly();
+        }
+
+        const list = await dirty(project, kind);
+
+        // Where the repository has a copy, that is the version to compare with.
+        const canonical = new Map();
+        if (workspace && reconciled.headSha) {
+            for (const entry of list.paths) {
+                if (entry.status === 'added') {
+                    continue;
+                }
+                try {
+                    const content = await fileAt(project, entry.path, reconciled.headSha, kind);
+                    if (typeof content === 'string') {
+                        canonical.set(entry.path, content);
+                    }
+                } catch {
+                    // Offline, or the file is gone upstream: the snapshot copy, if
+                    // any, is still better than nothing.
+                }
+            }
+        }
+
+        return {
+            paths: list.paths.map((entry) =>
+                canonical.has(entry.path)
+                    ? { ...entry, before: canonical.get(entry.path), beforeFromRepo: true }
+                    : entry,
+            ),
+            conflicts: reconciled.conflicts,
+            pulled: reconciled.applied,
+            headSha: reconciled.headSha,
+            lastCommit: list.lastCommit,
+        };
     }
 
     /**
@@ -1524,6 +1605,7 @@ export function createSync({ onChange } = {}) {
         deleteProject,
         renameProject,
         dirty,
+        previewCommit,
         preflight,
         commit,
         hasUncommitted,
