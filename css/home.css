@@ -421,3 +421,33 @@ main.is-home > .console-panel {
         padding: 14px 16px;
     }
 }
+
+/* Delete sits beside the project, not inside it: nesting a button in a button is
+   invalid, and the open action should stay one large target. */
+.home-project-delete {
+    flex-shrink: 0;
+    margin-left: 10px;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.home-project-delete:hover:not(:disabled) {
+    border-color: var(--border);
+    color: var(--accent-red);
+}
+
+.home-project-delete:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+
+.home-item {
+    display: flex;
+    align-items: center;
+}

@@ -339,6 +339,8 @@ export function mountHome(root, options) {
     const onCreate = typeof options?.onCreate === 'function' ? options.onCreate : null;
     const sync = options?.sync || null;
     const showGithub = options?.github !== false;
+    /** @type {((name: string) => Promise<void>) | undefined} */
+    const onDelete = typeof options?.onDelete === 'function' ? options.onDelete : undefined;
 
     let destroyed = false;
     let projects = [];
@@ -510,7 +512,30 @@ export function mountHome(root, options) {
                 }
             });
 
+            const remove = el('button', 'home-project-delete', 'Delete');
+            remove.type = 'button';
+            remove.title = 'Delete ' + project.name;
+            remove.setAttribute('aria-label', 'Delete ' + project.name);
+
+            remove.addEventListener('click', async () => {
+                if (!onDelete) {
+                    return;
+                }
+                remove.disabled = true;
+                remove.textContent = 'Deleting…';
+                try {
+                    await onDelete(project.name);
+                } catch {
+                    // The page reports why; the list is left as it was.
+                } finally {
+                    remove.disabled = false;
+                    remove.textContent = 'Delete';
+                    await update();
+                }
+            });
+
             item.appendChild(row);
+            item.appendChild(remove);
             list.appendChild(item);
         }
     }

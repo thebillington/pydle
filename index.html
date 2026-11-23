@@ -1150,6 +1150,22 @@ print("Hello, World!")</textarea>
                 await refreshVaultProjects();
                 await loadFile(project, file);
             },
+            onDelete: async (name) => {
+                const signedIn = Boolean(sync.workspace);
+                const ok = await confirmAction({
+                    title: 'Delete “' + name + '”?',
+                    message: signedIn
+                        ? 'Its files are removed from this device, and a commit removes them from your GitHub repository. Earlier versions stay in the history.'
+                        : 'Its files are removed from this device. This cannot be undone, and there is no copy in GitHub.',
+                    confirmLabel: 'Delete',
+                    danger: true,
+                });
+                if (!ok) {
+                    throw new Error('cancelled');
+                }
+                await sync.deleteProject(name);
+                await refreshVaultProjects();
+            },
             sync,
             github: Boolean(CONFIG.clientId),
         });
