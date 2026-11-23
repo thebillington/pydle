@@ -305,3 +305,20 @@ message when a package did not arrive.
 
 Do not add wheels to `vendor/pyodide/`. If a deployment ever needs to serve them
 itself, that is a hosting decision, not a repository one.
+
+### numpy is a 32-bit build
+
+Pyodide runs wasm32, so `np.intp` is 32 bits and the default integer is still
+`int64`. Anything that requires a *safe* cast from an array to indices therefore
+raises rather than coercing:
+
+```python
+TypeError: Cannot cast array data from dtype('int64') to dtype('int32')
+           according to the rule 'safe'
+```
+
+`np.bincount` on the result of `rng.integers(...)` is the usual way to meet it.
+Use `np.bincount(values.astype(np.int32))`, or avoid bincount entirely with
+`np.unique(values, return_counts=True)`, which is portable and usually clearer.
+The same applies to any other routine taking indices, and to `array.array`
+lengths: nothing here should assume a 64-bit address space.
