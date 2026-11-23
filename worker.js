@@ -58,9 +58,9 @@ async function runCode(code) {
 import json, sys
 exc = getattr(sys, 'last_exc', None) or getattr(sys, 'last_value', None)
 if exc is None:
-    json.dumps(None)
+    payload = None
 else:
-    json.dumps({
+    payload = {
         'type': type(exc).__name__,
         'message': getattr(exc, 'msg', None) or str(exc),
         'line': getattr(exc, 'lineno', None),
@@ -68,7 +68,8 @@ else:
         'endColumn': getattr(exc, 'end_offset', None),
         'source': getattr(exc, 'text', None),
         'notes': list(getattr(exc, '__notes__', [])),
-    })
+    }
+json.dumps(payload)
 `),
                 );
             } catch (extractFailure) {
@@ -77,15 +78,13 @@ else:
                 structured = null;
             }
 
-            console.info('[pydle] worker: error', {
-                summary,
-                structuredType: structured ? structured.type : null,
-                line: structured ? structured.line : null,
-                column: structured ? structured.column : null,
-                endColumn: structured ? structured.endColumn : null,
-                hasSource: Boolean(structured && structured.source),
-                notes: structured ? structured.notes : null,
-            });
+            console.info(
+                '[pydle] worker: error ' +
+                    JSON.stringify({
+                        summary,
+                        structured,
+                    }),
+            );
 
             self.postMessage({ type: 'error', summary, detail: text.trim(), structured });
         }

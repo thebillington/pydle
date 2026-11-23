@@ -404,16 +404,19 @@ print("Hello, World!")</textarea>
                 ? Math.min(lineText.length, span.column + shift + Math.max(1, span.length || 1))
                 : Math.max(1, lineText.length);
 
-            console.info('[pydle] marker', {
-                line: lineNumber,
-                exact,
-                span,
-                shift,
-                from,
-                to,
-                marked: lineText.slice(from, to),
-                wholeLine: !exact,
-            });
+            console.info(
+                '[pydle] marker ' +
+                    JSON.stringify({
+                        requestedLine: lineNumber,
+                        editorLine: lineText,
+                        exact: Boolean(exact),
+                        span,
+                        shift,
+                        from,
+                        to,
+                        marked: lineText.slice(from, to),
+                    }),
+            );
 
             errorTextMarker = editor.markText(
                 { line, ch: from },
@@ -1149,20 +1152,18 @@ print("Hello, World!")</textarea>
 
                             // One diagnostic line per failure. Copy this to report a
                             // marker that lands in the wrong place.
-                            console.info('[pydle] error', {
-                                summary,
-                                fromPython: {
-                                    type: (e.data.structured && e.data.structured.type) || null,
-                                    line: (e.data.structured && e.data.structured.line) || null,
-                                    column: (e.data.structured && e.data.structured.column) || null,
-                                    endColumn: (e.data.structured && e.data.structured.endColumn) || null,
-                                    hasSource: Boolean(e.data.structured && e.data.structured.source),
-                                },
-                                lineFromTraceback: line,
-                                location,
-                                displayColumn: displayLocation ? displayLocation.column : null,
-                                friendly: Boolean(friendly),
-                            });
+                            console.info(
+                                '[pydle] error ' +
+                                    JSON.stringify({
+                                        summary,
+                                        fromPython: e.data.structured || null,
+                                        lineFromTraceback: line,
+                                        location,
+                                        displayLocation,
+                                        rawLine,
+                                        friendly: Boolean(friendly),
+                                    }),
+                            );
                             appendErrorBlock({
                                 friendly,
                                 summary,
