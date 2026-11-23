@@ -22,6 +22,7 @@ import * as vault from './vault/fs.js';
 import { LEGACY_PREFIX } from './vault/legacy.js';
 import { normalizeProjectName, safeJoin } from './vault/paths.js';
 import { planMerge } from './reconcile.js';
+import { describeChange } from './commit-status.js';
 
 /**
  * The hash half of a stored snapshot entry.
@@ -1331,9 +1332,6 @@ export function createSync({ onChange } = {}) {
         const canonical = new Map();
         if (workspace && reconciled.headSha) {
             for (const entry of list.paths) {
-                if (entry.status === 'added') {
-                    continue;
-                }
                 try {
                     const content = await fileAt(project, entry.path, reconciled.headSha, kind);
                     if (typeof content === 'string') {
@@ -1346,12 +1344,41 @@ export function createSync({ onChange } = {}) {
             }
         }
 
+        // Status comes from the two versions, not from this device's memory of the
+        // last commit, so a file that already exists upstream is "modified" rather
+        // than being announced as new.
+        const refined = list.paths.map((entry) => {
+            const before = canonical.has(entry.path) ? canonical.get(entry.path) : entry.before;
+            return {
+                ...entry,
+                before,
+                status: describeChange(before ?? null, entry.after ?? null),
+                beforeFromRepo: canonical.has(entry.path),
+            };
+        });
+
+        // A file identical on both sides is already up to date. Record that in the
+        // snapshot, or it would be offered as changed for ever.
+        const converged = refined.filter((entry) => entry.status === 'unchanged');
+        if (converged.length > 0) {
+            const snapshot = await vault.readCommitSnapshot(project, { kind });
+            if (snapshot) {
+                const files = { ...(snapshot.files || {}) };
+                for (const entry of converged) {
+                    if (typeof entry.after !== 'string') {
+                        continue;
+                    }
+                    files[entry.path] = {
+                        hash: await gitBlobHash(entry.after),
+                        content: entry.after,
+                    };
+                }
+                await vault.writeCommitSnapshot(project, { ...snapshot, files }, { kind });
+            }
+        }
+
         return {
-            paths: list.paths.map((entry) =>
-                canonical.has(entry.path)
-                    ? { ...entry, before: canonical.get(entry.path), beforeFromRepo: true }
-                    : entry,
-            ),
+            paths: refined.filter((entry) => entry.status !== 'unchanged'),
             conflicts: reconciled.conflicts,
             pulled: reconciled.applied,
             headSha: reconciled.headSha,
