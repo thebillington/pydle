@@ -341,6 +341,8 @@ export function mountCommit(root, sync, handlers = {}) {
     let submitBtn = null;
     /** @type {HTMLTextAreaElement | null} */
     let messageInput = null;
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let loadingHint = null;
     /** @type {Map<string, HTMLInputElement>} */
     let checkboxes = new Map();
     /** @type {Map<string, HTMLElement>} */
@@ -473,6 +475,23 @@ export function mountCommit(root, sync, handlers = {}) {
         const note = el('p', 'commit-loading');
         note.append(aroundProjectName('Checking ', ' for changes\u2026'));
         note.setAttribute('aria-live', 'polite');
+
+        // Ask GitHub about each changed file, so a big project is slow rather than
+        // instant. Say so instead of leaving the same sentence there for a minute.
+        if (loadingHint !== null) {
+            clearTimeout(loadingHint);
+        }
+        loadingHint = setTimeout(() => {
+            loadingHint = null;
+            if (state.phase !== 'loading' || !note.isConnected) {
+                return;
+            }
+            note.textContent = '';
+            note.append(
+                aroundProjectName('Still checking ', '. A project with many files takes a moment.'),
+            );
+        }, 7000);
+
         body.append(note);
         footer.append(actions(button('Cancel', 'quiet', () => finish('cancelled'))));
     }
@@ -1052,6 +1071,10 @@ export function mountCommit(root, sync, handlers = {}) {
     }
 
     function render() {
+        if (loadingHint !== null && state.phase !== 'loading') {
+            clearTimeout(loadingHint);
+            loadingHint = null;
+        }
         renderBanner();
         projectLine.textContent = state.project || 'This project';
         content.setAttribute('aria-busy', state.busy ? 'true' : 'false');

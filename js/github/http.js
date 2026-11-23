@@ -82,11 +82,11 @@ function parseBody(text) {
  * Call the GitHub REST API.
  *
  * @param {string} path Full REST path, e.g. `/user` or `/repos/o/r/git/blobs`.
- * @param {{ token?: string, method?: string, body?: unknown, headers?: Record<string, string> }} [options]
+ * @param {{ token?: string, method?: string, body?: unknown, headers?: Record<string, string>, timeoutMs?: number }} [options]
  * @returns {Promise<any>} Parsed JSON, or null for 204 / an empty body.
  * @throws {GitHubError} On any non-ok response. 401 sets `isAuthError`.
  */
-export async function ghFetch(path, { token, method = 'GET', body, headers } = {}) {
+export async function ghFetch(path, { token, method = 'GET', body, headers, timeoutMs = 30000 } = {}) {
     const url = `${CONFIG.apiBase}${path}`;
     const requestHeaders = {
         Accept: 'application/vnd.github+json',
@@ -110,7 +110,26 @@ export async function ghFetch(path, { token, method = 'GET', body, headers } = {
         }
     }
 
-    const response = await fetch(url, { method, headers: requestHeaders, body: payload });
+    // A fetch that never returns leaves the caller waiting for ever, which is
+    // exactly what a dropped connection does. Bound it, so a stalled request becomes
+    // an error the dialog can report rather than an endless spinner.
+    let response;
+    try {
+        response = await fetch(url, {
+            method,
+            headers: requestHeaders,
+            body: payload,
+            signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+                ? AbortSignal.timeout(timeoutMs)
+                : undefined,
+        });
+    } catch (error) {
+        throw new GitHubError(
+            error && error.name === 'TimeoutError'
+                ? 'GitHub did not answer in time. Check your connection and try again.'
+                : 'GitHub could not be reached. Check your connection and try again.',
+        );
+    }
     const text = await response.text();
     const parsed = response.status === 204 ? null : parseBody(text);
 

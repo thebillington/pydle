@@ -944,12 +944,20 @@ export function createSync({ onChange } = {}) {
                 }
             }
 
+            // Read the blobs concurrently, then write in order: the reads are the
+            // slow part and are independent, while the vault writes are not.
+            const contents = await mapLimit(toApply, 6, async (item) =>
+                item.remoteHash === null ? null : await readBlobText(item.remoteHash),
+            );
+
             const applied = [];
-            for (const item of toApply) {
-                if (item.remoteHash === null) {
+            for (let index = 0; index < toApply.length; index += 1) {
+                const item = toApply[index];
+                const content = contents[index];
+                if (content === null) {
                     await vault.deleteFile(project, item.path, { kind });
                 } else {
-                    await vault.writeFile(project, item.path, await readBlobText(item.remoteHash), { kind });
+                    await vault.writeFile(project, item.path, content, { kind });
                 }
                 applied.push(item.path);
             }
@@ -1146,11 +1154,10 @@ export function createSync({ onChange } = {}) {
             // commit list, so the snapshot has never recorded them. Re-reading the
             // preview records them now, which is what stops the count on the save
             // button and the rail sitting at "1" for something already in GitHub.
-            try {
-                await previewCommit(project, kind);
-            } catch {
-                // Only tidying: a failure here must not report the commit as failed.
-            }
+            //
+            // Not awaited: it is bookkeeping, and waiting for a whole extra round of
+            // GitHub reads would delay the commit finishing for no benefit.
+            void previewCommit(project, kind).catch(() => {});
 
             setStatus('connected');
             return { sha: result.sha, message: trimmedMessage };
@@ -1310,6 +1317,42 @@ export function createSync({ onChange } = {}) {
      *   lastCommit: string | null,
      * }>}
      */
+    /**
+     * Run `work` over `items` with at most `limit` in flight, preserving order.
+     *
+     * The preview reads one blob per changed file. Done in series that is a round
+     * trip per file, which is what made the commit window sit on "Checking for
+     * changes" for a project with more than a handful of files.
+     *
+     * @template T, R
+     * @param {T[]} items
+     * @param {number} limit
+     * @param {(item: T, index: number) => Promise<R>} work
+     * @returns {Promise<R[]>}
+     */
+    async function mapLimit(items, limit, work) {
+        const results = new Array(items.length);
+        let next = 0;
+
+        const worker = async () => {
+            for (;;) {
+                const index = next;
+                next += 1;
+                if (index >= items.length) {
+                    return;
+                }
+                results[index] = await work(items[index], index);
+            }
+        };
+
+        const runners = [];
+        for (let i = 0; i < Math.min(limit, items.length); i += 1) {
+            runners.push(worker());
+        }
+        await Promise.all(runners);
+        return results;
+    }
+
     async function previewCommit(name, kind = 'work', resolutions = {}) {
         let project;
         try {
@@ -1339,19 +1382,27 @@ export function createSync({ onChange } = {}) {
         const list = await dirty(project, kind);
 
         // Where the repository has a copy, that is the version to compare with.
+        // Fetched concurrently: six at a time is polite to the API and turns a long
+        // project into a couple of round trips.
         const canonical = new Map();
         if (workspace && reconciled.headSha) {
-            for (const entry of list.paths) {
+            const fetched = await mapLimit(list.paths, 6, async (entry) => {
                 try {
                     const content = await fileAt(project, entry.path, reconciled.headSha, kind);
-                    if (typeof content === 'string') {
-                        canonical.set(entry.path, content);
-                    }
+                    return typeof content === 'string' ? content : null;
                 } catch {
                     // Offline, or the file is gone upstream: the snapshot copy, if
                     // any, is still better than nothing.
+                    return null;
                 }
-            }
+            });
+
+            list.paths.forEach((entry, index) => {
+                const content = fetched[index];
+                if (typeof content === 'string') {
+                    canonical.set(entry.path, content);
+                }
+            });
         }
 
         // Status comes from the two versions, not from this device's memory of the
