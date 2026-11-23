@@ -268,6 +268,9 @@ t.isvisible()      # Is turtle visible?</pre>
                 </ul>
                 <h3>Saving and GitHub</h3>
                 <p>Saving keeps the drawing in this browser, so it is available offline. Use <strong>Commit</strong> in the toolbar to put a copy in your GitHub repository. Nothing reaches GitHub until you commit.</p>
+
+                <h3>Libraries</h3>
+                <p>The turtle editor runs Python and the turtle module only. Other libraries such as numpy are available in the <a href="/">Python REPL</a>, where a project can declare them.</p>
             </div>
         </div>
     </div>
@@ -324,13 +327,14 @@ t.isvisible()      # Is turtle visible?</pre>
         import { buildErrorBlock, normaliseSource } from '../js/error-block.js';
         import { createExplainer } from '../js/explainer.js';
         import { commitBadge } from '../js/commit-badge.js';
+        import { discardCopy } from '../js/discard-copy.js';
         import { confirmAction, notify, promptText } from '../js/ui/dialog.js';
         import { projectSlug } from '../js/ui/files.js';
         import { mountStatus } from '../js/ui/status.js';
         import { mountConnect } from '../js/ui/connect.js';
         import { mountCommit } from '../js/ui/commit.js';
         import { mountDrawings } from '../js/ui/turtle-drawings.js';
-        import { createDrawings, discardConfirmation } from '../js/ui/turtle-storage.js';
+        import { createDrawings } from '../js/ui/turtle-storage.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
@@ -657,13 +661,15 @@ t.isvisible()      # Is turtle visible?</pre>
                 return;
             }
 
-            const all = Array.isArray(preview.paths)
-                ? preview.paths.map((entry) => entry.path)
-                : [];
             const conflicts = Array.isArray(preview.conflicts)
                 ? preview.conflicts.map((entry) => entry.path)
                 : [];
-            const paths = all.filter((path) => !conflicts.includes(path));
+            const copy = discardCopy({
+                paths: Array.isArray(preview.paths) ? preview.paths : [],
+                conflicts,
+                subject: name,
+            });
+            const paths = copy.paths;
 
             if (paths.length === 0) {
                 await notify({
@@ -677,10 +683,9 @@ t.isvisible()      # Is turtle visible?</pre>
                 return;
             }
 
-            const question = discardConfirmation({ name, paths, conflicts });
             const ok = await confirmAction({
-                title: question.title,
-                message: question.message,
+                title: copy.title,
+                message: copy.message,
                 confirmLabel: 'Discard',
                 danger: true,
             });

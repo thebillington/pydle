@@ -220,53 +220,6 @@ export function createDrawings(sync) {
 }
 
 /**
- * The question asked before throwing a drawing's local changes away.
- *
- * Kept out of the page so the wording can be tested: it is destructive, so it
- * has to say what goes, what stays, and why there is no way back. A file that
- * changed on both sides is never discarded (GitHub's copy and this device's copy
- * are both somebody's work), so it is named as left alone rather than listed.
- *
- * @param {{ name?: string, paths?: string[], conflicts?: string[] }} input
- * @returns {{ title: string, message: string }}
- */
-export function discardConfirmation({ name = '', paths = [], conflicts = [] } = {}) {
-    const discardable = Array.isArray(paths)
-        ? paths.filter((path) => typeof path === 'string' && path !== '')
-        : [];
-    const blocked = Array.isArray(conflicts)
-        ? conflicts.filter((path) => typeof path === 'string' && path !== '')
-        : [];
-
-    const count = discardable.length;
-    const listed =
-        discardable.slice(0, 6).join(', ') + (discardable.length > 6 ? ', and more' : '');
-    const drawing = typeof name === 'string' && name !== '' ? name : 'this drawing';
-
-    const leftAlone =
-        blocked.length === 0
-            ? ''
-            : '\n\n' +
-              blocked.length +
-              (blocked.length === 1 ? ' file was' : ' files were') +
-              ' also changed in GitHub, and ' +
-              (blocked.length === 1 ? 'is' : 'are') +
-              ' left alone.';
-
-    return {
-        title: 'Discard ' + count + (count === 1 ? ' change' : ' changes') + '?',
-        message:
-            (count === 1
-                ? 'The change to \u201c' + drawing + '\u201d goes back to'
-                : 'The changes to \u201c' + drawing + '\u201d go back to') +
-            ' the version in GitHub: ' +
-            listed +
-            '. This cannot be undone, because the work is not in any commit yet.' +
-            leftAlone,
-    };
-}
-
-/**
  * Remove one migrated key, leaving it in place if storage refuses.
  *
  * @param {string} key

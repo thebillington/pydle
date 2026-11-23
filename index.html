@@ -320,6 +320,7 @@ print("Hello, World!")</textarea>
         import { confirmAction, notify, promptText } from './js/ui/dialog.js';
         import { mountLibraries } from './js/ui/libraries.js';
         import { createExplainer } from './js/explainer.js';
+        import { discardCopy } from './js/discard-copy.js';
         import {
             CATALOGUE,
             OFFERED,
@@ -802,11 +803,14 @@ print("Hello, World!")</textarea>
                     return;
                 }
 
-                const all = Array.isArray(preview.paths) ? preview.paths.map((entry) => entry.path) : [];
                 const conflicts = Array.isArray(preview.conflicts)
                     ? preview.conflicts.map((entry) => entry.path)
                     : [];
-                const paths = all.filter((path) => !conflicts.includes(path));
+                const copy = discardCopy({
+                    paths: Array.isArray(preview.paths) ? preview.paths : [],
+                    conflicts,
+                });
+                const paths = copy.paths;
 
                 if (paths.length === 0) {
                     await notify({
@@ -820,25 +824,9 @@ print("Hello, World!")</textarea>
                     return;
                 }
 
-                const listed =
-                    paths.slice(0, 6).join(', ') + (paths.length > 6 ? ', and more' : '');
-                const leftAlone =
-                    conflicts.length > 0
-                        ? '\n\n' +
-                          conflicts.length +
-                          (conflicts.length === 1 ? ' file was' : ' files were') +
-                          ' also changed in GitHub, and is left alone.'
-                        : '';
-
                 const ok = await confirmAction({
-                    title: 'Discard ' + paths.length + (paths.length === 1 ? ' change' : ' changes') + '?',
-                    message:
-                        paths.length +
-                        (paths.length === 1 ? ' file goes back to' : ' files go back to') +
-                        ' the version in GitHub: ' +
-                        listed +
-                        '. This cannot be undone, because the work is not in any commit yet.' +
-                        leftAlone,
+                    title: copy.title,
+                    message: copy.message,
                     confirmLabel: 'Discard',
                     danger: true,
                 });
