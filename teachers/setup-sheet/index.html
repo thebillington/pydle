@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en-GB" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Set up GitHub for pydle: student sheet</title>
+    <meta name="description" content="A one-page printable sheet for students: make a GitHub account and connect it to pydle. GitHub accounts are 13+.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://pydle.uk/teachers/setup-sheet/">
+    <link rel="stylesheet" href="../../pages.css">
+    <style>
+        /* The sheet is designed light-only and for A4. Printing does not read
+           the theme script, so the colours are fixed here rather than inherited
+           from a viewer's dark mode. */
+        html {
+            background: #fff;
+        }
+
+        body {
+            background: #fff;
+            color: #1f2030;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        main.sheet {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 32px 24px 48px;
+        }
+
+        .sheet-head {
+            border-bottom: 2px solid #1f2030;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+        }
+
+        .sheet-head .kicker {
+            margin: 0;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #4f5a78;
+        }
+
+        .sheet-head h1 {
+            margin: 6px 0 4px;
+            font-size: 1.9rem;
+            letter-spacing: -0.02em;
+        }
+
+        .sheet-head p {
+            margin: 0;
+            color: #4f5a78;
+        }
+
+        .warning {
+            margin: 0 0 16px;
+            padding: 10px 14px;
+            border: 2px solid #1f2030;
+            border-radius: 6px;
+        }
+
+        .warning p {
+            margin: 0;
+        }
+
+        .warning strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        h2 {
+            margin: 20px 0 8px;
+            font-size: 1.05rem;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #d7d7cb;
+        }
+
+        ol.steps {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+            counter-reset: step;
+        }
+
+        ol.steps li {
+            counter-increment: step;
+            position: relative;
+            margin: 0 0 7px;
+            padding-left: 30px;
+            max-width: none;
+        }
+
+        ol.steps li::before {
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 1px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #1f2030;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 20px;
+            text-align: center;
+        }
+
+        code {
+            background: #f0f0e8;
+            border: 1px solid #d7d7cb;
+        }
+
+        .rules {
+            margin: 16px 0 0;
+            padding: 10px 14px;
+            border-left: 3px solid #1f2030;
+            background: #f7f7f2;
+        }
+
+        .rules p {
+            margin: 0;
+        }
+
+        .columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 22px;
+        }
+
+        .small {
+            color: #4f5a78;
+            font-size: 13px;
+        }
+
+        .sheet-foot {
+            margin-top: 20px;
+            padding-top: 8px;
+            border-top: 1px solid #d7d7cb;
+            color: #4f5a78;
+            font-size: 12px;
+        }
+
+        .screen-only {
+            margin: 0 0 18px;
+        }
+
+        @media (max-width: 640px) {
+            .columns {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @page {
+            size: A4;
+            margin: 11mm 12mm 9mm;
+        }
+
+        @media print {
+            body {
+                font-size: 9.6pt;
+                line-height: 1.34;
+            }
+
+            main.sheet {
+                max-width: none;
+                padding: 0;
+            }
+
+            .screen-only {
+                display: none !important;
+            }
+
+            .sheet-head {
+                padding-bottom: 7px;
+                margin-bottom: 10px;
+            }
+
+            .sheet-head h1 {
+                font-size: 17pt;
+                margin: 4px 0 2px;
+            }
+
+            .sheet-head p {
+                margin: 0;
+            }
+
+            h2 {
+                margin: 11px 0 5px;
+                font-size: 10.5pt;
+                break-after: avoid;
+            }
+
+            ol.steps li {
+                margin-bottom: 4px;
+                padding-left: 26px;
+                font-size: 9.6pt;
+            }
+
+            ol.steps li::before {
+                width: 17px;
+                height: 17px;
+                line-height: 17px;
+                font-size: 10px;
+            }
+
+            .warning {
+                margin-bottom: 10px;
+                padding: 7px 11px;
+            }
+
+            .rules {
+                margin-top: 9px;
+                padding: 8px 11px;
+            }
+
+            .small {
+                font-size: 9pt;
+            }
+
+            table {
+                margin: 8px 0;
+                font-size: 9pt;
+            }
+
+            th,
+            td {
+                padding: 4px 8px;
+            }
+
+            ol.steps li,
+            .rules,
+            .warning,
+            table {
+                break-inside: avoid;
+            }
+
+            .columns {
+                gap: 16px;
+            }
+
+            a {
+                color: inherit;
+                text-decoration: none;
+            }
+
+            code {
+                background: none;
+                border: 0;
+                padding: 0;
+                font-weight: 600;
+            }
+
+            .sheet-foot {
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="sheet">
+        <p class="screen-only no-print"><a class="button" href="/teachers/pydle-github-setup.pdf">Download this sheet as a PDF</a></p>
+
+        <header class="sheet-head">
+            <p class="kicker">pydle · student sheet</p>
+            <h1>Get your GitHub account ready for pydle</h1>
+            <p>Do this at home or in a club, not in the lesson. It takes about 15 minutes.</p>
+        </header>
+
+        <div class="warning">
+            <p><strong>You must be 13 or older.</strong>
+            GitHub accounts are only for people aged 13 and over. If you are 12 or younger, stop here and tell your teacher: you can still use pydle without GitHub, and you will not lose anything you need for the lesson.</p>
+        </div>
+
+        <h2>Part 1: make a GitHub account</h2>
+        <p class="small">Skip this part if you already have an account you can sign in to.</p>
+        <ol class="steps">
+            <li>Open <strong>github.com/signup</strong>.</li>
+            <li>Enter your email address, a password, and a username. Your username is public, so do not use your full name.</li>
+            <li>Check your email for a code and type it in. <strong>Look in junk and spam.</strong> If nothing arrives after 10 minutes, tell your teacher rather than pressing resend over and over.</li>
+            <li>Choose the <strong>Free</strong> plan. You never need to pay for anything.</li>
+            <li>Answer or skip the questions that follow. They do not affect anything.</li>
+        </ol>
+
+        <h2>Part 2: connect pydle</h2>
+        <div class="columns">
+            <ol class="steps">
+                <li>Open <strong>pydle.uk</strong> and click <strong>GitHub</strong> in the top right.</li>
+                <li>Click <strong>Sign in with GitHub</strong>.</li>
+                <li>pydle shows a short code, like <code>WDJB-MJHT</code>. Copy it.</li>
+                <li>Open <strong>github.com/login/device</strong>.</li>
+            </ol>
+            <ol class="steps" start="5" style="counter-reset: step 4;">
+                <li>Sign in if GitHub asks, then type or paste the code and press <strong>Continue</strong>.</li>
+                <li>Check the page says <strong>pydle</strong>, then press <strong>Authorize</strong>.</li>
+                <li>Go back to pydle and press <strong>Create my repository</strong>. It is private: only you can see it.</li>
+            </ol>
+        </div>
+
+        <div class="rules">
+            <p><strong>Never give the code to anyone.</strong> Only type it on <strong>github.com</strong>, on a page you opened yourself. A code someone sends you, or someone asking for it, is not from pydle. If you are not sure, close the tab and ask your teacher.</p>
+        </div>
+
+        <h2>Check that it worked</h2>
+        <ol class="steps">
+            <li>In pydle, make a project called <code>hello</code>, run it, then press <strong>Commit</strong> and write a short message.</li>
+            <li>Open <strong>github.com/<em>your-username</em>/pydle-workspace</strong> in a new tab. Your project should be there.</li>
+            <li>The <strong>GitHub</strong> button in pydle should show a green dot from now on.</li>
+        </ol>
+
+        <h2>If something goes wrong</h2>
+        <table>
+            <thead>
+                <tr><th>What you see</th><th>What to do</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>github.com will not load</td><td>The school network may block it. Try at home, and tell your teacher.</td></tr>
+                <tr><td>No email with a code</td><td>Check junk and spam. If it is not there, tell your teacher.</td></tr>
+                <tr><td>“That code expired”</td><td>The code lasts 15 minutes. Click <strong>Sign in with GitHub</strong> again for a new one.</td></tr>
+                <tr><td>It says you are signed in as someone else</td><td>Press <strong>Forget this device</strong> in pydle, then sign in again.</td></tr>
+            </tbody>
+        </table>
+
+        <p class="sheet-foot">pydle.uk · Teachers' notes: pydle.uk/teachers/ · Your work stays your own: the repository belongs to your GitHub account.</p>
+    </main>
+</body>
+</html>

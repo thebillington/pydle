@@ -14,17 +14,21 @@
 - Installation required: no
 - Runtime: CPython compiled to WebAssembly via Pyodide, executed in a Web Worker
 - Editor: CodeMirror
-- Storage: browser local storage, with download to `.py`
-- Backend: none; everything runs client-side
+- Storage: browser local storage (Origin Private File System, with an IndexedDB fallback), with download to `.py`
+- Backend: none for running code; a stateless CORS relay at auth.pydle.uk handles the optional GitHub sign-in
+- Optional sync: GitHub sign-in stores each project in a private repository called `pydle-workspace` in the user's own account, with commits and history
+- GitHub accounts: 13+, so repository sync is for year 9 and above; pydle works without it
 - Python support: standard Python and a browser turtle compatibility layer
-- Not supported: Trinket-style embeds, classroom accounts, cloud project storage, multi-language editing, native packages
+- Not supported: Trinket-style embeds, classroom accounts, rosters, assignments or marking, multi-language editing, native packages
 
 ## Pages
 
 - [pydle REPL](https://pydle.uk/): general-purpose Python editor, console, save/load and `.py` download.
 - [Turtle editor](https://pydle.uk/turtle/): Python turtle graphics rendered to an OffscreenCanvas.
 - [Python turtle online](https://pydle.uk/python-turtle-online/): guide to running turtle in the browser, who it is for and how it compares with desktop Python.
-- [Trinket alternative](https://pydle.uk/trinket-alternative/): what changed when Trinket closed on 31 August 2026, how to move a Python or turtle program, and pydle's honest limits.
+- [Trinket alternative](https://pydle.uk/trinket-alternative/): what changed when Trinket closed on 31 August 2026, how to move a Python or turtle program, and how pydle compares with the other browser editors.
+- [For teachers](https://pydle.uk/teachers/): how to run a lesson, why GitHub setup belongs outside the lesson, what is stored and where, and troubleshooting.
+- [Student setup sheet](https://pydle.uk/teachers/setup-sheet/): one printable page (PDF at https://pydle.uk/teachers/pydle-github-setup.pdf) taking a 13+ student through sign-up and connecting pydle.
 
 ## Support
 

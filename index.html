@@ -263,6 +263,9 @@ print("Hello, World!")</textarea>
 
                 <h3>Appearance</h3>
                 <p>The theme control in the header cycles through <strong>Auto</strong>, <strong>Light</strong> and <strong>Dark</strong>. Auto follows your computer's own setting, and pydle remembers the choice for next time.</p>
+
+                <h3>Using pydle in a lesson</h3>
+                <p>pydle needs no accounts, so a class can start immediately. Keeping work in GitHub is optional and needs a GitHub account, which is for people aged 13 and over. There are teachers' notes at <a href="/teachers/">pydle.uk/teachers</a>, including a one-page setup sheet to give students before the lesson.</p>
             </div>
         </div>
     </div>
@@ -712,6 +715,18 @@ print("Hello, World!")</textarea>
             if (currentFileName === null) {
                 throw new Error('No project is open.');
             }
+
+            // A requirements file with nothing left in it is a file that says
+            // nothing. Removing the last library removes the file, so a project
+            // without libraries looks like one rather than carrying an empty
+            // artefact into every commit.
+            if (text === '') {
+                await sync.deleteFile(currentFileName, 'requirements.txt');
+                delete projectFiles['requirements.txt'];
+                await refreshRail();
+                return;
+            }
+
             await sync.writeFiles(currentFileName, 'requirements.txt', text);
             projectFiles['requirements.txt'] = text;
             await refreshRail();

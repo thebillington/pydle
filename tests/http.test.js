@@ -34,10 +34,14 @@ function stubFetch(t, handler) {
  * @param {number} [status]
  * @returns {object}
  */
-function response(body, status = 200) {
+function response(body, status = 200, headers = {}) {
+    const lowered = Object.fromEntries(
+        Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]),
+    );
     return {
         ok: status >= 200 && status < 300,
         status,
+        headers: { get: (name) => lowered[String(name).toLowerCase()] ?? null },
         text: async () => {
             if (body === null) {
                 return '';
@@ -169,6 +173,55 @@ test('a network failure is reported as a connection problem', async (t) => {
             assert.ok(error instanceof GitHubError);
             assert.equal(error.status, 0);
             assert.match(error.message, /could not be reached/);
+            return true;
+        },
+    );
+});
+
+test('a spent rate limit is named as one, not as a 403', async (t) => {
+    stubFetch(t, () =>
+        response(
+            { message: 'API rate limit exceeded' },
+            403,
+            { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 90) },
+        ),
+    );
+
+    await assert.rejects(
+        () => ghFetch('/repos/o/r/git/trees/main', { token: 'tok' }),
+        (error) => {
+            assert.ok(error instanceof GitHubError);
+            assert.equal(error.rateLimited, true);
+            assert.match(error.message, /limiting requests/);
+            assert.match(error.message, /still on this device/);
+            assert.doesNotMatch(error.message, /scraping/);
+            return true;
+        },
+    );
+});
+
+test('a rate limit is recognised from the message alone', async (t) => {
+    stubFetch(t, () =>
+        response({ message: 'You have exceeded a secondary rate limit.' }, 403),
+    );
+
+    await assert.rejects(
+        () => ghFetch('/user', { token: 'tok' }),
+        (error) => {
+            assert.equal(error.rateLimited, true);
+            return true;
+        },
+    );
+});
+
+test('an ordinary 403 is not called a rate limit', async (t) => {
+    stubFetch(t, () => response({ message: 'Resource not accessible by integration' }, 403));
+
+    await assert.rejects(
+        () => ghFetch('/repos/o/r', { token: 'tok' }),
+        (error) => {
+            assert.equal(error.rateLimited, false);
+            assert.match(error.message, /403/);
             return true;
         },
     );

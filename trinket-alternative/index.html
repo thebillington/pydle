@@ -124,6 +124,16 @@
               "@type": "Question",
               "name": "Does pydle support turtle graphics?",
               "acceptedAnswer": { "@type": "Answer", "text": "Yes. The turtle editor implements common Python turtle drawing commands and renders them in the browser without Tkinter." }
+            },
+            {
+              "@type": "Question",
+              "name": "Do students need a GitHub account to use pydle?",
+              "acceptedAnswer": { "@type": "Answer", "text": "No. pydle runs Python with no account at all. A GitHub sign-in is optional and only adds a copy of the work in the student's own private repository, plus a commit history. GitHub accounts require the user to be 13 or older." }
+            },
+            {
+              "@type": "Question",
+              "name": "What is the catch for a school?",
+              "acceptedAnswer": { "@type": "Answer", "text": "There is no classroom layer: no roster, no assignments and no marking. Work is collected as a downloaded .py file, or from the student's own repository if they have one." }
             }
           ]
         }
@@ -138,6 +148,7 @@
             <a href="/">REPL</a>
             <a href="/turtle/">Turtle editor</a>
             <a href="/python-turtle-online/">Python turtle guide</a>
+            <a href="/teachers/">For teachers</a>
             <a href="https://github.com/sponsors/thebillington" rel="noopener">Sponsor</a>
         </nav>
     </header>
@@ -180,8 +191,8 @@
         <p>This matters if you are replacing a classroom workflow rather than a single embed:</p>
         <ul>
             <li>No embeddable widget or <code>&lt;iframe&gt;</code> API for a VLE or course page.</li>
-            <li>No accounts, classes, assignments or progress tracking.</li>
-            <li>No cloud project storage or share-by-link URLs.</li>
+            <li>No pydle accounts, classes, assignments or progress tracking. The only sign-in is an optional GitHub account, and it belongs to the student.</li>
+            <li>No pydle cloud storage and no share-by-link URLs for a runnable program. A copy can live in the student's own private GitHub repository, but you cannot hand someone a link that opens and runs the code.</li>
             <li>No multi-language support: pydle is Python only.</li>
             <li>No guarantee that Trinket-specific packages or features will work.</li>
         </ul>
@@ -195,18 +206,116 @@
             <li>Replace the old embed with a link to pydle and a copy of the code, or move the example into your own page.</li>
         </ol>
 
-        <h2>pydle compared with the main options</h2>
-        <table>
+        <h2>pydle compared with the other options</h2>
+        <p>Most of these either predate Trinket's closure as classroom platforms or appeared in the months afterwards. The table is pydle's own reading of each provider's published description in November 2026: check anything you are about to build a scheme of work on, because these products change quickly and several of them are one-person projects, as pydle is.</p>
+        <div class="table-scroll">
+        <table class="compare">
             <thead>
-                <tr><th>Option</th><th>Account</th><th>Turtle</th><th>Classroom features</th><th>Cost</th></tr>
+                <tr><th>Option</th><th>Runtime</th><th>Turtle</th><th>Account</th><th>Embeds</th><th>Class layer</th><th>Cost</th></tr>
             </thead>
             <tbody>
-                <tr><td>pydle</td><td>No</td><td>Yes</td><td>No</td><td>Free</td></tr>
-                <tr><td>Desktop Python</td><td>No</td><td>Yes, with Tkinter</td><td>No</td><td>Free, but needs install rights</td></tr>
-                <tr><td>Hosted classroom IDE</td><td>Usually</td><td>Usually</td><td>Usually</td><td>Free tier or paid</td></tr>
+                <tr>
+                    <td><strong>pydle</strong></td>
+                    <td>Pyodide</td>
+                    <td>Yes</td>
+                    <td>None; GitHub optional</td>
+                    <td>&mdash;</td>
+                    <td>&mdash;</td>
+                    <td>Free</td>
+                </tr>
+                <tr>
+                    <td>trinket.strivemath.org</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Courses</td>
+                    <td>Free, community-run</td>
+                </tr>
+                <tr>
+                    <td>Pyroom</td>
+                    <td>Pyodide</td>
+                    <td>Yes, plus Tkinter</td>
+                    <td>No</td>
+                    <td>iframe</td>
+                    <td>&mdash;</td>
+                    <td>Free core</td>
+                </tr>
+                <tr>
+                    <td>CS Room</td>
+                    <td>Yes</td>
+                    <td>Yes, with Tkinter and pygame</td>
+                    <td>Teacher and student</td>
+                    <td>No; refuses framing</td>
+                    <td>Classes and autograding</td>
+                    <td>Free</td>
+                </tr>
+                <tr>
+                    <td>CS++</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Optional</td>
+                    <td>No; refuses framing</td>
+                    <td>Classes, LTI</td>
+                    <td>Free</td>
+                </tr>
+                <tr>
+                    <td>Coddy</td>
+                    <td>Browser, server fallback</td>
+                    <td>Yes</td>
+                    <td>Optional</td>
+                    <td>Yes</td>
+                    <td>Up to 35 students</td>
+                    <td>Free, with a credit line</td>
+                </tr>
+                <tr>
+                    <td>pythoncompiler.io</td>
+                    <td>Yes</td>
+                    <td>Yes, with PNG/GIF export</td>
+                    <td>Optional</td>
+                    <td>Code boxes</td>
+                    <td>Classes and progress</td>
+                    <td>Free</td>
+                </tr>
+                <tr>
+                    <td>Pickcode</td>
+                    <td>Yes</td>
+                    <td>Yes, capped on free tier</td>
+                    <td>Yes</td>
+                    <td>&mdash;</td>
+                    <td>Classes</td>
+                    <td>Free tier</td>
+                </tr>
+                <tr>
+                    <td>JupyterLite</td>
+                    <td>Pyodide notebooks</td>
+                    <td>&mdash;</td>
+                    <td>No</td>
+                    <td>&mdash;</td>
+                    <td>&mdash;</td>
+                    <td>Free</td>
+                </tr>
+                <tr>
+                    <td>Desktop Python</td>
+                    <td>Native</td>
+                    <td>Yes, with Tkinter</td>
+                    <td>No</td>
+                    <td>&mdash;</td>
+                    <td>&mdash;</td>
+                    <td>Free, needs install rights</td>
+                </tr>
             </tbody>
         </table>
-        <p>The right choice depends on whether you need a classroom platform or just a place to run Python. pydle deliberately does the second thing and nothing else.</p>
+        </div>
+
+        <h3>Which of those actually matters</h3>
+        <p>If you need a gradebook, a roster, a mark or a code box inside a VLE page, pydle is the wrong tool and one of the classroom platforms is the right one. That is not a gap to be filled later: pydle is an editor, and the rest of the list above is a service.</p>
+        <p>If you need a place where a student can write Python and turtle without an account, an install or a sign-up, and where their work can optionally live in a repository they own, pydle is the smallest thing in that list that does it. The two things that are genuinely unusual here are:</p>
+        <ul>
+            <li><strong>Work kept in the student's own GitHub repository</strong>, with a real commit history, rather than in a vendor's cloud. Nothing else in the table stores work that way, and the repository survives pydle.</li>
+            <li><strong>No backend at all</strong>, so there is no service to close and no free tier to fall off. The site is static files; the Python comes from a CDN.</li>
+        </ul>
+        <p>Two cautions before you rely on any of this. First, several of the entries above are new sites with strong search positions and thin track records; try the one you pick with a real class before committing a term to it. Second, GitHub accounts are 13+, so a workflow built on pydle's repository sync is for year 9 and up; younger students should use pydle without signing in.</p>
 
         <h2 id="faq">Frequently asked questions</h2>
         <div class="faq">
@@ -230,6 +339,14 @@
                 <summary>Does pydle support turtle graphics?</summary>
                 <p>Yes. The turtle editor implements common Python turtle drawing commands and renders them in the browser without Tkinter.</p>
             </details>
+            <details>
+                <summary>Do students need a GitHub account to use pydle?</summary>
+                <p>No. pydle runs Python with no account at all. A GitHub sign-in is optional and only adds a copy of the work in the student's own private repository, plus a commit history. GitHub accounts are for people aged 13 and over, so the repository route is year 9 and up.</p>
+            </details>
+            <details>
+                <summary>What is the catch for a school?</summary>
+                <p>There is no classroom layer: no roster, no assignments and no marking. Work is collected as a downloaded <code>.py</code> file, or from the student's repository if they have one. The <a href="/teachers/">teachers' notes</a> explain the setup, including why GitHub should not be set up during a lesson.</p>
+            </details>
         </div>
 
         <h2>Try it</h2>
@@ -238,7 +355,7 @@
 
     <footer class="site-footer">
         <p><a class="repo" href="https://github.com/thebillington/pydle" rel="noopener">pydle</a> is an <a href="https://github.com/thebillington/pydle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT-licensed</a> project built and maintained by <a href="https://github.com/thebillington" rel="noopener">thebillington</a>.</p>
-        <p><a href="https://github.com/sponsors/thebillington" rel="noopener">Sponsor this project</a> · <a href="/">Python REPL</a> · <a href="/turtle/">Turtle editor</a> · <a href="/python-turtle-online/">Python turtle guide</a></p>
+        <p><a href="https://github.com/sponsors/thebillington" rel="noopener">Sponsor this project</a> · <a href="/">Python REPL</a> · <a href="/turtle/">Turtle editor</a> · <a href="/python-turtle-online/">Python turtle guide</a> · <a href="/teachers/">For teachers</a></p>
     </footer>
 </body>
 </html>

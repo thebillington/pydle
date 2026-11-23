@@ -28,6 +28,8 @@ export class GitHubError extends Error {
         this.body = body;
         /** @type {boolean} True only for 401 — the caller should reconnect. */
         this.isAuthError = status === 401;
+        /** @type {boolean} True when GitHub refused because of a rate limit. */
+        this.rateLimited = false;
     }
 }
 
@@ -134,6 +136,46 @@ export async function ghFetch(path, { token, method = 'GET', body, headers, time
     const parsed = response.status === 204 ? null : parseBody(text);
 
     if (!response.ok) {
+        // A rate limit is not a normal failure: it means pydle asked too often, and
+        // it needs to be reported in those words rather than as "API 403" next to a
+        // message about scraping. The remaining count is in a header; the body says
+        // it too, which survives a proxy that strips headers.
+        // Tolerate a response without real headers: the tests use a minimal stand-in
+        // for Response, and a missing header must not become a TypeError.
+        const header = (name) =>
+            response.headers && typeof response.headers.get === 'function'
+                ? response.headers.get(name)
+                : null;
+
+        const remaining = header('x-ratelimit-remaining');
+        const bodyText = text.toLowerCase();
+        const limited =
+            response.status === 429 ||
+            (response.status === 403 &&
+                (remaining === '0' || bodyText.includes('rate limit') || bodyText.includes('secondary rate')));
+
+        if (limited) {
+            const reset = header('x-ratelimit-reset');
+            const minutes =
+                reset && Number.isFinite(Number(reset))
+                    ? Math.max(1, Math.ceil((Number(reset) * 1000 - Date.now()) / 60000))
+                    : null;
+            const error = new GitHubError(
+                'GitHub is limiting requests' +
+                    (minutes ? ' for about ' + minutes + ' more minute' + (minutes === 1 ? '' : 's') : '') +
+                    '. Nothing is lost: your work is still on this device. Try again when the limit resets.',
+                { status: response.status, body: parsed },
+            );
+            error.rateLimited = true;
+            // When GitHub says, remember how long for. Errors are not only shown,
+            // they are used to stop asking until the limit resets.
+            error.resetAt =
+                reset && Number.isFinite(Number(reset))
+                    ? Number(reset) * 1000
+                    : Date.now() + 60000;
+            throw error;
+        }
+
         // 404 and 409 are routine here and are handled by the caller: a repository
         // that does not exist yet, and an empty repository refusing refs and blobs.
         // Logging them made a working sign-in look like a wall of errors.

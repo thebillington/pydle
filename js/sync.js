@@ -196,6 +196,11 @@ function asSyncError(error) {
         return new SyncError('conflict', error.message, { cause: error });
     }
     if (error instanceof GitHubError) {
+        if (error.rateLimited) {
+            // Not a sign-in problem and not a configuration problem: GitHub is
+            // asking us to wait, and saying so is the whole message.
+            return new SyncError('busy', error.message, { cause: error });
+        }
         if (error.isAuthError) {
             return new SyncError('auth', 'GitHub rejected the sign-in. Please reconnect.', { cause: error });
         }
@@ -396,7 +401,25 @@ export function createSync({ onChange } = {}) {
      * @param {(token: string) => Promise<T>} call
      * @returns {Promise<T>}
      */
+    /**
+     * When GitHub's rate limit is known to be in force, until when.
+     *
+     * Kept here so that a burst of previews, saves and status refreshes does not
+     * keep asking a service that has already said no. Asking again cannot succeed
+     * early, and it is what turned one 403 into a wall of them.
+     *
+     * @type {number}
+     */
+    let limitedUntil = 0;
+
+    /** @type {SyncError | null} */
+    let limitedError = null;
+
     async function withToken(call) {
+        if (limitedUntil > Date.now() && limitedError) {
+            throw limitedError;
+        }
+
         const token = await ensureToken();
         try {
             return await call(token);
@@ -405,6 +428,10 @@ export function createSync({ onChange } = {}) {
                 tokens.expiresAt = 0;
                 const retryToken = await ensureToken();
                 return await call(retryToken);
+            }
+            if (error instanceof GitHubError && error.rateLimited) {
+                limitedUntil = error.resetAt || Date.now() + 60000;
+                limitedError = asSyncError(error);
             }
             throw error;
         }
@@ -823,8 +850,19 @@ export function createSync({ onChange } = {}) {
      * @param {string} ref Branch or commit sha.
      * @returns {Promise<Record<string, string>>}
      */
-    async function remoteProjectHashes(project, ref, kind = 'work') {
-        const prefix = `${repoRoot(kind)}/${project}/`;
+    /** @type {Map<string, Array<{ type: string, path: string, sha: string }>>} */
+    const treeCache = new Map();
+
+    /**
+     * The full tree for a commit, remembered by SHA.
+     *
+     * @param {string} ref
+     * @returns {Promise<Array<{ type: string, path: string, sha: string }>>}
+     */
+    async function treeAt(ref) {
+        if (treeCache.has(ref)) {
+            return treeCache.get(ref);
+        }
         const tree = await withToken((token) =>
             ghFetch(
                 `/repos/${workspace.owner}/${workspace.repo}/git/trees/` +
@@ -832,9 +870,23 @@ export function createSync({ onChange } = {}) {
                 { token },
             ),
         );
+        const entries = ((tree && tree.tree) || []).filter(
+            (entry) => entry && typeof entry.path === 'string' && typeof entry.sha === 'string',
+        );
+        if (treeCache.size >= 20) {
+            const oldest = treeCache.keys().next();
+            if (!oldest.done) {
+                treeCache.delete(oldest.value);
+            }
+        }
+        treeCache.set(ref, entries);
+        return entries;
+    }
 
+    async function remoteProjectHashes(project, ref, kind = 'work') {
+        const prefix = `${repoRoot(kind)}/${project}/`;
         const hashes = {};
-        for (const entry of (tree && tree.tree) || []) {
+        for (const entry of await treeAt(ref)) {
             if (entry.type !== 'blob' || !entry.path.startsWith(prefix)) {
                 continue;
             }
@@ -850,17 +902,9 @@ export function createSync({ onChange } = {}) {
      * @returns {Promise<string[]>}
      */
     async function remoteProjects(ref, kind = 'work') {
-        const tree = await withToken((token) =>
-            ghFetch(
-                `/repos/${workspace.owner}/${workspace.repo}/git/trees/` +
-                    `${encodeURIComponent(ref)}?recursive=1`,
-                { token },
-            ),
-        );
-
         const projects = new Set();
         const prefix = `${repoRoot(kind)}/`;
-        for (const entry of (tree && tree.tree) || []) {
+        for (const entry of await treeAt(ref)) {
             if (!entry.path.startsWith(prefix)) {
                 continue;
             }
@@ -879,14 +923,45 @@ export function createSync({ onChange } = {}) {
      * @param {string} sha
      * @returns {Promise<string>}
      */
+    /**
+     * Blob text by SHA.
+     *
+     * A blob's content cannot change for a given SHA, so this is safe to remember
+     * for the session. Without it, every preview re-read the same files: the
+     * commit window, the count on the save button and the commit itself each asked
+     * for the whole project again, which is how a signed-in account reached
+     * GitHub's 5000-requests-an-hour limit.
+     *
+     * @type {Map<string, string>}
+     */
+    const blobCache = new Map();
+
+    /** Bound the cache so a long session cannot grow it without limit. */
+    const BLOB_CACHE_LIMIT = 300;
+
     async function readBlobText(sha) {
+        if (blobCache.has(sha)) {
+            return blobCache.get(sha);
+        }
+
         const blob = await withToken((token) =>
             ghFetch(`/repos/${workspace.owner}/${workspace.repo}/git/blobs/${sha}`, { token }),
         );
-        if (!blob || typeof blob.content !== 'string') {
-            return '';
+        const text =
+            !blob || typeof blob.content !== 'string'
+                ? ''
+                : blob.encoding === 'base64'
+                  ? decodeBase64(blob.content)
+                  : blob.content;
+
+        if (blobCache.size >= BLOB_CACHE_LIMIT) {
+            const oldest = blobCache.keys().next();
+            if (!oldest.done) {
+                blobCache.delete(oldest.value);
+            }
         }
-        return blob.encoding === 'base64' ? decodeBase64(blob.content) : blob.content;
+        blobCache.set(sha, text);
+        return text;
     }
 
     /**
@@ -1140,10 +1215,13 @@ export function createSync({ onChange } = {}) {
             const nextFiles = { ...committed };
             for (const path of selected) {
                 if (Object.prototype.hasOwnProperty.call(files, path)) {
-                    nextFiles[path] = {
-                        hash: await gitBlobHash(files[path]),
-                        content: files[path],
-                    };
+                    const content = files[path];
+                    const hash = await gitBlobHash(content);
+                    nextFiles[path] = { hash, content };
+                    // The commit has just written this exact content as a blob, so
+                    // remembering it by its SHA saves re-reading every file the next
+                    // time the preview asks what the repository holds.
+                    blobCache.set(hash, content);
                 } else {
                     delete nextFiles[path];
                 }
@@ -1376,6 +1454,13 @@ export function createSync({ onChange } = {}) {
         try {
             reconciled = await preflight(project, resolutions, kind);
         } catch (error) {
+            // A rate limit is not something to work around silently: the student
+            // needs to know why nothing can be read, and hammering the API while
+            // limited only extends it.
+            if (error && (error.rateLimited || error.kind === 'busy')) {
+                throw error;
+            }
+
             // Reconciling failed, but that does not mean the repository cannot be
             // read. Ask it directly where HEAD is, so the diff is still measured
             // against what GitHub holds rather than against this device's memory.
@@ -1392,6 +1477,9 @@ export function createSync({ onChange } = {}) {
                 );
                 reconciled = { applied: [], conflicts: [], headSha: head ? head.sha : null };
             } catch (headError) {
+                if (headError && (headError.rateLimited || headError.kind === 'busy')) {
+                    throw headError;
+                }
                 console.warn('[pydle] preview could not read the repository', headError);
                 return localOnly();
             }
@@ -1404,18 +1492,38 @@ export function createSync({ onChange } = {}) {
         // project into a couple of round trips.
         const canonical = new Map();
         if (workspace && reconciled.headSha) {
-            const fetched = await mapLimit(list.paths, 6, async (entry) => {
+            // Read the tree once, then the blobs it names, rather than asking the
+            // contents API for every file. The tree is cached by commit SHA and the
+            // blobs by blob SHA, both immutable, so a second preview of the same
+            // project costs no requests at all.
+            let remote = {};
+            try {
+                remote = await remoteProjectHashes(project, reconciled.headSha, kind);
+            } catch (error) {
+                if (error && (error.rateLimited || error.kind === 'busy')) {
+                    throw error;
+                }
+                remote = {};
+            }
+
+            const present = list.paths.filter((entry) =>
+                Object.prototype.hasOwnProperty.call(remote, entry.path),
+            );
+
+            const fetched = await mapLimit(present, 6, async (entry) => {
                 try {
-                    const content = await fileAt(project, entry.path, reconciled.headSha, kind);
-                    return typeof content === 'string' ? content : null;
-                } catch {
+                    return await readBlobText(remote[entry.path]);
+                } catch (error) {
+                    if (error && (error.rateLimited || error.kind === 'busy')) {
+                        throw error;
+                    }
                     // Offline, or the file is gone upstream: the snapshot copy, if
                     // any, is still better than nothing.
                     return null;
                 }
             });
 
-            list.paths.forEach((entry, index) => {
+            present.forEach((entry, index) => {
                 const content = fetched[index];
                 if (typeof content === 'string') {
                     canonical.set(entry.path, content);
