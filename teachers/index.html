@@ -82,7 +82,7 @@
           "@id": "https://pydle.uk/teachers/#page",
           "url": "https://pydle.uk/teachers/",
           "name": "pydle for teachers",
-          "description": "How to use pydle in a classroom: no student accounts, optional GitHub storage for year 9 and up, and a printable student setup sheet.",
+          "description": "How to use pydle in a classroom, with no student accounts, optional GitHub storage for year 9 and up, and a printable setup sheet.",
           "isPartOf": { "@id": "https://pydle.uk/#website" },
           "inLanguage": "en-GB",
           "primaryImageOfPage": "https://pydle.uk/og-image.png"
@@ -137,7 +137,7 @@
     <main>
         <p class="eyebrow">For teachers · Python · no install</p>
         <h1>pydle for teachers</h1>
-        <p class="lede">pydle needs no accounts, no installation and no licence, so a class can be writing Python in the first minute of a lesson. GitHub is optional: it gives a student their own copy of the work and a history of it, and it is the only part that needs setting up in advance.</p>
+        <p class="lede">pydle needs no accounts, no installation and no licence, so a class can be writing Python in the first minute of a lesson. GitHub is optional. It gives a student their own copy of the work and a history of it, and it is the only part that needs setting up in advance.</p>
 
         <div class="cta-row">
             <a class="button" href="/">Open the Python editor</a>
@@ -166,45 +166,27 @@
             </tbody>
         </table>
         </div>
-        <p>From year 9, GitHub should be the default. It is the difference between work that survives the device and work that does not. It does not make anything easier for you.</p>
-
-        <h2>GitHub accounts are 13+, so year 9 and up</h2>
-        <p>GitHub's terms require users to be at least 13 years old. In England that means year 9 and above; a year 9 student may still be 13 or may have just turned 14, so check the year group rather than the timetable.</p>
-        <ul>
-            <li><strong>Year 9 and up:</strong> the GitHub route is fine, subject to your school's own policy.</li>
-            <li><strong>Year 7 and 8:</strong> use pydle without GitHub. Nothing is lost except the off-device copy: they can still write, run, save to the device and download <code>.py</code> files.</li>
-            <li><strong>Do not create accounts for students.</strong> One account per person is GitHub's rule, and an account made by an adult for a child puts you in the middle of a service you do not administer.</li>
-            <li><strong>Do not let students share an account.</strong> Two people on one GitHub login means one repository neither of them can safely commit to, and a sign-in on a shared machine that neither of them can revoke cleanly.</li>
-        </ul>
-        <p class="note">If your school wants under-13s on GitHub, that is a policy and data-protection conversation with your DPO. pydle works without it.</p>
+        <p>From year 9, GitHub should be the default. Work survives the device and keeps its history. GitHub accounts are for people aged 13 and over. Do not create accounts for students or let them share one. One account per person is GitHub's rule, and a shared login leaves two students with a repository neither of them can safely commit to.</p>
 
         <h2>Why not to do the GitHub setup in a lesson</h2>
-        <p class="note"><strong>Thirty sign-ups from one school address look like abuse.</strong> GitHub rate-limits account creation by source address, and a class behind a school filter shares one. In August 2026, a class of twelve hit <em>Too Many Requests</em> trying to sign up from their school filter, and the advice in GitHub Classroom's own discussion forum was to have students create accounts at home or to stagger them. One documented school case went further: the accounts were created, then suspended days later, and restoring them took four appeals over three weeks. This is current behaviour. Sign-ups from an unfamiliar or heavily shared address can also trigger extra verification on the spot.</p>
-        <p>Everything below is a ten-minute problem when it happens to one student at home, and a lost lesson when it happens to thirty students at once.</p>
+        <p class="note"><strong>Thirty sign-ups from one school address look like abuse.</strong> GitHub rate-limits account creation by source address, and a class behind a school filter shares one. In August 2026, a class of twelve hit <em>Too Many Requests</em> trying to sign up from their school filter, and the advice in GitHub Classroom's own discussion forum was to have students create accounts at home or to stagger them. One documented school case went further. The accounts were created, then suspended days later, and restoring them took four appeals over three weeks. This is current behaviour. Sign-ups from an unfamiliar or heavily shared address can also trigger extra verification on the spot.</p>
         <ul>
             <li><strong>Filtering.</strong> <code>github.com</code> is blocked or partly blocked on many school networks. Sign-in also needs <code>api.github.com</code>, and the editor needs <code>cdn.jsdelivr.net</code> for the Python runtime. You will discover the gaps on a class set of devices, not on yours.</li>
             <li><strong>Email verification.</strong> GitHub will not activate an account until the email is confirmed. School mail filters frequently quarantine those messages, and some domains refuse external sign-ups altogether. A student who cannot receive the mail cannot finish, and there is nothing you can do from the front of the room.</li>
-            <li><strong>It takes two steps.</strong> pydle signs in with GitHub's device flow: the student reads an eight-character code off the screen and types it into <code>github.com/login/device</code>, then approves pydle. The code lasts fifteen minutes. Circulating to help thirty students type it is most of a lesson.</li>
-            <li><strong>Nobody is blocked by not doing it.</strong> The lesson does not need GitHub. It only needs the browser.</li>
+            <li><strong>It takes two steps.</strong> pydle signs in with GitHub's device flow. The student reads an eight-character code off the screen and types it into <code>github.com/login/device</code>, then approves pydle. The code lasts fifteen minutes. Circulating to help thirty students type it is most of a lesson.</li>
         </ul>
 
-        <h3>What works instead</h3>
+        <h2>Before the lesson</h2>
+        <p>The GitHub setup is preparation, a week ahead, not a lesson activity.</p>
         <ol>
-            <li><strong>Set it as preparation, a week ahead.</strong> Hand out the <a href="/teachers/pydle-github-setup.pdf">student setup sheet</a> and say which lesson will use it. The sheet is one page, has no school-specific details, and can be printed or shared as a PDF.</li>
-            <li><strong>Run a short clinic.</strong> Twenty minutes at lunch or after school for the students who did not manage it. One adult, a few devices, no audience.</li>
-            <li><strong>Test on a student device first.</strong> A staff laptop on the staff network proves nothing about a Chromebook on the student VLAN.</li>
-            <li><strong>Carry on regardless.</strong> On the day, students without GitHub work exactly as everyone else does. Connecting later does not lose the projects already on their device: those stay in the local vault and can be committed whenever the student chooses.</li>
+            <li><strong>Check the network</strong> on a student device, not a staff laptop. It needs <code>pydle.uk</code>, <code>cdn.jsdelivr.net</code> for Python and libraries, <code>auth.pydle.uk</code> and <code>github.com</code>, plus <code>api.github.com</code> if you are using GitHub.</li>
+            <li><strong>Check the browser.</strong> A current Chrome, Edge, Firefox or Safari. pydle needs WebAssembly.</li>
+            <li><strong>Check the year group is 13+</strong> before you print anything that mentions GitHub.</li>
+            <li><strong>Print the sheet</strong>, one per student, or send the PDF through your usual channel. Hand it out a week before you need it.</li>
+            <li><strong>Run a clinic</strong> at lunch or after school for the students who did not manage it. One adult, a few devices.</li>
+            <li><strong>Take five minutes in the first lesson</strong> for the students who are connected. Make a project, run it, press <strong>Commit</strong>, and show the repository in a browser tab.</li>
         </ol>
-
-        <h2>The setup, in order</h2>
-        <ol>
-            <li><strong>Check the network</strong> on one student device: <code>pydle.uk</code>, <code>cdn.jsdelivr.net</code> (Python and libraries), <code>auth.pydle.uk</code> and <code>github.com</code> with <code>api.github.com</code> if you are using GitHub.</li>
-            <li><strong>Check the browser.</strong> A current Chrome, Edge, Firefox or Safari. pydle needs WebAssembly; it does not need an extension or an install.</li>
-            <li><strong>Confirm the year group is 13+</strong> before you print anything that mentions GitHub.</li>
-            <li><strong>Print the sheet,</strong> one per student, or send the PDF through your usual channel.</li>
-            <li><strong>Give it a week,</strong> then run the clinic.</li>
-            <li><strong>In the first lesson,</strong> take five minutes on the board for the students who are connected: make a project, run it, press <strong>Commit</strong>, show the repository in a browser tab. Everyone else starts the task.</li>
-        </ol>
+        <p>Students without GitHub work exactly as everyone else does.</p>
 
         <h2>What students get from GitHub</h2>
         <p>When a student signs in, pydle offers to create one <strong>private</strong> repository called <code>pydle-workspace</code> in their own account. Each project the student commits becomes a folder in it, with its files and its <code>requirements.txt</code>.</p>
@@ -219,10 +201,10 @@
         <h2>Collecting and seeing work</h2>
         <p>pydle has no teacher view, so collection is manual whichever route you use.</p>
         <ul>
-            <li><strong>Without GitHub:</strong> students use the download button in the toolbar and submit the <code>.py</code> file through your usual channel, or show you the screen at the end of the lesson.</li>
-            <li><strong>With GitHub, per student:</strong> the repository is private, so a student has to add you as a collaborator on it, or make it public, before you can read it. For a class of thirty that is a lot of accepting.</li>
-            <li><strong>With GitHub Classroom:</strong> if your school already uses it, an organisation and a classroom sit on top of the same repositories and give you the class view pydle does not have. It is extra setup, and it is the part pydle deliberately does not do.</li>
-            <li><strong>In every case:</strong> the downloaded <code>.py</code> is the portable copy. Ask for that at the end of a unit even if the work is in a repository.</li>
+            <li><strong>Without GitHub</strong>, students use the download button in the toolbar and submit the <code>.py</code> file through your usual channel, or show you the screen at the end of the lesson.</li>
+            <li><strong>With GitHub, per student</strong>, the repository is private, so a student has to add you as a collaborator on it, or make it public, before you can read it. For a class of thirty that is a lot of accepting.</li>
+            <li><strong>With GitHub Classroom</strong>, if your school already uses it, an organisation and a classroom sit on top of the same repositories and give you the class view pydle does not have. It is extra setup, and it is the part pydle deliberately does not do.</li>
+            <li><strong>Either way</strong>, the downloaded <code>.py</code> is the portable copy. Ask for that at the end of a unit even if the work is in a repository.</li>
         </ul>
 
         <h2>Shared, school and loan devices</h2>
@@ -230,7 +212,7 @@
             <li>The saved work belongs to the browser profile, not to the student. Two students on one profile see each other's projects.</li>
             <li>Use a separate OS account or a guest profile per student where you can. In a private or incognito window the work is gone when the window closes, which is safe but useless for next lesson.</li>
             <li><strong>Forget this device</strong>, inside the GitHub panel, removes the GitHub sign-in from that browser. It does <em>not</em> delete the projects, so a shared machine still holds them.</li>
-            <li>To leave nothing behind on a shared machine: delete the projects in pydle, press <strong>Forget this device</strong>, then clear site data for <code>pydle.uk</code> in the browser settings.</li>
+            <li>To leave nothing behind on a shared machine, delete the projects in pydle, press <strong>Forget this device</strong>, then clear site data for <code>pydle.uk</code> in the browser settings.</li>
         </ul>
 
         <h2>What pydle stores, and where</h2>
@@ -248,7 +230,7 @@
         <div class="faq">
             <details>
                 <summary>A student cannot reach github.com</summary>
-                <p>Almost always filtering. Check <code>api.github.com</code> as well as the main site: the sign-in will fail even when the page loads. The student can carry on without GitHub.</p>
+                <p>Almost always filtering. Check <code>api.github.com</code> as well as the main site. The sign-in will fail even when the page loads. The student can carry on without GitHub.</p>
             </details>
             <details>
                 <summary>"That code expired before it was approved."</summary>
