@@ -170,7 +170,7 @@ function messageFor(error, fallback) {
  * @param {{ onLoadVersion?: (version: { project: string, path: string, sha: string, content: string, date: string | null, message: string }) => void | Promise<void> }} [options]
  * @returns {{ open: (project: string) => void, close: () => void, reload: () => void, destroy: () => void }}
  */
-export function mountHistory(root, sync, { onLoadVersion } = {}) {
+export function mountHistory(root, sync, { onLoadVersion, onLoadCommit } = {}) {
     if (!root) {
         throw new TypeError('mountHistory needs a container element.');
     }
@@ -181,6 +181,7 @@ export function mountHistory(root, sync, { onLoadVersion } = {}) {
     ensureStylesheet();
 
     const loadVersion = typeof onLoadVersion === 'function' ? onLoadVersion : null;
+    const loadCommit = typeof onLoadCommit === 'function' ? onLoadCommit : null;
 
     root.classList.add('overlay', 'history-overlay', 'hidden');
     root.textContent = '';
@@ -506,6 +507,32 @@ export function mountHistory(root, sync, { onLoadVersion } = {}) {
         );
         head.append(full, byline);
         detailPane.appendChild(head);
+
+        if (loadCommit !== null) {
+            const tools = el('div', 'history-commit-tools');
+            const putBack = el('button', 'sync-btn sync-btn-quiet history-commit-load', 'Put back this version');
+            putBack.type = 'button';
+            putBack.title = 'Write the files from this commit back into the project';
+            putBack.addEventListener('click', () => {
+                putBack.disabled = true;
+                void Promise.resolve(
+                    loadCommit({
+                        project,
+                        sha: commit.sha,
+                        message: commit.message,
+                        date: commit.date,
+                        files: (detail.files || []).map((file) => ({
+                            path: file.path,
+                            status: file.status,
+                        })),
+                    }),
+                ).finally(() => {
+                    putBack.disabled = false;
+                });
+            });
+            tools.appendChild(putBack);
+            detailPane.appendChild(tools);
+        }
 
         const files = detail.files || [];
         detailPane.appendChild(el('div', 'history-files-label', `Files changed (${files.length})`));

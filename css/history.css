@@ -486,3 +486,10 @@
         padding-right: 16px;
     }
 }
+
+/* Commit-level action, beside the commit it applies to. */
+.history-commit-tools {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 0 10px;
+}

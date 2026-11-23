@@ -60,7 +60,7 @@ function ensureStylesheet() {
         return;
     }
 
-    const href = new URL('../css/libraries.css', import.meta.url).href;
+    const href = new URL('../../css/libraries.css', import.meta.url).href;
     const links = document.querySelectorAll('link[rel="stylesheet"]');
     for (const link of links) {
         if (link instanceof HTMLLinkElement && link.href === href) {
@@ -137,7 +137,7 @@ export function mountLibraries(root, options = {}) {
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
 
-    body.append(note, listNode, status);
+    body.append(note, status, listNode);
 
     const footer = el('div', 'dialog-footer');
     const doneBtn = el('button', 'dialog-btn dialog-btn-primary', 'Done');

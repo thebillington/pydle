@@ -310,6 +310,8 @@ print("Hello, World!")</textarea>
         import { mountCommit } from './js/ui/commit.js';
         import { mountHistory } from './js/ui/history.js';
         import { confirmAction, notify, promptText } from './js/ui/dialog.js';
+        import { mountLibraries } from './js/ui/libraries.js';
+        import { addPackage, parseRequirements, removePackage } from './js/packages.js';
         import { importLegacyProjects } from './js/vault/legacy.js';
         import { normalizeProjectName } from './js/vault/paths.js';
 
@@ -511,6 +513,114 @@ print("Hello, World!")</textarea>
         // the editor as an unsaved change. Nothing is written back over history;
         // the user saves and commits it like any other edit.
         const history = mountHistory(document.getElementById('history-overlay'), sync, {
+            onLoadCommit: async ({ project, sha, message, date, files }) => {
+                if (project !== currentFileName) {
+                    showStatus('Open ' + project + ' to put that version back', 'error');
+                    return;
+                }
+
+                // Everything the commit recorded, with the project folder removed
+                // so it is a path inside the project.
+                const wanted = [];
+                for (const file of Array.isArray(files) ? files : []) {
+                    if (file.status === 'deleted') {
+                        continue;
+                    }
+                    const inside = file.path.startsWith(project + '/')
+                        ? file.path.slice(project.length + 1)
+                        : file.path;
+                    try {
+                        const content = await sync.fileAt(project, inside, sha);
+                        if (typeof content === 'string') {
+                            wanted.push({ path: inside, content });
+                        }
+                    } catch {
+                        // A file that cannot be read is simply not part of the restore.
+                    }
+                }
+
+                if (wanted.length === 0) {
+                    await notify({
+                        title: 'Nothing to put back',
+                        message: 'That version did not record any files that can be read.',
+                        variant: 'info',
+                    });
+                    return;
+                }
+
+                const go = await confirmAction({
+                    title: 'Put back this version?',
+                    message:
+                        'This writes ' + wanted.length + (wanted.length === 1 ? ' file' : ' files') +
+                        ' from that version back into this project, replacing what is here now. ' +
+                        'Commit afterwards to put it in GitHub.',
+                    confirmLabel: 'Put back',
+                    danger: true,
+                });
+                if (!go) {
+                    return;
+                }
+
+                // Files that did not exist in that version are left alone unless the
+                // student says otherwise: removing one that was never committed would
+                // destroy work no history can recover.
+                let current = {};
+                try {
+                    current = (await sync.readProject(project)) || {};
+                } catch {
+                    current = {};
+                }
+                const inCommit = new Set(wanted.map((file) => file.path));
+                const extras = Object.keys(current).filter((path) => !inCommit.has(path));
+
+                let removeExtras = false;
+                if (extras.length > 0) {
+                    const listed = extras.slice(0, 6).join(', ') + (extras.length > 6 ? ', and more' : '');
+                    removeExtras = await confirmAction({
+                        title: 'Remove the newer files?',
+                        message:
+                            extras.length + (extras.length === 1 ? ' file did' : ' files did') +
+                            ' not exist in that version: ' + listed + '. ' +
+                            'Remove them as well, or keep them? A file that was never committed cannot be recovered.',
+                        confirmLabel: 'Remove them',
+                    });
+                }
+
+                try {
+                    for (const file of wanted) {
+                        await sync.writeFiles(project, file.path, file.content);
+                    }
+                    if (removeExtras) {
+                        for (const path of extras) {
+                            await sync.deleteFile(project, path);
+                        }
+                    }
+                } catch (error) {
+                    showStatus('Could not put that version back', 'error');
+                    return;
+                }
+
+                await refreshRail();
+                await refreshCommitState();
+
+                // Land the student on the entry file so the result is visible.
+                const entry = wanted.find((file) => file.path === 'main.py') || wanted[0];
+                if (entry && entry.path !== currentPath) {
+                    currentPath = entry.path;
+                    editor.setValue(entry.content);
+                    lastSavedCode = entry.content;
+                    dirty = false;
+                    updateFileIndicator();
+                    updateEditorControls();
+                }
+
+                showStatus(
+                    'Put back ' + wanted.length + (wanted.length === 1 ? ' file' : ' files') +
+                        ' from ' + (date ? new Date(date).toLocaleDateString('en-GB') : 'that version') +
+                        '. Not in GitHub yet.',
+                    'ready',
+                );
+            },
             onLoadVersion: async ({ project, path, content }) => {
                 if (typeof content !== 'string') {
                     return;
@@ -563,12 +673,67 @@ print("Hello, World!")</textarea>
                 : 'History for ' + currentFileName;
         }
 
+        const librariesHost = document.createElement('div');
+        librariesHost.id = 'libraries-root';
+        document.body.appendChild(librariesHost);
+
+        /** The project's requirements.txt text, from the vault. */
+        async function readRequirements() {
+            if (currentFileName === null) {
+                return '';
+            }
+            if (typeof projectFiles['requirements.txt'] === 'string') {
+                return projectFiles['requirements.txt'];
+            }
+            try {
+                const files = (await sync.readProject(currentFileName)) || {};
+                return typeof files['requirements.txt'] === 'string' ? files['requirements.txt'] : '';
+            } catch {
+                return '';
+            }
+        }
+
+        /**
+         * Write requirements.txt and refresh what depends on it.
+         *
+         * @param {string} text
+         */
+        async function writeRequirements(text) {
+            if (currentFileName === null) {
+                throw new Error('No project is open.');
+            }
+            await sync.writeFiles(currentFileName, 'requirements.txt', text);
+            projectFiles['requirements.txt'] = text;
+            await refreshRail();
+        }
+
+        const librariesDialog = mountLibraries(librariesHost, {
+            // The catalogue exists in every build; whether a package can actually
+            // be loaded depends on the deployment, which is a separate decision.
+            available: true,
+            list: async () => parseRequirements(await readRequirements()),
+            add: async (name) => {
+                const text = await readRequirements();
+                await writeRequirements(addPackage(text, name));
+            },
+            remove: async (name) => {
+                const text = await readRequirements();
+                await writeRequirements(removePackage(text, name));
+            },
+        });
+
         const fileRail = mountFileRail(document.getElementById('file-rail'), {
             onSelect: (path) => { void selectFile(path); },
             onCreate: (name) => createFile(name),
             onRename: (from, to) => renameFile(from, to),
             onDelete: (path) => removeFile(path),
             onHome: () => { void goHome(); },
+            onAddLibrary: () => {
+                if (currentFileName === null) {
+                    return;
+                }
+                void librariesDialog.open();
+            },
             onCommitHelp: () => {
                 helpOverlay.classList.remove('hidden');
                 const section = document.getElementById('help-commit');

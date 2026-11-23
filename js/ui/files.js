@@ -26,6 +26,30 @@ const MAX_FILE_NAME = 120;
 const COLLAPSED_KEY = 'pydle_file_rail_collapsed';
 
 /**
+ * The Libraries section's stylesheet, which also styles the picker.
+ *
+ * `index.html` is not this module's to edit, so the link is attached when the
+ * rail mounts. The picker does the same check, so whichever mounts first wins
+ * and the page never loads it twice.
+ */
+const LIBRARIES_STYLESHEET = new URL('../../css/libraries.css', import.meta.url).href;
+
+function ensureLibrariesStylesheet() {
+    const links = document.querySelectorAll('link[rel="stylesheet"]');
+    for (const link of links) {
+        if (link instanceof HTMLLinkElement && link.href === LIBRARIES_STYLESHEET) {
+            return;
+        }
+    }
+
+    const stylesheet = document.createElement('link');
+    stylesheet.rel = 'stylesheet';
+    stylesheet.href = LIBRARIES_STYLESHEET;
+    stylesheet.dataset.pydleLibraries = '';
+    document.head.appendChild(stylesheet);
+}
+
+/**
  * Turn what someone typed into a safe single file name.
  *
  * Rules, in the order they apply:
@@ -262,6 +286,8 @@ function storeCollapsed(collapsed) {
  * }} [handlers]
  */
 export function mountFileRail(root, handlers = {}) {
+    ensureLibrariesStylesheet();
+
     const state = {
         project: null,
         files: [],
