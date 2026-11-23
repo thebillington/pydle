@@ -305,6 +305,8 @@ export function mountCommit(root, sync, handlers = {}) {
         /** Files changed on both sides, needing a decision. */
         /** @type {Array<{ path: string, kind: string, remoteHash: string | null }>} */
         conflicts: [],
+        /** True when GitHub could not be read, so this is not a current view. */
+        unverified: false,
         /** Files that will go into the commit. */
         /** @type {Set<string>} */
         selected: new Set(),
@@ -886,6 +888,21 @@ export function mountCommit(root, sync, handlers = {}) {
         const conflicts = Array.isArray(state.conflicts) ? state.conflicts : [];
         const pulled = Array.isArray(state.pulled) ? state.pulled : [];
 
+        if (state.unverified) {
+            banner.hidden = false;
+            banner.classList.add('commit-banner-attention');
+            banner.append(
+                el(
+                    'p',
+                    'commit-banner-text',
+                    'GitHub could not be reached, so this is compared with the last commit saved ' +
+                        'on this device. Saving will fail until the connection is back, and nothing ' +
+                        'here is lost meanwhile.',
+                ),
+            );
+            return;
+        }
+
         if (conflicts.length > 0) {
             banner.hidden = false;
             banner.classList.add('commit-banner-attention');
@@ -1207,6 +1224,7 @@ export function mountCommit(root, sync, handlers = {}) {
 
         state.pulled = Array.isArray(report && report.pulled) ? report.pulled : [];
         state.conflicts = Array.isArray(report && report.conflicts) ? report.conflicts : [];
+        state.unverified = Boolean(report && report.unverified);
 
         const entries = Array.isArray(report && report.paths)
             ? report.paths.map(normaliseChange).filter(Boolean)

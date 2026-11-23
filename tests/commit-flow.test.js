@@ -155,12 +155,10 @@ test('a preview after a commit costs at most two requests', async (t) => {
     );
 });
 
-// Current behaviour is wrong here: `currentHead()` trusts its 10-second cache,
-// so a branch moved on another device moments after a commit is invisible to
-// previewCommit() and the change is neither pulled nor conflicted. The test
-// describes the intended behaviour and is marked todo until the cache rule is
-// revisited. (`commit()` itself reads the ref freshly, so it does notice.)
-test('a commit made elsewhere is pulled or reported as a conflict', { todo: 'previewCommit trusts a stale HEAD cache' }, async (t) => {
+// A branch can move between two previews. A remembered HEAD is how a device
+// commits over a change made elsewhere, so the ref is read on every preview; this
+// used to fail while that answer was cached for ten seconds.
+test('a commit made elsewhere is pulled or reported as a conflict', async (t) => {
     const { sync, world } = await connected(t);
 
     await sync.writeFiles('demo', 'main.py', 'print(1)\n');
@@ -224,23 +222,28 @@ test('a file already in the repository is modified, never added', async (t) => {
     assert.equal(entry.after, 'print(2)\n');
 });
 
-test('preview still works offline when HEAD has not moved', async (t) => {
+test('preview still works offline, compared with the last commit this device saw', async (t) => {
     const { sync, world } = await connected(t, {
         'work/demo/main.py': 'print(1)\n',
     });
 
-    // Same content on both sides. A first online preview records the content in
-    // the snapshot, so the next one has no reason to ask GitHub anything.
+    // Same content on both sides, so the first online preview records it in the
+    // snapshot and reports nothing to commit.
     await sync.writeFiles('demo', 'main.py', 'print(1)\n');
     const first = await sync.previewCommit('demo');
     assert.equal(first.count, 0);
+    assert.equal(first.unverified, false);
 
     world.resetRequests();
     world.offline(true);
 
+    // The ref is read on every preview, because a remembered answer is how a
+    // commit made elsewhere gets overwritten. Offline, that one read fails and
+    // the snapshot becomes the baseline, flagged so the dialog can say so.
     const offline = await sync.previewCommit('demo');
     assert.equal(offline.count, 0);
-    assert.equal(world.requestCount(), 0, 'the snapshot should answer without the network');
+    assert.equal(offline.unverified, true);
+    assert.equal(world.requestCount(), 1, 'one attempt, then the snapshot answers');
 });
 
 test('a rate-limited preview says so and is not an auth error', async (t) => {

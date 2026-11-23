@@ -225,6 +225,28 @@
     const sync = {
         dirty,
 
+        /**
+         * The dialog prefers this when it exists: the repository-aware view.
+         * `unverified` stands in for GitHub being unreachable while the snapshot
+         * still answers.
+         */
+        async previewCommit() {
+            if (state === 'unverified') {
+                const paths = CHANGES;
+                return {
+                    paths,
+                    count: paths.length,
+                    pulled: [],
+                    conflicts: [],
+                    unverified: true,
+                    headSha: 'abc1234',
+                    lastCommit: 'abc1234',
+                };
+            }
+            const report = await dirty();
+            return { ...report, pulled: [], conflicts: [], unverified: false };
+        },
+
         async commit({ message, paths }) {
             if (state === 'commit-error') {
                 const error = new Error('Could not reach GitHub. Your work is saved on this device.');

@@ -1003,33 +1003,23 @@ export function createSync({ onChange } = {}) {
      * @returns {Promise<{ applied: string[], conflicts: Array<{ path: string, kind: string, remoteHash: string | null }>, headSha: string | null }>}
      */
     /**
-     * Where HEAD is, remembered for a few seconds.
+     * Where HEAD is, read now.
      *
-     * One save can ask the preview several times (the badge, the dialog, the
-     * commit), and each one began with the same ref lookup. The window is short
-     * enough that a commit from another device is still noticed, and `fresh`
-     * skips the cache entirely where staleness would matter.
+     * Deliberately not cached. A commit made on another device moments ago has to
+     * be seen before this device commits over it; a remembered answer is how a
+     * stale view of the branch turns into a lost change. The badge no longer asks
+     * this question at all, so the traffic that made caching tempting is gone.
      *
-     * @param {{ fresh?: boolean }} [options]
      * @returns {Promise<string | null>}
      */
-    let headCache = { sha: null, at: 0, branch: null };
-
-    async function currentHead({ fresh = false } = {}) {
-        const branch = workspace ? workspace.branch : null;
-        const now = Date.now();
-        if (!fresh && headCache.branch === branch && now - headCache.at < 10000) {
-            return headCache.sha;
-        }
-
+    async function currentHead() {
         const head = await withToken((token) =>
-            getRef({ token, owner: workspace.owner, repo: workspace.repo, branch }),
+            getRef({ token, owner: workspace.owner, repo: workspace.repo, branch: workspace.branch }),
         );
-        headCache = { sha: head ? head.sha : null, at: Date.now(), branch };
-        return headCache.sha;
+        return head ? head.sha : null;
     }
 
-    async function preflight(name, resolutions = {}, kind = 'work') {
+    async function preflight(name, resolutions = {}, kind = 'work', knownHead = null) {
         if (!workspace) {
             throw new SyncError('auth', 'Sign in to GitHub first.');
         }
@@ -1042,17 +1032,21 @@ export function createSync({ onChange } = {}) {
         }
 
         try {
-            const head = await withToken((token) =>
-                getRef({ token, owner: workspace.owner, repo: workspace.repo, branch: workspace.branch }),
-            );
+            const head = knownHead
+                ? { sha: knownHead }
+                : await withToken((token) =>
+                      getRef({
+                          token,
+                          owner: workspace.owner,
+                          repo: workspace.repo,
+                          branch: workspace.branch,
+                      }),
+                  );
             if (!head) {
                 return { applied: [], conflicts: [], headSha: null };
             }
 
             const snapshot = await vault.readCommitSnapshot(project, { kind });
-
-            // This read is fresh, so it is also the best thing to remember.
-            headCache = { sha: head.sha, at: Date.now(), branch: workspace.branch };
 
             // HEAD has not moved since the last commit this device saw, so the
             // snapshot already describes the repository: nothing to pull, nothing
@@ -1290,16 +1284,6 @@ export function createSync({ onChange } = {}) {
                 }
             }
             await vault.writeCommitSnapshot(project, { sha: result.sha, files: nextFiles }, { kind });
-            headCache = { sha: result.sha, at: Date.now(), branch: workspace.branch };
-
-            // Files that were already identical to the repository are not in the
-            // commit list, so the snapshot has never recorded them. Re-reading the
-            // preview records them now, which is what stops the count on the save
-            // button and the rail sitting at "1" for something already in GitHub.
-            //
-            // Not awaited: it is bookkeeping, and waiting for a whole extra round of
-            // GitHub reads would delay the commit finishing for no benefit.
-            void previewCommit(project, kind).catch(() => {});
 
             setStatus('connected');
             return { sha: result.sha, message: trimmedMessage };
@@ -1514,10 +1498,32 @@ export function createSync({ onChange } = {}) {
             return localOnly();
         }
 
-        // Where HEAD is, cached for a few seconds: one save can ask for this
-        // several times, and the answer is the same.
-        const headSha = await currentHead();
         const snapshotBefore = await vault.readCommitSnapshot(project, { kind });
+
+        // Where the repository is *now*. A remembered answer would let this device
+        // commit over a change made elsewhere, so it is always read.
+        let headSha = null;
+        let unverified = false;
+        try {
+            headSha = await currentHead();
+        } catch (error) {
+            const mapped = asSyncError(error);
+
+            // Being told to wait, or to sign in, is not something to paper over.
+            if (mapped.kind === 'busy' || mapped.kind === 'auth') {
+                throw mapped;
+            }
+
+            // Offline, or GitHub unreachable. The dialog can still show what would
+            // go if the repository has not moved, compared with the last commit
+            // this device saw, as long as it does not pretend to be current.
+            unverified = true;
+            headSha = snapshotBefore && typeof snapshotBefore.sha === 'string' ? snapshotBefore.sha : null;
+            if (headSha === null) {
+                return localOnly();
+            }
+            console.warn('[pydle] preview is unverified: GitHub could not be read', mapped);
+        }
 
         // If HEAD is still the commit this device last saw, the snapshot already
         // describes the repository. There is nothing to reconcile and nothing to
@@ -1525,13 +1531,13 @@ export function createSync({ onChange } = {}) {
         let reconciled = { applied: [], conflicts: [], headSha };
         if (!snapshotMatchesHead(headSha, snapshotBefore)) {
             try {
-                reconciled = await preflight(project, resolutions, kind);
+                reconciled = await preflight(project, resolutions, kind, headSha);
             } catch (error) {
                 // A rate limit is not something to work around silently: the student
                 // needs to know why nothing can be read, and hammering the API while
                 // limited only extends it.
                 if (error && (error.rateLimited || error.kind === 'busy')) {
-                    throw error;
+                    throw asSyncError(error);
                 }
 
                 // Reconciling failed, but that does not mean the repository cannot
@@ -1649,6 +1655,10 @@ export function createSync({ onChange } = {}) {
             // The same shape `dirty()` returns, because the callers that only want
             // a number should not have to know which of the two they are holding.
             count: changed.length,
+            // True when GitHub could not be read and this is compared with the last
+            // commit this device saw. The dialog says so rather than implying the
+            // view is current.
+            unverified,
             conflicts: reconciled.conflicts,
             pulled: reconciled.applied,
             headSha: reconciled.headSha,
