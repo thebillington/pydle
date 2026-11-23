@@ -529,3 +529,34 @@
     outline: 2px solid var(--accent-red);
     outline-offset: 1px;
 }
+
+/* A library declared by hand that pydle does not offer. */
+.file-rail-library {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.file-rail-library-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-rail-library-flag {
+    flex-shrink: 0;
+    padding: 0 4px;
+    border: 1px solid var(--accent-yellow);
+    border-radius: 4px;
+    color: var(--accent-yellow);
+    font-family: var(--font-sans);
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.file-rail-library.is-unavailable .file-rail-library-name {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}

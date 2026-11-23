@@ -18,6 +18,7 @@
 
 import { isReservedPath, normalizeProjectName, safeJoin } from '../vault/paths.js';
 import { confirmAction, promptText } from './dialog.js';
+import { splitDeclared } from '../packages.js';
 
 /** A file name has to stay readable in the rail and on GitHub. */
 const MAX_FILE_NAME = 120;
@@ -696,8 +697,25 @@ export function mountFileRail(root, handlers = {}) {
 
         libraries.hidden = state.project === null;
         librariesList.textContent = '';
+        // The same rule the loader uses, so the rail cannot claim a library is
+        // available when the worker will refuse it.
+        const refusedNames = new Set(splitDeclared(state.libraries).refused);
         for (const library of state.libraries) {
-            librariesList.appendChild(el('li', 'file-rail-library', library));
+            const item = el('li', 'file-rail-library');
+            item.append(el('span', 'file-rail-library-name', library));
+
+            // A name written into requirements.txt by hand that is not offered.
+            // Saying so here as well as in the console, because this is where the
+            // student will look to see what the project depends on.
+            if (refusedNames.has(library)) {
+                item.classList.add('is-unavailable');
+                item.append(el('span', 'file-rail-library-flag', 'not available'));
+                item.title =
+                    library +
+                    ' is not one of the libraries pydle offers, so it is not loaded.';
+            }
+
+            librariesList.appendChild(item);
         }
         const declared = state.libraries.length > 0;
         librariesList.hidden = !declared;
