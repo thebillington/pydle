@@ -95,7 +95,7 @@ export function toSnakeCase(raw) {
  * Names that cannot be used, because a directory of that name already means
  * something else inside the vault.
  */
-export const RESERVED_PROJECT_NAMES = new Set(['drawings', 'assignments', 'feedback']);
+export const RESERVED_PROJECT_NAMES = new Set(['assignments', 'feedback']);
 
 export function validateProjectName(raw) {
     const name = String(raw ?? '').trim().toLowerCase();

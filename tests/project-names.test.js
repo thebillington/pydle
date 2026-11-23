@@ -176,12 +176,15 @@ test('typing a file name does not eat the dot as you type', async () => {
 test('names used by pydle itself are refused', async () => {
     const { validateProjectName } = await import('../js/ui/home.js');
 
-    for (const reserved of ['drawings', 'assignments', 'feedback']) {
+    // Reserved for the classroom layer, which would own these directories.
+    for (const reserved of ['assignments', 'feedback']) {
         const check = validateProjectName(reserved);
         assert.equal(check.ok, false, reserved + ' should be refused');
         assert.match(check.error, /used by pydle itself/);
     }
 
-    // A near miss is fine.
+    // 'drawings' is allowed on purpose: the turtle namespace is dot-prefixed, so a
+    // project of that name cannot collide with it.
+    assert.equal(validateProjectName('drawings').ok, true);
     assert.equal(validateProjectName('drawings_2').ok, true);
 });

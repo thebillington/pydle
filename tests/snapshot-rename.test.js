@@ -125,15 +125,16 @@ test('renameCommitSnapshot moves a hyphenated snapshot to the snake_case key', a
 
 test('renameCommitSnapshot keeps the namespace it was given', async () => {
     const meta = table('meta');
-    meta.set('commit:drawings/my-picture', { sha: 'def', files: {} });
+    // The drawings namespace is dot-prefixed so no project can collide with it.
+    meta.set('commit:.drawings/my-picture', { sha: 'def', files: {} });
 
     const moved = await fs.renameCommitSnapshot('my-picture', 'my_picture', {
         kind: 'drawings',
     });
 
     assert.equal(moved, true);
-    assert.equal(meta.has('commit:drawings/my-picture'), false);
-    assert.deepEqual(meta.get('commit:drawings/my_picture'), { sha: 'def', files: {} });
+    assert.equal(meta.has('commit:.drawings/my-picture'), false);
+    assert.deepEqual(meta.get('commit:.drawings/my_picture'), { sha: 'def', files: {} });
 });
 
 test('renameCommitSnapshot is a quiet no-op when nothing was committed', async () => {

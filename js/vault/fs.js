@@ -34,12 +34,16 @@ const SNAPSHOT_PREFIX = 'commit:';
 /**
  * Project namespaces.
  *
- * `work` deliberately maps to the empty string: it is the original layout, so the
- * programs already on every device keep working with no migration. `drawings` is a
- * new sibling directory. Anything added here needs the same treatment in sync.js,
- * which mirrors it into `work/` and `drawings/` in the repository.
+ * `work` maps to the empty string: it is the original layout, so nothing on a device
+ * needs migrating. `drawings` is a dot-prefixed sibling, because project names
+ * cannot contain a dot: `normalizeProjectName` strips them, so no project can ever
+ * be called `.drawings`. That makes the namespaces structurally incapable of
+ * colliding, rather than relying on a reserved word.
+ *
+ * The name used *inside a repository* is separate and stays readable: `work/` and
+ * `drawings/`, see the repository mapping in sync.js.
  */
-const KIND_DIRS = { work: '', drawings: 'drawings' };
+const KIND_DIRS = { work: '', drawings: '.drawings' };
 
 /**
  * @param {string} kind
