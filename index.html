@@ -886,9 +886,11 @@ print("Hello, World!")</textarea>
                     return;
                 }
                 void flushCurrent().then((saved) => {
-                    if (saved) {
-                        void commitDialog.open(currentFileName);
+                    if (!saved) {
+                        showStatus('That could not be saved, so nothing was sent to GitHub.', 'error');
+                        return;
                     }
+                    void commitDialog.open(currentFileName);
                 });
             },
         });
@@ -1924,54 +1926,40 @@ print("Hello, World!")</textarea>
          * count in the toolbar and the beforeunload warning stay honest. A late
          * answer for a project that is no longer open is dropped.
          */
+        /**
+         * How much local work is not in the last commit this device saw.
+         *
+         * Local only, deliberately. This runs on every save, file switch and
+         * project open, and it decides whether the Commit control exists. Asking
+         * GitHub here meant a failed or rate-limited request painted zero, and
+         * zero hides the control, so "could not ask" looked like "nothing to do".
+         *
+         * Checking the repository belongs to the commit window, which is opened
+         * deliberately, can afford one request, and can say what went wrong.
+         */
         async function refreshCommitState() {
             const token = ++commitStateToken;
-            if (currentFileName === null) {
+            const name = currentFileName;
+
+            if (name === null) {
                 paintCommitState(0);
                 return;
             }
-            const name = currentFileName;
+
             let report = null;
             try {
-                // Prefer the repository-aware preview when there is one. `dirty()`
-                // compares against this device's snapshot of the last commit, so a
-                // file that already matches GitHub — restored from history, or
-                // committed from another device — counts as changed until something
-                // reconciles it. That is why the badge could say "1" while the
-                // dialog said there was nothing to save.
-                report = sync.workspace && typeof sync.previewCommit === 'function'
-                    ? await sync.previewCommit(name)
-                    : await sync.dirty(name);
+                report = await sync.dirty(name);
             } catch {
-                // The repository could not be read, which usually means GitHub is
-                // rate limiting. The local changes are still real, so show those
-                // rather than nothing: a missing Commit button reads as "there is
-                // nothing to save", which is the opposite of the truth.
-                try {
-                    const local = await sync.dirty(name);
-                    if (token === commitStateToken && currentFileName === name) {
-                        paintCommitState(
-                            local && Number.isFinite(local.count) ? local.count : 0,
-                        );
-                    }
-                } catch {
-                    // Leave the last known state rather than guessing.
-                }
+                // The vault itself could not be read. Keep the last number rather
+                // than replacing a real count with a confident zero.
                 return;
             }
+
             if (token !== commitStateToken || currentFileName !== name) {
                 return;
             }
-            // `paths.length` as a fallback, so a report that only lists files still
-            // produces a number rather than a silent zero.
-            const count = report
-                ? Number.isFinite(report.count)
-                    ? report.count
-                    : Array.isArray(report.paths)
-                      ? report.paths.length
-                      : 0
-                : 0;
-            paintCommitState(count);
+
+            paintCommitState(report && Number.isFinite(report.count) ? report.count : 0);
         }
 
         /** Whether the commit dialog ended in a commit, so the status is not misleading. */

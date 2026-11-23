@@ -19,6 +19,7 @@
 import { isReservedPath, normalizeProjectName, safeJoin } from '../vault/paths.js';
 import { confirmAction, promptText } from './dialog.js';
 import { splitDeclared } from '../packages.js';
+import { commitBadge } from '../commit-badge.js';
 
 /** A file name has to stay readable in the rail and on GitHub. */
 const MAX_FILE_NAME = 120;
@@ -609,20 +610,24 @@ export function mountFileRail(root, handlers = {}) {
      * an offer rather than a permanent button that does nothing.
      */
     function renderCommit() {
-        const count = state.uncommitted;
-        // Nothing to commit, or nowhere to commit to: no button, and no
-        // explanation of a button that is not there.
-        const show = state.canCommit && count > 0 && state.project !== null;
-        commitBtn.hidden = !show;
-        discardBtn.hidden = !show;
-        if (!show) {
+        // One rule, shared with its tests: shown only when there is known local
+        // work to commit. "Known" is the point: the count no longer depends on a
+        // network call that can fail and paint zero.
+        const badge = commitBadge({
+            signedIn: state.canCommit,
+            project: state.project,
+            count: state.uncommitted,
+        });
+
+        commitBtn.hidden = !badge.visible;
+        discardBtn.hidden = !badge.visible;
+        if (!badge.visible) {
             return;
         }
 
-        const label = `Commit ${count} ${count === 1 ? 'file' : 'files'} to GitHub`;
-        commitBtn.title = label;
-        commitBtn.setAttribute('aria-label', label);
-        commitBtn.querySelector('.file-rail-commit-count').textContent = String(count);
+        commitBtn.title = badge.title;
+        commitBtn.setAttribute('aria-label', badge.label);
+        commitBtn.querySelector('.file-rail-commit-count').textContent = String(badge.count);
     }
 
     function renderCollapsed() {
