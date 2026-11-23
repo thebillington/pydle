@@ -342,7 +342,10 @@ export function mountFileRail(root, handlers = {}) {
             run(() => handlers.onCommit());
         }
     });
-    foot.append(commitBtn, newBtn);
+    foot.append(commitBtn);
+
+    // Under the files it adds to, so the two read as one thing.
+    body.appendChild(newBtn);
 
     root.append(head, body, libraries, notice, foot);
 

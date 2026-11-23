@@ -1142,6 +1142,16 @@ export function createSync({ onChange } = {}) {
             }
             await vault.writeCommitSnapshot(project, { sha: result.sha, files: nextFiles }, { kind });
 
+            // Files that were already identical to the repository are not in the
+            // commit list, so the snapshot has never recorded them. Re-reading the
+            // preview records them now, which is what stops the count on the save
+            // button and the rail sitting at "1" for something already in GitHub.
+            try {
+                await previewCommit(project, kind);
+            } catch {
+                // Only tidying: a failure here must not report the commit as failed.
+            }
+
             setStatus('connected');
             return { sha: result.sha, message: trimmedMessage };
         } catch (error) {
