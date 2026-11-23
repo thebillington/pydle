@@ -103,6 +103,14 @@
             var root = document.documentElement;
             var meta = document.querySelector('meta[name="theme-color"]');
 
+            /*
+             * Nothing below the splash is shown until boot decides between the
+             * project page and an editor, and the decision has data behind it.
+             * Without this the page painted Home, then the editor, then Home
+             * again, and the project list re-rendered as it loaded.
+             */
+            root.setAttribute('data-booting', '');
+
             function storedMode() {
                 try {
                     var value = localStorage.getItem(KEY);
@@ -123,6 +131,12 @@
             }
 
             apply();
+
+            // If the module fails or stalls, showing the app beats a splash for
+            // ever. Boot clears this on its own, much sooner in practice.
+            setTimeout(function () {
+                root.removeAttribute('data-booting');
+            }, 15000);
 
             var query = window.matchMedia('(prefers-color-scheme: light)');
             var onSchemeChange = function () {
@@ -153,8 +167,32 @@
     <link rel="stylesheet" href="css/dialog.css">
     <link rel="stylesheet" href="css/repl.css">
     <link rel="stylesheet" href="css/theme-switch.css">
+    <style>
+        /* The splash is the only thing painted until boot is done. */
+        html[data-booting] body > :not(#boot-splash) {
+            visibility: hidden;
+        }
+
+        #boot-splash {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            background: var(--bg-primary, #1e1e2e);
+            color: var(--text-secondary, #8b96c9);
+            font-family: var(--font-sans, system-ui, sans-serif);
+            font-size: 15px;
+            letter-spacing: 0.02em;
+            z-index: 100;
+        }
+
+        html:not([data-booting]) #boot-splash {
+            display: none;
+        }
+    </style>
 </head>
 <body>
+    <div id="boot-splash" aria-hidden="true"><span>pydle</span></div>
     <header>
         <h1>pydle <span class="subtitle">python in your browser</span></h1>
         <div class="controls">
@@ -1460,11 +1498,25 @@ print("Hello, World!")</textarea>
             github: Boolean(CONFIG.clientId),
         });
 
+        /**
+         * Show the project page.
+         *
+         * Returns the update so boot can wait for the list before revealing
+         * anything: a splash followed by one settled screen, rather than a
+         * loading state that is replaced a moment later.
+         *
+         * @returns {Promise<void>}
+         */
         function showHome() {
             mainEl.classList.add('is-home');
             homeRoot.hidden = false;
             updateEditorControls();
-            void home.update().then(() => home.focus());
+            return home.update().then(() => home.focus());
+        }
+
+        /** Let the app be seen, once boot has decided what it is showing. */
+        function revealApp() {
+            document.documentElement.removeAttribute('data-booting');
         }
 
         function hideHome() {
@@ -2409,11 +2461,10 @@ print("Hello, World!")</textarea>
             // ever shows canonical names: first the rename of anything stored
             // under the old rule (the snapshot moves with it), then the one-time
             // import of pre-vault copies.
-            // Home is the resting state, so it is painted before anything touches
-            // storage: the app should never show a blank editor while IndexedDB
-            // opens. Home has its own loading state for the list.
-            showHome();
-
+            // Nothing is visible yet: the splash covers the shell from the first
+            // paint. Migrations run first so the project page is only ever shown
+            // with canonical names, and the list is loaded before it appears, so
+            // there is one screen rather than a loading state and then a list.
             await renameStoredProjects();
             await importLegacyFiles();
             await refreshVaultProjects();
@@ -2424,14 +2475,16 @@ print("Hello, World!")</textarea>
             // project to open from this device's history.
             const opened = await openRequestedProject();
             if (!opened) {
-                showHome();
+                await showHome();
             }
 
+            revealApp();
             void startSync();
         }
 
         initWorker();
         void boot().catch((error) => {
+            revealApp();
             // Never leave the app half-started and silent: report it, and still
             // start sync so a signed-in student is not logged out by a failed
             // migration.
