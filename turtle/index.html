@@ -159,10 +159,6 @@
                     <button id="download-btn" class="toolbar-btn" title="Download as .py file">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </button>
-                    <button id="commit-btn" class="toolbar-btn commit-btn" title="Nothing to commit" aria-label="Nothing to commit" aria-haspopup="dialog" disabled>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><line x1="1.5" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22.5" y2="12"/></svg>
-                        <span id="commit-count" class="commit-count" hidden>0</span>
-                    </button>
                     <button id="copy-btn" class="toolbar-btn" title="Copy to clipboard">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
@@ -410,8 +406,6 @@ t.isvisible()      # Is turtle visible?</pre>
         const loadBtn = document.getElementById('load-btn');
         const downloadBtn = document.getElementById('download-btn');
         const copyBtn = document.getElementById('copy-btn');
-        const commitBtn = document.getElementById('commit-btn');
-        const commitCount = document.getElementById('commit-count');
         const switchBtn = document.getElementById('switch-btn');
         const resizeHandle = document.getElementById('resize-handle');
         const canvasPanel = document.querySelector('.canvas-panel');
@@ -701,17 +695,22 @@ t.isvisible()      # Is turtle visible?</pre>
         function paintCommitState(count) {
             const safe = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
             uncommittedNow = safe > 0;
-            commitCount.textContent = safe > 99 ? '99+' : String(safe);
-            commitCount.hidden = safe === 0;
-            commitBtn.classList.toggle('has-changes', safe > 0);
-            commitBtn.disabled = safe === 0;
+            const saveButton = document.getElementById('save-btn');
+            if (saveButton instanceof HTMLElement) {
+                saveButton.classList.toggle(
+                    'has-uncommitted',
+                    safe > 0 && Boolean(sync.workspace),
+                );
+            }
+            const base = sync.workspace ? 'Save and commit (Ctrl+S)' : 'Save (Ctrl+S)';
             const label = safe === 0
-                ? (currentFileName === null
-                    ? 'Nothing to commit'
-                    : 'Nothing to commit in ' + currentFileName)
-                : 'Commit ' + safe + (safe === 1 ? ' uncommitted file' : ' uncommitted files') + ' to GitHub';
-            commitBtn.title = label;
-            commitBtn.setAttribute('aria-label', label);
+                ? base
+                : base + ': ' + safe + (safe === 1 ? ' file' : ' files') + ' not in GitHub yet';
+            const saveButton = document.getElementById('save-btn');
+            if (saveButton instanceof HTMLElement) {
+                saveButton.title = label;
+                saveButton.setAttribute('aria-label', label);
+            }
         }
 
         /** Ask the vault what this drawing has not committed, then repaint. */
@@ -748,15 +747,6 @@ t.isvisible()      # Is turtle visible?</pre>
             },
         });
 
-        commitBtn.addEventListener('click', async () => {
-            if (currentFileName === null) {
-                return;
-            }
-            if (!(await flush())) {
-                return;
-            }
-            void commitDialog.open(currentFileName);
-        });
 
         /* ---- Drawings list ------------------------------------------------ */
 

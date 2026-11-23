@@ -414,7 +414,7 @@ export function mountHistory(root, sync, { onLoadVersion } = {}) {
                 stateLine(
                     'history-empty',
                     project
-                        ? 'No commits yet. Commit this project to start its history.'
+                        ? 'Nothing here yet. Save this project to GitHub to start its history.'
                         : 'Open a project to see its history.',
                 ),
             );

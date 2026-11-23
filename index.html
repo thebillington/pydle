@@ -249,7 +249,7 @@ print("Hello, World!")</textarea>
                 <h3>Keyboard shortcuts</h3>
                 <ul>
                     <li><strong>Ctrl+Enter</strong>: run your code</li>
-                    <li><strong>Ctrl+S</strong>: commit your work to GitHub</li>
+                    <li><strong>Ctrl+S</strong>: save, and put a copy in GitHub</li>
                     <li><strong>Ctrl+F</strong>: find text</li>
                     <li><strong>Ctrl+H</strong>: find and replace</li>
                     <li><strong>Ctrl+/</strong>: add or remove a comment</li>
@@ -1034,8 +1034,16 @@ print("Hello, World!")</textarea>
             worker.postMessage({ type: 'init' });
         }
 
-        function runCode() {
+        async function runCode() {
             if (!workerReady) return;
+
+            // Running means "keep this". Save to the device only: opening the
+            // commit dialog every time a student presses Run would be noise, and
+            // committing is for when they mean to publish it.
+            if (currentFileName !== null && currentPath !== null) {
+                await flushCurrent();
+            }
+
             clearErrorLine();
             const code = editor.getValue();
             worker.postMessage({ type: 'run', code });
@@ -1146,7 +1154,7 @@ print("Hello, World!")</textarea>
             onCommitted: (result) => {
                 const count = result.paths.length;
                 showStatus(
-                    'Committed ' + count + (count === 1 ? ' file' : ' files') + ' to GitHub',
+                    'Saved ' + count + (count === 1 ? ' file' : ' files') + ' to GitHub',
                     'ready',
                 );
                 void refreshCommitState();

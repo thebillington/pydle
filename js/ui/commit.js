@@ -160,7 +160,7 @@ export function mountCommit(root, sync, handlers = {}) {
 
     const header = el('div', 'overlay-header');
     const heading = el('div', 'commit-heading');
-    const title = el('h2', '', 'Commit your work');
+    const title = el('h2', '', 'Save to GitHub');
     title.id = titleId;
     const projectLine = el('p', 'commit-project', '');
     projectLine.id = projectId;
@@ -230,7 +230,7 @@ export function mountCommit(root, sync, handlers = {}) {
      * @returns {string}
      */
     function submitLabel(count) {
-        return count === 1 ? 'Commit 1 file' : `Commit ${count} files`;
+        return count === 1 ? 'Save 1 file' : `Save ${count} files`;
     }
 
     function readyToSubmit() {
@@ -246,7 +246,7 @@ export function mountCommit(root, sync, handlers = {}) {
         const count = state.selected.size;
 
         if (submitBtn) {
-            submitBtn.textContent = state.busy ? 'Committing\u2026' : submitLabel(count);
+            submitBtn.textContent = state.busy ? 'Saving\u2026' : submitLabel(count);
             submitBtn.disabled = !readyToSubmit();
         }
 
@@ -340,7 +340,7 @@ export function mountCommit(root, sync, handlers = {}) {
     function renderClean() {
         const section = el('section', 'commit-section commit-empty');
         section.append(
-            el('p', 'sync-lede', 'Nothing to commit.'),
+            el('p', 'sync-lede', 'Nothing to save.'),
             (() => {
                 const line = el('p', 'sync-text');
                 line.append(aroundProjectName('', ' has no uncommitted changes.'));
@@ -389,14 +389,14 @@ export function mountCommit(root, sync, handlers = {}) {
             // without committing deletes nothing, so it should not be styled as a
             // destructive action.
             const guard = el('p', 'commit-guard');
-            guard.append(aroundProjectName('', ' has uncommitted changes. Commit them before you go, or '));
-            const leave = el('button', 'commit-guard-link', 'leave without committing');
+            guard.append(aroundProjectName('', ' has unsaved changes. Save them before you go, or '));
+            const leave = el('button', 'commit-guard-link', 'leave without saving');
             leave.type = 'button';
             leave.disabled = Boolean(state.busy);
             leave.title = 'Your files stay on this device. Nothing is deleted.';
             leave.setAttribute(
                 'aria-label',
-                'Leave without committing. Your files stay on this device.',
+                'Leave without saving. Your files stay on this device.',
             );
             leave.addEventListener('click', () => finish('discarded'));
             guard.append(leave, document.createTextNode(' and carry on.'));
@@ -469,7 +469,7 @@ export function mountCommit(root, sync, handlers = {}) {
         messageSection.append(
             messageLabel,
             messageInput,
-            el('p', 'commit-hint', 'A short note about what changed, and why.'),
+            el('p', 'commit-hint', 'A short note about what changed, and why. This becomes one commit in your repository.'),
         );
         body.append(messageSection);
 
