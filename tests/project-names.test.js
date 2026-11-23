@@ -145,3 +145,30 @@ test('editedLabel describes recent dates in plain words', () => {
     assert.equal(editedLabel(0), '');
     assert.equal(editedLabel(Number.NaN), '');
 });
+
+test('typing a project name one character at a time keeps the separator', async () => {
+    const { liveProjectName, validateProjectName } = await import('../js/ui/home.js');
+
+    // The bug: the strict transform trimmed on every keystroke, so "my " became
+    // "my" and the words ran together into "myproject".
+    let typed = '';
+    for (const char of 'my project') {
+        typed = liveProjectName(typed + char);
+    }
+    assert.equal(typed, 'my_project');
+
+    // And the strict rule still produces the same name on submit.
+    const check = validateProjectName(typed);
+    assert.equal(check.ok, true);
+    assert.equal(check.name, 'my_project');
+});
+
+test('typing a file name does not eat the dot as you type', async () => {
+    const { liveFileName } = await import('../js/ui/home.js');
+
+    let typed = '';
+    for (const char of 'my drawing.py') {
+        typed = liveFileName(typed + char);
+    }
+    assert.equal(typed, 'my_drawing.py');
+});

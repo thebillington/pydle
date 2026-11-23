@@ -37,6 +37,42 @@ export { MAX_PROJECT_NAME };
  * @param {unknown} raw
  * @returns {string}
  */
+/**
+ * The live version of {@link toSnakeCase}, for use while typing.
+ *
+ * The strict version trims trailing separators, which is right on submit but wrong
+ * on every keystroke: typing "my project" passes through "my ", which trimmed to
+ * "my", so the space vanished and the next letter ran the words together into
+ * "myproject". This keeps a trailing separator until there is a character after it.
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+export function liveProjectName(raw) {
+    return String(raw ?? '')
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_')
+        .replace(/[^a-z0-9_]/g, '')
+        .replace(/_+/g, '_')
+        .slice(0, MAX_PROJECT_NAME);
+}
+
+/**
+ * The live version of {@link toSnakeFileName}, for use while typing.
+ *
+ * Only lowercases and turns spaces into underscores, so a half-typed ".py" is not
+ * mangled on the way in. The strict version validates on submit.
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+export function liveFileName(raw) {
+    return String(raw ?? '')
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_.]/g, '');
+}
+
 export function toSnakeCase(raw) {
     try {
         return normalizeProjectName(String(raw ?? ''));
@@ -543,7 +579,7 @@ export function mountHome(root, options) {
                 value: suggested,
                 confirmLabel: 'Continue',
                 hint: 'Lowercase letters, numbers and underscores, for example my_first_project.',
-                transform: toSnakeCase,
+                transform: liveProjectName,
                 preview: (value) => {
                     const check = validateProjectName(value);
                     return check.ok ? 'Project: ' + check.name : '';
@@ -573,7 +609,7 @@ export function mountHome(root, options) {
                 value: 'main.py',
                 confirmLabel: 'Create project',
                 hint: 'Snake case, ending in .py. The first file starts with a small example.',
-                transform: toSnakeFileName,
+                transform: liveFileName,
                 preview: (value) => {
                     const check = validateStarterFileName(value);
                     return check.ok ? 'File: ' + check.name : '';

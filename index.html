@@ -717,6 +717,15 @@ print("Hello, World!")</textarea>
         function markDirty() {
             const code = editor.getValue();
             dirty = code !== lastSavedCode;
+
+            // The warning on tab close is driven by `uncommittedNow`, which is
+            // refreshed from the commit snapshot. Typing does not change that
+            // snapshot, so without this a student could commit, type, and lose the
+            // new lines with no browser prompt at all.
+            if (dirty) {
+                uncommittedNow = true;
+            }
+
             updateFileIndicator();
         }
 
@@ -1596,6 +1605,19 @@ print("Hello, World!")</textarea>
             if (!uncommitted) {
                 return true;
             }
+            // With no repository there is nothing to commit to, so a commit dialog
+            // would be a dead end with a disabled primary button. Ask plainly.
+            if (!sync.workspace) {
+                return confirmAction({
+                    title: 'Unsaved changes',
+                    message:
+                        'This project has changes that are not saved as a commit. ' +
+                        'Leave them and carry on? Nothing is deleted, and your work stays on this device.',
+                    confirmLabel: 'Leave without committing',
+                    danger: true,
+                });
+            }
+
             const outcome = await commitDialog.open(currentFileName, { leaving: true });
             return outcome !== 'cancelled';
         }
