@@ -654,6 +654,7 @@ print("Hello, World!")</textarea>
                 updateFileIndicator();
                 updateEditorControls();
                 void refreshRail();
+                void refreshCommitState();
                 history.close();
                 showStatus('Loaded an earlier version of ' + path + '. Save and commit it when ready.', 'ready');
             },
@@ -1767,7 +1768,15 @@ print("Hello, World!")</textarea>
             const name = currentFileName;
             let report = null;
             try {
-                report = await sync.dirty(name);
+                // Prefer the repository-aware preview when there is one. `dirty()`
+                // compares against this device's snapshot of the last commit, so a
+                // file that already matches GitHub — restored from history, or
+                // committed from another device — counts as changed until something
+                // reconciles it. That is why the badge could say "1" while the
+                // dialog said there was nothing to save.
+                report = sync.workspace && typeof sync.previewCommit === 'function'
+                    ? await sync.previewCommit(name)
+                    : await sync.dirty(name);
             } catch {
                 // Keep the last known state rather than guessing at the count.
                 return;
