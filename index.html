@@ -312,6 +312,7 @@ print("Hello, World!")</textarea>
         import { mountHistory } from './js/ui/history.js';
         import { confirmAction, notify, promptText } from './js/ui/dialog.js';
         import { mountLibraries } from './js/ui/libraries.js';
+        import { createExplainer } from './js/explainer.js';
         import { addPackage, parseRequirements, removePackage } from './js/packages.js';
         import { importLegacyProjects } from './js/vault/legacy.js';
         import { normalizeProjectName } from './js/vault/paths.js';
@@ -1549,17 +1550,14 @@ print("Hello, World!")</textarea>
         async function explainError(detail, code) {
             try {
                 if (explainerReady === null) {
-                    explainerReady = (async () => {
-                        const mod = await import(
-                            './vendor/python-friendly-error-messages/index.browser.js'
-                        );
-                        await mod.loadCopydeckFor(navigator.language || 'en');
-                        mod.registerAdapter('pyodide', mod.cpythonAdapter);
-                        return mod;
-                    })();
+                    explainerReady = createExplainer({
+                        load: () =>
+                            import('./vendor/python-friendly-error-messages/index.browser.js'),
+                        language: navigator.language || 'en',
+                    });
                 }
-                const mod = await explainerReady;
-                return mod.friendlyExplain({
+                const explainer = await explainerReady;
+                return explainer.explain({
                     error: detail,
                     code,
                     runtime: 'pyodide',

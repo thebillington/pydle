@@ -279,6 +279,24 @@ They call `sync` and read `sync.status`; they never import from `js/github/`.
 - Multi-file bulk import, folder upload.
 - The classroom layer — see Appendix A of PLAN.md.
 
+## Error explanations
+
+`vendor/python-friendly-error-messages/` is the RPF explainer, unmodified. It
+explains by exception type, and its `TypeError` entry has one variant with no
+condition, so every TypeError is described as joining text and a number. That is
+wrong for most of them, including numpy's 32-bit cast refusal.
+
+`js/explainer.js` gives that one variant the `if.match_message` condition the
+library already supports, then loads the corrected deck through the library's own
+`loadCopydeck` hook. The words stay the library's; only the condition is added.
+When the message does not match, `friendlyExplain` returns null and the error
+block shows Python's own sentence, which is better than a confident wrong answer.
+
+If the vendored file is updated and the variant is renamed, the patch quietly
+does nothing and the old behaviour returns. `tests/explainer.test.js` runs the real
+vendored deck against a numpy cast traceback, so that shows up as a failing test
+rather than as a misleading message in front of a student.
+
 ## Libraries
 
 A project's libraries are whatever `requirements.txt` names. The Libraries dialog in
