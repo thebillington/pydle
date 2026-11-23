@@ -65,11 +65,22 @@ This approach keeps the app portable and lets normal turtle programs run in the 
 
 This repo is designed to be deployed as a static GitHub Pages site.
 
-- `main` contains the source
-- `gh-pages` contains the published site
+- `main` is the source, and GitHub Pages builds from it at the repository root
+- there is no separate publish branch: a push to `main` deploys
 - `CNAME` points the site at `pydle.uk`
 
 The published site is just static HTML, CSS, JavaScript, and vendored runtime assets. No build step is required.
+
+## Deploying your own copy
+
+pydle is MIT licensed and static, with no build step, so a school can publish its
+own copy that does not depend on `pydle.uk`. Fork the repository, delete the
+`CNAME` file, and turn on GitHub Pages for `main`.
+
+GitHub sync is the only part that needs configuration of your own: a GitHub OAuth
+App with device flow enabled, and a Cloudflare Worker that adds CORS to GitHub's
+OAuth endpoints. Step by step instructions, including what breaks without it, are
+in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Local Development
 

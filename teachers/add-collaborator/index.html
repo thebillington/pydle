@@ -272,9 +272,9 @@
         </div>
 
         <form class="picker" id="picker" hidden>
-            <label for="teacher">Teacher's GitHub username</label>
+            <label for="teacher">Enter your GitHub username to make a sheet you can share</label>
             <div class="row">
-                <input id="teacher" name="username" type="text" placeholder="e.g. thebillington" autocomplete="off" spellcheck="false">
+                <input id="teacher" name="username" type="text" placeholder="e.g. thebillington" autocomplete="off" spellcheck="false" autofocus>
                 <button type="submit">Make the sheet</button>
             </div>
             <p class="error" id="picker-error" hidden></p>
@@ -313,6 +313,7 @@
     <script>
         (function () {
             var USERNAME = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+            var STORE = 'pydle_teacher_username';
             var params = new URLSearchParams(window.location.search);
             var raw = params.get('username') || params.get('teacher') || params.get('u') || '';
             var name = raw.trim().replace(/^@/, '');
@@ -323,6 +324,7 @@
             var whoName = document.getElementById('who-name');
             var stepTeacher = document.getElementById('step-teacher');
             var pageTitle = document.getElementById('page-title');
+            var printBtn = document.getElementById('print-btn');
 
             function apply(value) {
                 whoName.textContent = '@' + value;
@@ -331,16 +333,37 @@
                 document.title = 'Add @' + value + ' to your pydle repository';
             }
 
-            if (name) {
-                if (USERNAME.test(name)) {
-                    apply(name);
-                } else {
+            function remember(value) {
+                try {
+                    window.localStorage.setItem(STORE, value);
+                } catch (error) {
+                    // A blocked store only costs the next visit the prompt.
+                }
+            }
+
+            function recall() {
+                try {
+                    return window.localStorage.getItem(STORE) || '';
+                } catch (error) {
+                    return '';
+                }
+            }
+
+            if (name && USERNAME.test(name)) {
+                apply(name);
+                remember(name);
+            } else {
+                if (name) {
                     errorNode.textContent = 'That is not a GitHub username. Check the spelling and try again.';
                     errorNode.hidden = false;
-                    picker.hidden = false;
                 }
-            } else {
+                var stored = recall();
+                if (stored && USERNAME.test(stored)) {
+                    apply(stored);
+                    input.value = stored;
+                }
                 picker.hidden = false;
+                input.focus();
             }
 
             picker.addEventListener('submit', function (event) {
@@ -354,13 +377,14 @@
                 }
                 errorNode.hidden = true;
                 apply(value);
+                remember(value);
                 var url = new URL(window.location.href);
                 url.searchParams.set('username', value);
                 window.history.replaceState(null, '', url);
-                document.getElementById('print-btn').focus();
+                printBtn.focus();
             });
 
-            document.getElementById('print-btn').addEventListener('click', function () {
+            printBtn.addEventListener('click', function () {
                 window.print();
             });
         })();
