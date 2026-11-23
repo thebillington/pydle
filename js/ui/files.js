@@ -282,6 +282,7 @@ function storeCollapsed(collapsed) {
  *   onCreate?: (name: string) => void | Promise<void>,
  *   onRename?: (from: string, to: string) => void | Promise<void>,
  *   onDelete?: (path: string) => void | Promise<void>,
+ *   onRemoveLibrary?: (name: string) => void | Promise<void>,
  *   onHome?: () => void,
  *   onAddLibrary?: () => void,
  * }} [handlers]
@@ -714,6 +715,17 @@ export function mountFileRail(root, handlers = {}) {
                     library +
                     ' is not one of the libraries pydle offers, so it is not loaded.';
             }
+
+            // Removing is the counterpart to Add, and it belongs on the row it
+            // removes. Reversible by ticking the box again, so it asks nothing.
+            const removeBtn = el('button', 'file-rail-library-remove', '\u00d7');
+            removeBtn.type = 'button';
+            removeBtn.title = 'Remove ' + library + ' from this project';
+            removeBtn.setAttribute('aria-label', 'Remove ' + library + ' from this project');
+            removeBtn.addEventListener('click', () => {
+                run(() => handlers.onRemoveLibrary && handlers.onRemoveLibrary(library));
+            });
+            item.append(removeBtn);
 
             librariesList.appendChild(item);
         }

@@ -1365,7 +1365,7 @@ export function createSync({ onChange } = {}) {
         // the dialog still works with nothing behind it.
         const localOnly = async () => {
             const only = await dirty(name, kind);
-            return { ...only, conflicts: [], pulled: [], headSha: null };
+            return { ...only, count: only.paths.length, conflicts: [], pulled: [], headSha: null };
         };
 
         if (!workspace) {
@@ -1438,8 +1438,13 @@ export function createSync({ onChange } = {}) {
             }
         }
 
+        const changed = refined.filter((entry) => entry.status !== 'unchanged');
+
         return {
-            paths: refined.filter((entry) => entry.status !== 'unchanged'),
+            paths: changed,
+            // The same shape `dirty()` returns, because the callers that only want
+            // a number should not have to know which of the two they are holding.
+            count: changed.length,
             conflicts: reconciled.conflicts,
             pulled: reconciled.applied,
             headSha: reconciled.headSha,

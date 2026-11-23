@@ -744,6 +744,18 @@ print("Hello, World!")</textarea>
                 }
                 void librariesDialog.open();
             },
+            onRemoveLibrary: async (name) => {
+                if (currentFileName === null) {
+                    return;
+                }
+                try {
+                    const text = await readRequirements();
+                    await writeRequirements(removePackage(text, name));
+                    showStatus('Removed ' + name + ' from this project.', 'ready');
+                } catch {
+                    showStatus('Could not remove ' + name, 'error');
+                }
+            },
             onDiscard: async () => {
                 if (currentFileName === null) {
                     return;
@@ -1918,7 +1930,16 @@ print("Hello, World!")</textarea>
             if (token !== commitStateToken || currentFileName !== name) {
                 return;
             }
-            paintCommitState(report && Number.isFinite(report.count) ? report.count : 0);
+            // `paths.length` as a fallback, so a report that only lists files still
+            // produces a number rather than a silent zero.
+            const count = report
+                ? Number.isFinite(report.count)
+                    ? report.count
+                    : Array.isArray(report.paths)
+                      ? report.paths.length
+                      : 0
+                : 0;
+            paintCommitState(count);
         }
 
         /** Whether the commit dialog ended in a commit, so the status is not misleading. */
