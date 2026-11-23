@@ -281,9 +281,12 @@ export function mountCommit(root, sync, handlers = {}) {
     /* Rendering --------------------------------------------------------- */
 
     /**
-     * The project name as a name: a slug in monospace, so a sentence cannot read as
-     * if the project were a place. "spiral has uncommitted changes", not "changes in
-     * spiral".
+     * The project name, presented so it cannot be mistaken for a word in the
+     * sentence: quoted, and in monospace.
+     *
+     * A student names a project after their own work, so the text in this slot is
+     * arbitrary. Quoting it is the difference between "“house” has changes…" and a
+     * reader wondering whether a house is a thing the app knows about.
      *
      * @returns {HTMLElement}
      */
@@ -301,7 +304,13 @@ export function mountCommit(root, sync, handlers = {}) {
      */
     function aroundProjectName(before, after) {
         const fragment = document.createDocumentFragment();
-        fragment.append(document.createTextNode(before), projectName(), document.createTextNode(after));
+        fragment.append(
+            document.createTextNode(before),
+            document.createTextNode('\u201c'),
+            projectName(),
+            document.createTextNode('\u201d'),
+            document.createTextNode(after),
+        );
         return fragment;
     }
 
