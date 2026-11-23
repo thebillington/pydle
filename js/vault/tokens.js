@@ -120,3 +120,51 @@ export async function loadTokens() {
 export async function clearTokens() {
     await runAuth('readwrite', (store) => store.delete(TOKENS_KEY));
 }
+
+/**
+ * The repository this device was last connected to.
+ *
+ * Kept separately from the tokens so a failed sign-in check cannot look like a
+ * sign-out. When GitHub is rate limiting, `connect()` cannot verify the account;
+ * without this, the page has no workspace, the commit button disappears and the
+ * only visible explanation is an error, which reads as "you are logged out".
+ */
+const WORKSPACE_KEY = 'workspace';
+
+/**
+ * @param {{ owner: string, repo: string, branch: string }} workspace
+ * @returns {Promise<void>}
+ */
+export async function saveWorkspace(workspace) {
+    await runAuth('readwrite', (store) =>
+        store.put(
+            {
+                owner: workspace.owner,
+                repo: workspace.repo,
+                branch: workspace.branch,
+                savedAt: Date.now(),
+            },
+            WORKSPACE_KEY,
+        ),
+    );
+}
+
+/**
+ * @returns {Promise<{ owner: string, repo: string, branch: string } | null>}
+ */
+export async function loadWorkspace() {
+    const record = await runAuth('readonly', (store) => store.get(WORKSPACE_KEY));
+    if (!record || typeof record.owner !== 'string' || typeof record.repo !== 'string') {
+        return null;
+    }
+    return {
+        owner: record.owner,
+        repo: record.repo,
+        branch: typeof record.branch === 'string' ? record.branch : 'main',
+    };
+}
+
+/** @returns {Promise<void>} */
+export async function clearWorkspace() {
+    await runAuth('readwrite', (store) => store.delete(WORKSPACE_KEY));
+}

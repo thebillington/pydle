@@ -17,7 +17,14 @@ import { GitHubError, ghFetch } from './github/http.js';
 import { createRepo, getRef, getRepo, getUser } from './github/git-data.js';
 import { bootstrapRepo } from './github/scaffold.js';
 import { ConflictError, commitFiles } from './github/commit.js';
-import { clearTokens, loadTokens, saveTokens } from './vault/tokens.js';
+import {
+    clearTokens,
+    clearWorkspace,
+    loadTokens,
+    loadWorkspace,
+    saveTokens,
+    saveWorkspace,
+} from './vault/tokens.js';
 import * as vault from './vault/fs.js';
 import { LEGACY_PREFIX } from './vault/legacy.js';
 import { normalizeProjectName, safeJoin } from './vault/paths.js';
@@ -564,6 +571,20 @@ export function createSync({ onChange } = {}) {
                 return;
             }
 
+            // Optimistic, from the last successful connection. It is corrected
+            // below if the repository has gone, but it means a boot that cannot
+            // reach GitHub keeps the workspace instead of looking signed out.
+            if (!workspace) {
+                try {
+                    const remembered = await loadWorkspace();
+                    if (remembered) {
+                        workspace = remembered;
+                    }
+                } catch {
+                    // No stored workspace: the network check below decides.
+                }
+            }
+
             user = await withToken((token) => getUser({ token }));
             console.info('[pydle] connect: signed in as', user.login);
 
@@ -574,6 +595,7 @@ export function createSync({ onChange } = {}) {
 
                 if (!repo) {
                     workspace = null;
+                    await clearWorkspace();
                 } else {
                     const usable = await withToken((token) =>
                         isWorkspaceRepo(token, user.login, REPO_NAME, repo.default_branch, repo.size),
@@ -581,6 +603,7 @@ export function createSync({ onChange } = {}) {
 
                     if (!usable) {
                         workspace = null;
+                        await clearWorkspace();
                     } else {
                         workspace = {
                             owner: user.login,
@@ -597,6 +620,7 @@ export function createSync({ onChange } = {}) {
                                 branch: workspace.branch,
                             }),
                         );
+                        await saveWorkspace(workspace);
                     }
                 }
             } catch (error) {
@@ -744,6 +768,7 @@ export function createSync({ onChange } = {}) {
     /** Forget this device. Local work is untouched. */
     async function disconnect() {
         await clearTokens();
+        await clearWorkspace();
         // Do not let an in-flight attempt resurrect a token after signing out.
         refreshInFlight = null;
         connectInFlight = null;
