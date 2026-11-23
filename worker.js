@@ -25,13 +25,81 @@ async function init() {
     }
 }
 
-async function runCode(code) {
+/**
+ * Where the project's files are written inside Pyodide's virtual filesystem.
+ *
+ * Python can only import a module that exists on disk, and until now the only thing
+ * on disk was the string handed to `runPythonAsync`. A project with `person.py`
+ * therefore could not `import person`, which is the whole point of a multi-file
+ * project.
+ */
+const WORK_ROOT = '/home/pyodide/work';
+
+/**
+ * Write the project's files where Python can import them.
+ *
+ * The directory is emptied every run so an edited module is picked up rather than a
+ * cached one, and any module previously imported from it is dropped from
+ * `sys.modules` for the same reason.
+ *
+ * @param {Record<string, string>} files Path relative to the project, to text.
+ */
+function prepareFiles(files) {
+    pyodide.runPython(`
+import os, shutil, sys
+_root = '${WORK_ROOT}'
+for _name in [n for n, m in list(sys.modules.items())
+              if getattr(m, '__file__', None) and str(m.__file__).startswith(_root)]:
+    del sys.modules[_name]
+shutil.rmtree(_root, ignore_errors=True)
+os.makedirs(_root, exist_ok=True)
+`);
+
+    const entries = [];
+    const directories = new Set();
+
+    for (const [path, content] of Object.entries(files || {})) {
+        const segments = String(path).split('/').filter(Boolean);
+        if (segments.length === 0) {
+            continue;
+        }
+        if (segments.length > 1) {
+            directories.add([WORK_ROOT, ...segments.slice(0, -1)].join('/'));
+        }
+        entries.push([`${WORK_ROOT}/${segments.join('/')}`, String(content ?? '')]);
+    }
+
+    // Directories first, through Python, because that is the API proven to work here.
+    if (directories.size > 0) {
+        pyodide.runPython(`
+import os
+for _dir in ${JSON.stringify([...directories])}:
+    os.makedirs(_dir, exist_ok=True)
+`);
+    }
+
+    for (const [fullPath, content] of entries) {
+        pyodide.FS.writeFile(fullPath, content, { encoding: 'utf8' });
+    }
+
+    pyodide.runPython(`
+import os, sys, importlib
+_root = '${WORK_ROOT}'
+os.chdir(_root)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+importlib.invalidate_caches()
+`);
+}
+
+async function runCode(code, files) {
     if (running) return;
     running = true;
 
     self.postMessage({ type: 'running' });
 
     try {
+        prepareFiles(files);
         await pyodide.runPythonAsync(code);
     } catch (err) {
         if (err.message !== 'Execution stopped') {
@@ -109,7 +177,7 @@ self.onmessage = async function (e) {
             await init();
             break;
         case 'run':
-            await runCode(e.data.code);
+            await runCode(e.data.code, e.data.files);
             break;
         case 'stop':
             stopCode();

@@ -1464,7 +1464,15 @@ print("Hello, World!")</textarea>
             clearErrorLine();
             const code = editor.getValue();
             lastRunCode = code;
-            worker.postMessage({ type: 'run', code });
+
+            // Every file in the project goes with the run, so `import person` works
+            // for a file the student wrote in another tab of the same project. The
+            // buffer being run wins over whatever was last written to the vault.
+            const files = { ...projectFiles };
+            if (currentPath !== null) {
+                files[currentPath] = code;
+            }
+            worker.postMessage({ type: 'run', code, files });
         }
 
         function stopCode() {
