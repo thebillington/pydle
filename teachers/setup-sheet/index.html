@@ -165,12 +165,21 @@
         }
 
         @media print {
+            html,
+            body {
+                height: 100%;
+            }
+
             body {
                 font-size: 9.2pt;
                 line-height: 1.32;
             }
 
             main.sheet {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                min-height: 100%;
                 max-width: none;
                 padding: 0;
             }

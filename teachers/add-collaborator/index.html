@@ -196,12 +196,21 @@
         }
 
         @media print {
+            html,
+            body {
+                height: 100%;
+            }
+
             body {
                 font-size: 10.5pt;
                 line-height: 1.38;
             }
 
             main.sheet {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                min-height: 100%;
                 max-width: none;
                 padding: 0;
             }
@@ -352,6 +361,7 @@
             if (name && USERNAME.test(name)) {
                 apply(name);
                 remember(name);
+                picker.remove();
             } else {
                 if (name) {
                     errorNode.textContent = 'That is not a GitHub username. Check the spelling and try again.';
