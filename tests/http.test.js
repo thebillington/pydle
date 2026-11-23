@@ -1,62 +1,175 @@
-import { test } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { CONFIG } from '../js/config.js';
 import { ghFetch, GitHubError } from '../js/github/http.js';
 
-const original = globalThis.fetch;
+/**
+ * Replace globalThis.fetch for one test and record every call.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {(url: string, options: object, index: number) => object} handler
+ * @returns {Array<{ url: string, options: any }>}
+ */
+function stubFetch(t, handler) {
+    const original = globalThis.fetch;
+    const calls = [];
 
-function stub(fn) {
-    globalThis.fetch = fn;
+    globalThis.fetch = async (url, options = {}) => {
+        calls.push({ url, options });
+        return handler(url, options, calls.length - 1);
+    };
+
+    t.after(() => {
+        globalThis.fetch = original;
+    });
+
+    return calls;
 }
 
-test('a request that never answers becomes an error, not a wait for ever', async () => {
-    // A dropped connection leaves fetch pending. That is what made the commit
-    // window sit on "Checking for changes" indefinitely, so the wait is bounded.
-    stub((url, options) =>
+/**
+ * A minimal Response stand-in: ghFetch only reads `ok`, `status` and `text()`.
+ *
+ * @param {unknown} body
+ * @param {number} [status]
+ * @returns {object}
+ */
+function response(body, status = 200) {
+    return {
+        ok: status >= 200 && status < 300,
+        status,
+        text: async () => {
+            if (body === null) {
+                return '';
+            }
+            return typeof body === 'string' ? body : JSON.stringify(body);
+        },
+    };
+}
+
+test('ghFetch sets Authorization, Accept and the pinned API version', async (t) => {
+    const calls = stubFetch(t, () => response({ login: 'octocat' }));
+
+    await ghFetch('/user', { token: 'tok-123' });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, `${CONFIG.apiBase}/user`);
+    assert.equal(calls[0].options.method, 'GET');
+
+    const headers = calls[0].options.headers;
+    assert.equal(headers.Authorization, 'Bearer tok-123');
+    assert.equal(headers.Accept, 'application/vnd.github+json');
+    assert.equal(headers['X-GitHub-Api-Version'], CONFIG.apiVersion);
+    assert.equal(headers['X-GitHub-Api-Version'], '2026-03-10');
+});
+
+test('ghFetch encodes an object body as JSON and passes strings through', async (t) => {
+    const calls = stubFetch(t, () => response({ sha: 'abc' }));
+
+    await ghFetch('/repos/o/r/git/blobs', {
+        token: 'tok',
+        method: 'POST',
+        body: { content: 'print(1)', encoding: 'utf-8' },
+    });
+
+    assert.equal(calls[0].options.method, 'POST');
+    assert.equal(calls[0].options.headers['Content-Type'], 'application/json');
+    assert.deepEqual(JSON.parse(calls[0].options.body), { content: 'print(1)', encoding: 'utf-8' });
+
+    await ghFetch('/repos/o/r/git/blobs', { token: 'tok', method: 'POST', body: '{"raw":true}' });
+
+    assert.equal(calls[1].options.body, '{"raw":true}');
+});
+
+test('ghFetch returns parsed JSON', async (t) => {
+    stubFetch(t, () => response({ default_branch: 'trunk', private: true }));
+
+    const repo = await ghFetch('/repos/o/r', { token: 'tok' });
+
+    assert.deepEqual(repo, { default_branch: 'trunk', private: true });
+});
+
+test('a 401 becomes a GitHubError with isAuthError set', async (t) => {
+    stubFetch(t, () => response({ message: 'Bad credentials' }, 401));
+
+    await assert.rejects(
+        () => ghFetch('/user', { token: 'stale' }),
+        (error) => {
+            assert.ok(error instanceof GitHubError);
+            assert.equal(error.status, 401);
+            assert.equal(error.isAuthError, true);
+            assert.deepEqual(error.body, { message: 'Bad credentials' });
+            assert.match(error.message, /Bad credentials/);
+            return true;
+        },
+    );
+});
+
+test('non-auth failures are not marked as auth errors', async (t) => {
+    stubFetch(t, () => response({ message: 'Not Found' }, 404));
+
+    await assert.rejects(
+        () => ghFetch('/repos/o/missing', { token: 'tok' }),
+        (error) => {
+            assert.ok(error instanceof GitHubError);
+            assert.equal(error.status, 404);
+            assert.equal(error.isAuthError, false);
+            return true;
+        },
+    );
+});
+
+test('204 and empty bodies return null', async (t) => {
+    stubFetch(t, (url, options, index) => (index === 0 ? response(null, 204) : response('', 200)));
+
+    assert.equal(await ghFetch('/user', { token: 'tok' }), null);
+    assert.equal(await ghFetch('/user', { token: 'tok' }), null);
+});
+
+test('a request that never answers fails instead of waiting for ever', async (t) => {
+    // A dropped connection leaves fetch pending, which left the commit window on
+    // "Checking for changes" with no way out. The wait is bounded instead.
+    const original = globalThis.fetch;
+    globalThis.fetch = (url, options) =>
         new Promise((resolve, reject) => {
             options.signal.addEventListener('abort', () => reject(options.signal.reason));
-        }),
-    );
+        });
+    t.after(() => {
+        globalThis.fetch = original;
+    });
 
     // Node's timeout signals use unref'd timers, so hold the loop open or the
     // runner decides the test is done before the timeout can fire.
     const keepAlive = setTimeout(() => {}, 2000);
     try {
-        await assert.rejects(() => ghFetch('/user', { timeoutMs: 40 }), (error) => {
-            assert.ok(error instanceof GitHubError);
-            assert.equal(error.status, 0);
-            assert.match(error.message, /did not answer in time/);
-            return true;
-        });
+        await assert.rejects(
+            () => ghFetch('/user', { token: 'tok', timeoutMs: 40 }),
+            (error) => {
+                assert.ok(error instanceof GitHubError);
+                assert.equal(error.status, 0);
+                assert.match(error.message, /did not answer in time/);
+                return true;
+            },
+        );
     } finally {
         clearTimeout(keepAlive);
     }
 });
 
-test('a network failure is reported as a connection problem', async () => {
-    stub(() => Promise.reject(new TypeError('Failed to fetch')));
-
-    await assert.rejects(() => ghFetch('/user'), (error) => {
-        assert.ok(error instanceof GitHubError);
-        assert.equal(error.status, 0);
-        assert.match(error.message, /could not be reached/);
-        return true;
+test('a network failure is reported as a connection problem', async (t) => {
+    const original = globalThis.fetch;
+    globalThis.fetch = () => Promise.reject(new TypeError('Failed to fetch'));
+    t.after(() => {
+        globalThis.fetch = original;
     });
-});
 
-test('a 401 still marks itself as an auth error', async () => {
-    stub(async () => new Response(JSON.stringify({ message: 'Bad credentials' }), { status: 401 }));
-
-    await assert.rejects(() => ghFetch('/user'), (error) => {
-        assert.ok(error instanceof GitHubError);
-        assert.equal(error.isAuthError, true);
-        return true;
-    });
-});
-
-test('a normal response is returned as parsed JSON', async () => {
-    stub(async () => new Response(JSON.stringify({ login: 'octocat' }), { status: 200 }));
-
-    const body = await ghFetch('/user');
-    assert.deepEqual(body, { login: 'octocat' });
+    await assert.rejects(
+        () => ghFetch('/user', { token: 'tok' }),
+        (error) => {
+            assert.ok(error instanceof GitHubError);
+            assert.equal(error.status, 0);
+            assert.match(error.message, /could not be reached/);
+            return true;
+        },
+    );
 });
