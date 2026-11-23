@@ -278,3 +278,27 @@ They call `sync` and read `sync.status`; they never import from `js/github/`.
 - QR codes for the device URI (needs a vendored QR encoder; fine as a follow-up).
 - Multi-file bulk import, folder upload.
 - The classroom layer — see Appendix A of PLAN.md.
+
+## Libraries
+
+A project's libraries are whatever `requirements.txt` names. The Libraries dialog in
+the rail edits that file; it is the only source of truth, and it travels with the
+project and appears in the repository.
+
+Nothing is installed until the code runs. Before each run the worker reads
+`requirements.txt`, resolves each name against `vendor/pyodide/pyodide-lock.json`,
+and loads the wheel and its dependencies. **`numpy` is vendored** in
+`vendor/pyodide/` so it works with no network at all, which is what a school needs.
+
+Wheels that are not vendored are fetched from the Pyodide CDN at the same version as
+the bundled runtime, so the picker works in a build that has not vendored them yet.
+That path needs a connection the first time, and is the one to vendor away if a
+classroom is offline. To vendor a wheel, download its `file_name` from the lockfile
+at `https://cdn.jsdelivr.net/pyodide/v<version>/full/<file_name>` into
+`vendor/pyodide/`; no code change is needed, the worker prefers the local copy.
+
+The worker resolves the wheel explicitly rather than calling `loadPackage('<name>')`.
+With a bare name that call resolves even when the wheel cannot be fetched, leaving the
+package uninstalled and turning a missing download into a confusing `ImportError`
+later. The worker also checks `loadedPackages` after loading and reports a plain
+message when a package did not arrive.

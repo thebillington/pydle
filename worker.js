@@ -36,6 +36,143 @@ async function init() {
 const WORK_ROOT = '/home/pyodide/work';
 
 /**
+ * Cache of package details, read once from the vendored lockfile: the wheel
+ * filename and what it depends on.
+ *
+ * @type {Map<string, { file: string, depends: string[] }> | null}
+ */
+let packageInfo = null;
+
+/**
+ * Read the lockfile into the cache, once.
+ *
+ * @returns {Promise<Map<string, { file: string, depends: string[] }>>}
+ */
+async function readPackageInfo() {
+    if (packageInfo !== null) {
+        return packageInfo;
+    }
+    packageInfo = new Map();
+    try {
+        const response = await fetch(PYODIDE_URL + 'pyodide-lock.json');
+        if (response.ok) {
+            const lock = await response.json();
+            for (const [key, value] of Object.entries(lock.packages || {})) {
+                if (value && typeof value.file_name === 'string') {
+                    packageInfo.set(key, {
+                        file: value.file_name,
+                        depends: Array.isArray(value.depends) ? value.depends : [],
+                    });
+                }
+            }
+        }
+    } catch {
+        // No lockfile: nothing can be resolved.
+    }
+    return packageInfo;
+}
+
+/**
+ * Where to fetch a wheel from.
+ *
+ * The bundled copy comes first because it works offline and is the same origin,
+ * which is what a school deployment needs. The Pyodide CDN is the fallback so the
+ * feature works in a build that has not vendored that wheel yet.
+ *
+ * @param {string} file
+ * @returns {Promise<{ url: string, bundled: boolean }>}
+ */
+async function wheelUrl(file) {
+    const local = PYODIDE_URL + file;
+    try {
+        const probe = await fetch(local, { method: 'HEAD' });
+        if (probe.ok) {
+            return { url: local, bundled: true };
+        }
+    } catch {
+        // Fall through to the CDN.
+    }
+    const version = pyodide.version || '0.26.4';
+    return { url: 'https://cdn.jsdelivr.net/pyodide/v' + version + '/full/' + file, bundled: false };
+}
+
+/**
+ * Install one package, and whatever it depends on, before returning.
+ *
+ * The wheel is resolved explicitly rather than passing the bare name, because
+ * `loadPackage('numpy')` resolves even when the wheel cannot be fetched. That
+ * silent success is what left packages uninstalled and turned a missing download
+ * into a confusing ImportError later on.
+ *
+ * @param {string} name
+ * @param {Set<string>} [seen]
+ * @returns {Promise<boolean>}
+ */
+async function loadOne(name, seen = new Set()) {
+    if (pyodide.loadedPackages && pyodide.loadedPackages[name]) {
+        return true;
+    }
+    if (seen.has(name)) {
+        return true;
+    }
+    seen.add(name);
+
+    const info = await readPackageInfo();
+    const entry = info.get(name);
+    if (!entry) {
+        self.postMessage({
+            type: 'status',
+            text: name + ' is not available in this build of pydle.',
+        });
+        return false;
+    }
+
+    for (const dependency of entry.depends) {
+        await loadOne(dependency, seen);
+    }
+
+    const { url, bundled } = await wheelUrl(entry.file);
+    try {
+        await pyodide.loadPackage(url);
+    } catch {
+        // Reported below; the check after the call is what decides.
+    }
+
+    if (pyodide.loadedPackages && pyodide.loadedPackages[name]) {
+        return true;
+    }
+
+    self.postMessage({
+        type: 'status',
+        text:
+            name +
+            (bundled
+                ? ' could not be loaded from this copy of pydle.'
+                : '. Check your connection and try again.'),
+    });
+    return false;
+}
+
+/**
+ * Install the libraries the project declares in `requirements.txt`.
+ *
+ * @param {string[]} packages
+ */
+async function loadPackages(packages) {
+    const list = Array.isArray(packages) ? packages : [];
+    for (const name of list) {
+        if (typeof name !== 'string' || name === '') {
+            continue;
+        }
+        if (pyodide.loadedPackages && pyodide.loadedPackages[name]) {
+            continue;
+        }
+        self.postMessage({ type: 'status', text: 'Getting ' + name + ' ready\u2026' });
+        await loadOne(name);
+    }
+}
+
+/**
  * Write the project's files where Python can import them.
  *
  * The directory is emptied every run so an edited module is picked up rather than a
@@ -92,7 +229,7 @@ importlib.invalidate_caches()
 `);
 }
 
-async function runCode(code, files) {
+async function runCode(code, files, packages) {
     if (running) return;
     running = true;
 
@@ -100,6 +237,7 @@ async function runCode(code, files) {
 
     try {
         prepareFiles(files);
+        await loadPackages(packages);
         await pyodide.runPythonAsync(code);
     } catch (err) {
         if (err.message !== 'Execution stopped') {
@@ -177,7 +315,7 @@ self.onmessage = async function (e) {
             await init();
             break;
         case 'run':
-            await runCode(e.data.code, e.data.files);
+            await runCode(e.data.code, e.data.files, e.data.packages);
             break;
         case 'stop':
             stopCode();

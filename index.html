@@ -1647,7 +1647,16 @@ print("Hello, World!")</textarea>
             if (currentPath !== null) {
                 files[currentPath] = code;
             }
-            worker.postMessage({ type: 'run', code, files });
+            // Libraries the project declares in requirements.txt. The worker loads
+            // them before running; without this numpy is present in the distribution
+            // but not on the import path, which is the error students were seeing.
+            const declared = parseRequirements(
+                typeof projectFiles['requirements.txt'] === 'string'
+                    ? projectFiles['requirements.txt']
+                    : '',
+            );
+
+            worker.postMessage({ type: 'run', code, files, packages: declared });
         }
 
         function stopCode() {
