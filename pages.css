@@ -239,34 +239,6 @@ th {
     text-transform: uppercase;
 }
 
-/* Wide comparison tables scroll rather than forcing the page sideways. */
-.table-scroll {
-    overflow-x: auto;
-    margin: 18px 0;
-}
-
-.table-scroll table {
-    margin: 0;
-    min-width: 660px;
-}
-
-.compare {
-    font-size: 0.86rem;
-}
-
-.compare th,
-.compare td {
-    padding: 8px 10px;
-}
-
-.compare td:first-child {
-    white-space: nowrap;
-}
-
-.compare th {
-    font-size: 0.7rem;
-}
-
 .faq {
     margin-top: 18px;
 }
