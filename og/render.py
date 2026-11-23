@@ -32,32 +32,8 @@ CARDS = [
         "eyebrow": "FREE &middot; OPEN SOURCE",
         "headline": "Python REPL and<br>turtle editor",
         "size": 45,
-        "body": "Real CPython in WebAssembly. Save in the browser, download a .py, or "
-                "commit to GitHub.",
-    },
-    {
-        "out": "og-teachers.png",
-        "eyebrow": "FOR TEACHERS &middot; NO STUDENT ACCOUNTS",
-        "headline": "Python in class,<br>nothing to install",
-        "size": 42,
-        "body": "Students write Python and commit to a repository they own, so git "
-                "comes with the lesson.",
-    },
-    {
-        "out": "og-turtle.png",
-        "eyebrow": "PYTHON TURTLE &middot; BROWSER",
-        "headline": "Python turtle,<br>drawn in the browser",
-        "size": 36,
-        "body": "Real CPython in WebAssembly. Loops, colours and fills, with no "
-                "install and no Tkinter.",
-    },
-    {
-        "out": "og-trinket.png",
-        "eyebrow": "TRINKET CLOSED &middot; 31 AUGUST 2026",
-        "headline": "A Trinket<br>alternative",
-        "size": 45,
-        "body": "Python and turtle with no account and no server. MIT licensed, so "
-                "a school can host its own copy.",
+        "body": "CPython in WebAssembly, so no server is involved. Programs save in the "
+                "browser, download as a .py, or commit to GitHub.",
     },
 ]
 
