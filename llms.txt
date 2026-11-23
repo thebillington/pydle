@@ -21,7 +21,7 @@
 - Optional sync: GitHub sign-in stores each project in a private repository called `pydle-workspace` in the user's own account, with commits and history
 - GitHub accounts: 13+, so repository sync is for year 9 and above; pydle works without it
 - Python support: standard Python and a browser turtle compatibility layer
-- Not supported: Trinket-style embeds, classroom accounts, rosters, assignments or marking, multi-language editing, native packages
+- Not supported: multi-language editing, native packages
 
 ## Pages
 
