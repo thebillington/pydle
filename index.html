@@ -1726,6 +1726,32 @@ print("Hello, World!")</textarea>
                     } catch {
                         continue;
                     }
+
+                    // A project named after a namespace would share its keyspace
+                    // with that namespace. Creation refuses the name now, but a
+                    // project saved before that rule needs moving out of the way.
+                    if (RESERVED_PROJECT_NAMES.has(canonical)) {
+                        const moved = canonical + '_project';
+                        if (!taken.has(moved)) {
+                            if (await sync.renameProject(project.name, moved, kind)) {
+                                taken.delete(project.name);
+                                taken.add(moved);
+                                console.warn(
+                                    '[pydle] renamed reserved project name',
+                                    project.name,
+                                    'to',
+                                    moved,
+                                );
+                            }
+                        } else {
+                            console.warn(
+                                '[pydle] project uses a reserved name and cannot be moved',
+                                project.name,
+                            );
+                        }
+                        continue;
+                    }
+
                     if (canonical === project.name || taken.has(canonical)) {
                         continue;
                     }
