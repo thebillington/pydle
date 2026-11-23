@@ -8,6 +8,51 @@ let __gameStep = null;
 let __sleepInterrupt = null;
 let animMode = false;
 
+/**
+ * Report a Python failure in the shape the page understands.
+ *
+ * `err.message` is Python's own formatted traceback; `err.stack` is Pyodide's
+ * JavaScript internals, which is meaningless to a student. Python also knows
+ * the line, column and notes exactly, so ask it rather than parsing the text:
+ * the page uses that to mark the line and to explain the error in plain words.
+ *
+ * @param {any} err
+ */
+function postPythonError(err) {
+    const text = typeof err.message === 'string' ? err.message : String(err);
+    const lines = text.split('\n').filter((line) => line.trim() !== '');
+    const summary = lines.length > 0 ? lines[lines.length - 1].trim() : 'Python stopped on an error.';
+
+    let structured = null;
+    try {
+        structured = JSON.parse(
+            pyodide.runPython(`
+import json, sys
+exc = getattr(sys, 'last_exc', None) or getattr(sys, 'last_value', None)
+if exc is None:
+    payload = None
+else:
+    payload = {
+        'type': type(exc).__name__,
+        'message': getattr(exc, 'msg', None) or str(exc),
+        'line': getattr(exc, 'lineno', None),
+        'column': getattr(exc, 'offset', None),
+        'endColumn': getattr(exc, 'end_offset', None),
+        'source': getattr(exc, 'text', None),
+        'notes': list(getattr(exc, '__notes__', [])),
+    }
+json.dumps(payload)
+`),
+        );
+    } catch (extractFailure) {
+        // The page still gets Python's sentence and traceback; only the
+        // line-and-column detail is missing.
+        structured = null;
+    }
+
+    self.postMessage({ type: 'error', summary, detail: text.trim(), structured });
+}
+
 function setupSleep() {
     let useAsyncSleep = false;
 
@@ -142,7 +187,7 @@ def __game_step():
                 return;
             }
         } catch (err) {
-            self.postMessage({ type: 'error', message: err.message, traceback: err.stack || '' });
+            postPythonError(err);
         }
         running = false;
         self.postMessage({ type: 'done' });
@@ -153,10 +198,14 @@ def __game_step():
     
     self.postMessage({ type: 'running' });
     try {
-        await pyodide.runPythonAsync('from turtle import *\nimport turtle as _t\n' + code);
+        // The imports run first, on their own, so the student's code keeps its
+        // own line numbers in the traceback. Prepending them to the same run
+        // shifted every reported line by two.
+        await pyodide.runPythonAsync('from turtle import *\nimport turtle as _t\n');
+        await pyodide.runPythonAsync(code, { filename: 'main.py' });
     } catch (err) {
         if (err.message !== 'Execution stopped') {
-            self.postMessage({ type: 'error', message: err.message, traceback: err.stack || '' });
+            postPythonError(err);
         }
         pyodide.runPython(`_t._stop_anim()`);
         running = false;
@@ -221,7 +270,7 @@ self.onmessage = async function (e) {
                         }
                     }
                 } catch (err) {
-                    self.postMessage({ type: 'error', message: err.message, traceback: err.stack || '' });
+                    postPythonError(err);
                     running = false;
                     __gameStep = null;
                     animMode = false;

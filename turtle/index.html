@@ -123,6 +123,7 @@
     <link rel="stylesheet" href="vendor/codemirror/dracula.min.css">
     <link rel="stylesheet" href="../css/codemirror-light.css">
     <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="../css/repl.css">
     <link rel="stylesheet" href="turtle.css">
     <link rel="stylesheet" href="../css/editor-extras.css">
     <link rel="stylesheet" href="../css/dialog.css">
@@ -152,8 +153,14 @@
                 <span class="panel-label-inline">editor</span>
                 <div class="editor-toolbar-right">
                     <span id="file-indicator" class="file-indicator" title="Saved on this device">untitled</span>
-                    <button id="save-btn" class="toolbar-btn" title="Save on this device and open the commit dialog (Ctrl+S)">
+                    <button id="save-btn" class="toolbar-btn" title="Save on this device (Ctrl+S)" aria-label="Save on this device">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        <span id="save-count" class="toolbar-count" aria-hidden="true" hidden></span>
+                    </button>
+                    <button id="discard-btn" class="toolbar-label-btn toolbar-discard" type="button" hidden title="Throw away changes that are not in GitHub">Discard</button>
+                    <button id="commit-btn" class="toolbar-label-btn toolbar-commit" type="button" hidden title="Put this drawing in GitHub">
+                        <span class="toolbar-label-text">Commit</span>
+                        <span id="commit-count" class="toolbar-commit-count" aria-hidden="true"></span>
                     </button>
                     <button id="load-btn" class="toolbar-btn" title="Open a saved drawing">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -255,10 +262,12 @@ t.isvisible()      # Is turtle visible?</pre>
                 <h3>Keyboard Shortcuts</h3>
                 <ul>
                     <li><strong>Ctrl+Enter</strong> - Run code</li>
-                    <li><strong>Ctrl+S</strong> - Save and open the commit dialog</li>
+                    <li><strong>Ctrl+S</strong> - Save on this device</li>
                     <li><strong>Ctrl+/</strong> - Toggle comment</li>
                     <li><strong>Escape</strong> - Close this dialog</li>
                 </ul>
+                <h3>Saving and GitHub</h3>
+                <p>Saving keeps the drawing in this browser, so it is available offline. Use <strong>Commit</strong> in the toolbar to put a copy in your GitHub repository. Nothing reaches GitHub until you commit.</p>
             </div>
         </div>
     </div>
@@ -311,13 +320,17 @@ t.isvisible()      # Is turtle visible?</pre>
         import { createSync } from '../js/sync.js';
         import { getResolvedTheme, mountThemeToggle } from '../js/ui/theme.js';
         import { lineFromTraceback } from '../js/traceback.js';
+        import { errorLocation, errorNotes } from '../js/error-report.js';
+        import { buildErrorBlock, normaliseSource } from '../js/error-block.js';
+        import { createExplainer } from '../js/explainer.js';
+        import { commitBadge } from '../js/commit-badge.js';
         import { confirmAction, notify, promptText } from '../js/ui/dialog.js';
         import { projectSlug } from '../js/ui/files.js';
         import { mountStatus } from '../js/ui/status.js';
         import { mountConnect } from '../js/ui/connect.js';
         import { mountCommit } from '../js/ui/commit.js';
         import { mountDrawings } from '../js/ui/turtle-drawings.js';
-        import { createDrawings } from '../js/ui/turtle-storage.js';
+        import { createDrawings, discardConfirmation } from '../js/ui/turtle-storage.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
@@ -405,6 +418,10 @@ t.isvisible()      # Is turtle visible?</pre>
         const canvas = document.getElementById('canvas');
         const fileIndicator = document.getElementById('file-indicator');
         const saveBtn = document.getElementById('save-btn');
+        const saveCount = document.getElementById('save-count');
+        const discardBtn = document.getElementById('discard-btn');
+        const commitBtn = document.getElementById('commit-btn');
+        const commitCount = document.getElementById('commit-count');
         const loadBtn = document.getElementById('load-btn');
         const downloadBtn = document.getElementById('download-btn');
         const copyBtn = document.getElementById('copy-btn');
@@ -418,6 +435,7 @@ t.isvisible()      # Is turtle visible?</pre>
         let tickScheduled = false;
         let currentFileName = null;
         let lastSavedCode = editor.getValue();
+        let lastRunCode = '';
         let dirty = false;
 
         // Drawings live in their own namespace in the vault, so a turtle
@@ -587,9 +605,134 @@ t.isvisible()      # Is turtle visible?</pre>
             if (drawingsList) {
                 void drawingsList.refresh();
             }
+        }
 
-            // Saving is not committing. The dialog asks which file and what message.
+        /**
+         * Save locally, then open the commit dialog.
+         *
+         * Committing is a deliberate act, separate from Save and from Ctrl+S.
+         * Flushing first means the dialog lists what is on screen, not an older
+         * vault copy of it.
+         */
+        async function commitFile() {
+            if (currentFileName === null) {
+                return;
+            }
+            if (!(await flush())) {
+                showStatus('That could not be saved, so nothing was sent to GitHub', 'error');
+                return;
+            }
             void commitDialog.open(currentFileName);
+        }
+
+        /**
+         * Throw away this drawing's local changes, putting it back to GitHub.
+         *
+         * The editor is flushed first so what disappears is exactly what is on
+         * screen. Files changed on both sides are left alone and named in the
+         * confirmation, because neither copy is provably the one to keep.
+         */
+        async function discardFile() {
+            if (currentFileName === null) {
+                return;
+            }
+
+            const name = currentFileName;
+            if (!(await flush())) {
+                return;
+            }
+
+            let preview = null;
+            try {
+                preview =
+                    sync.workspace && typeof sync.previewCommit === 'function'
+                        ? await sync.previewCommit(name, 'drawings')
+                        : await sync.dirty(name, 'drawings');
+            } catch {
+                preview = null;
+            }
+
+            if (preview === null) {
+                showStatus('Could not work out what would be discarded', 'error');
+                return;
+            }
+
+            const all = Array.isArray(preview.paths)
+                ? preview.paths.map((entry) => entry.path)
+                : [];
+            const conflicts = Array.isArray(preview.conflicts)
+                ? preview.conflicts.map((entry) => entry.path)
+                : [];
+            const paths = all.filter((path) => !conflicts.includes(path));
+
+            if (paths.length === 0) {
+                await notify({
+                    title: 'Nothing to discard',
+                    message:
+                        conflicts.length > 0
+                            ? 'The other copy is in GitHub and was changed there too. Open Commit and decide which copy to keep.'
+                            : 'This drawing already matches GitHub.',
+                    variant: 'info',
+                });
+                return;
+            }
+
+            const question = discardConfirmation({ name, paths, conflicts });
+            const ok = await confirmAction({
+                title: question.title,
+                message: question.message,
+                confirmLabel: 'Discard',
+                danger: true,
+            });
+            if (!ok) {
+                return;
+            }
+
+            let result;
+            try {
+                result = await sync.discard(name, { paths, kind: 'drawings' });
+            } catch {
+                showStatus('Could not discard those changes', 'error');
+                return;
+            }
+
+            // The file may have changed underneath the editor, so reload it
+            // from the vault rather than leaving stale text on screen.
+            if (currentFileName === name) {
+                let code = null;
+                try {
+                    code = await drawings.read(name);
+                } catch {
+                    code = null;
+                }
+                if (typeof code === 'string') {
+                    editor.setValue(code);
+                    lastSavedCode = code;
+                    dirty = false;
+                    clearErrorLine();
+                    updateFileIndicator();
+                } else if (Array.isArray(result.removed) && result.removed.length > 0) {
+                    // A drawing that was never committed has no earlier version
+                    // to go back to, so discard removes its only file. Clear the
+                    // editor rather than leaving text that is no longer stored.
+                    editor.setValue('');
+                    lastSavedCode = '';
+                    dirty = false;
+                    clearErrorLine();
+                    updateFileIndicator();
+                }
+            }
+
+            await refreshCommitState();
+            if (drawingsList) {
+                void drawingsList.refresh();
+            }
+
+            const count = result.restored.length + result.removed.length;
+            showStatus(
+                'Discarded ' + count + (count === 1 ? ' change' : ' changes') + '.',
+                'ready',
+            );
         }
 
         async function loadFile(name) {
@@ -597,7 +740,7 @@ t.isvisible()      # Is turtle visible?</pre>
                 closeLoadOverlay();
                 return;
             }
-            if (!(await checkUnsaved())) {
+            if (!(await confirmLeave())) {
                 return;
             }
 
@@ -685,33 +828,48 @@ t.isvisible()      # Is turtle visible?</pre>
 
         /* ---- Commits ------------------------------------------------------ */
         //
-        // The commit dialog is shared with the REPL page. It asks its sync
-        // object for dirty() and commit() only, so a thin adapter adds the
+        // The commit dialog is shared with the REPL page. It asks its adapter
+        // for dirty(), previewCommit() and commit(), so a thin adapter adds the
         // drawings namespace rather than a second copy of the dialog.
 
         /**
          * Reflect the open drawing's uncommitted files on the toolbar.
+         *
+         * One rule decides both controls: `commitBadge` hides Commit and
+         * Discard unless there is known local work and somewhere to put it. The
+         * count is also shown on Save, which stays a local action: the dot says
+         * "not in GitHub yet" without making Save mean something else.
          *
          * @param {number} count
          */
         function paintCommitState(count) {
             const safe = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
             uncommittedNow = safe > 0;
-            const saveButton = document.getElementById('save-btn');
-            if (saveButton instanceof HTMLElement) {
-                saveButton.classList.toggle(
-                    'has-uncommitted',
-                    safe > 0 && Boolean(sync.workspace),
-                );
-            }
-            const base = sync.workspace ? 'Save and commit (Ctrl+S)' : 'Save (Ctrl+S)';
+
+            const badge = commitBadge({
+                signedIn: Boolean(sync.workspace),
+                project: currentFileName,
+                count: safe,
+            });
+
+            saveBtn.classList.toggle('has-uncommitted', badge.visible);
+            saveBtn.classList.toggle('has-count', badge.visible);
+            saveCount.hidden = !badge.visible;
+            saveCount.textContent = badge.visible ? String(badge.count) : '';
+
+            const base = 'Save on this device (Ctrl+S)';
             const label = safe === 0
                 ? base
                 : base + ': ' + safe + (safe === 1 ? ' file' : ' files') + ' not in GitHub yet';
-            const saveButton = document.getElementById('save-btn');
-            if (saveButton instanceof HTMLElement) {
-                saveButton.title = label;
-                saveButton.setAttribute('aria-label', label);
+            saveBtn.title = label;
+            saveBtn.setAttribute('aria-label', label);
+
+            commitBtn.hidden = !badge.visible;
+            discardBtn.hidden = !badge.visible;
+            if (badge.visible) {
+                commitBtn.title = badge.title;
+                commitBtn.setAttribute('aria-label', badge.label);
+                commitCount.textContent = String(badge.count);
             }
         }
 
@@ -732,6 +890,11 @@ t.isvisible()      # Is turtle visible?</pre>
 
         const commitTarget = {
             dirty: (name) => sync.dirty(name, 'drawings'),
+            // The shared dialog always passes its own kind ('work'). This page
+            // has no libraries, and drawings live in their own namespace, so the
+            // adapter supplies 'drawings' and ignores the argument.
+            previewCommit: (name, kind, resolutions) =>
+                sync.previewCommit(name, 'drawings', resolutions),
             commit: (options) => sync.commit({ ...options, kind: 'drawings' }),
         };
 
@@ -785,6 +948,8 @@ t.isvisible()      # Is turtle visible?</pre>
         });
 
         saveBtn.addEventListener('click', () => { void saveFile(); });
+        commitBtn.addEventListener('click', () => { void commitFile(); });
+        discardBtn.addEventListener('click', () => { void discardFile(); });
 
         downloadBtn.addEventListener('click', () => {
             const code = editor.getValue();
@@ -807,6 +972,11 @@ t.isvisible()      # Is turtle visible?</pre>
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
+                // Do not reopen anything over someone who is already typing a
+                // commit message: that would throw the message away.
+                if (document.querySelector('.commit-overlay:not(.hidden)')) {
+                    return;
+                }
                 void saveFile();
             }
             if (e.ctrlKey && e.key === 'Enter') {
@@ -846,11 +1016,61 @@ t.isvisible()      # Is turtle visible?</pre>
             }
         }
 
+        /** @type {Promise<any> | null} */
+        let explainerReady = null;
+
+        /**
+         * Ask the vendored explainer what the error means.
+         *
+         * Loaded on first use so the bundle never delays the editor, and any
+         * failure here is silent: a friendly sentence can only help, so it must
+         * never stop Python's own words being shown.
+         *
+         * @param {string} detail The formatted traceback.
+         * @param {string} code The program that ran.
+         * @returns {Promise<any | null>}
+         */
+        async function explainError(detail, code) {
+            try {
+                if (explainerReady === null) {
+                    explainerReady = createExplainer({
+                        load: () =>
+                            import('../vendor/python-friendly-error-messages/index.browser.js'),
+                        language: navigator.language || 'en',
+                    });
+                }
+                const explainer = await explainerReady;
+                return explainer.explain({
+                    error: detail,
+                    code,
+                    runtime: 'pyodide',
+                    file: 'main.py',
+                });
+            } catch {
+                return null;
+            }
+        }
+
+        /**
+         * Add the structured error under whatever has been printed so far.
+         *
+         * @param {{ summary: string, notes: string[], detail: string, sourceLine: string, location: object | null }} input
+         */
+        function appendErrorBlock(input) {
+            const previous = document.getElementById('console-error');
+            if (previous) previous.remove();
+
+            const block = buildErrorBlock(input);
+            block.id = 'console-error';
+            consoleEl.append(block);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
         async function initWorker() {
             worker = new Worker('worker.js?t=' + Date.now());
 
-            worker.onmessage = function (e) {
-                const { type, text, message, traceback } = e.data;
+            worker.onmessage = async function (e) {
+                const { type } = e.data;
 
                 switch (type) {
                     case 'status':
@@ -897,22 +1117,62 @@ t.isvisible()      # Is turtle visible?</pre>
                         tickRunning = false;
                         break;
 
-                    case 'error':
-                        log('Error: ' + message);
-                        if (traceback) log(traceback);
+                    case 'error': {
+                        const summary =
+                            e.data.summary || e.data.message || 'Python stopped on an error.';
+                        const detail = e.data.detail || e.data.traceback || '';
+                        const structured = e.data.structured || null;
+                        const notes = errorNotes({ structured });
+
                         showStatus('Error', 'error');
                         runBtn.disabled = false;
                         stopBtn.disabled = true;
                         tickRunning = false;
+
                         try {
-                            const line = lineFromTraceback(
-                                (traceback || '') + '\n' + (message || '')
-                            );
-                            if (line !== null) markErrorLine(line);
-                        } catch (e) {
-                            // Marking is a convenience: never break the error path.
+                            const line = lineFromTraceback(detail + '\n' + summary);
+                            const location =
+                                line === null
+                                    ? null
+                                    : errorLocation({ structured, detail });
+
+                            const reported = structured && structured.source;
+                            const rawLine =
+                                typeof reported === 'string' && reported.trim() !== ''
+                                    ? reported
+                                    : location
+                                      ? editor.getLine(location.line - 1) || ''
+                                      : '';
+
+                            const shown = normaliseSource(rawLine, location);
+
+                            clearErrorLine();
+                            if (line !== null) {
+                                markErrorLine(line);
+                            }
+
+                            const friendly = await explainError(detail, lastRunCode);
+                            appendErrorBlock({
+                                friendly,
+                                summary,
+                                notes,
+                                detail,
+                                sourceLine: shown.sourceLine,
+                                location: shown.location,
+                            });
+                        } catch (renderFailure) {
+                            // Reporting an error must never itself fail.
+                            appendErrorBlock({
+                                friendly: null,
+                                summary,
+                                notes,
+                                detail,
+                                sourceLine: '',
+                                location: null,
+                            });
                         }
                         break;
+                    }
 
                     case 'stdout':
                         log(e.data.text);
@@ -929,10 +1189,19 @@ t.isvisible()      # Is turtle visible?</pre>
             worker.postMessage({ type: 'init' });
         }
 
-        function runCode() {
+        async function runCode() {
             if (!workerReady) return;
             clearErrorLine();
+
+            // Running means "keep this". Save to the device only: committing is
+            // a deliberate separate act, but an unsaved buffer should not be
+            // lost just because the student pressed Run.
+            if (currentFileName !== null) {
+                await flush();
+            }
+
             const code = editor.getValue();
+            lastRunCode = code;
             worker.postMessage({ type: 'run', code });
             canvas.focus();
         }
@@ -970,14 +1239,16 @@ t.isvisible()      # Is turtle visible?</pre>
             }
         });
 
-        /* ---- Leaving for the Python editor -------------------------------- */
+        /* ---- Leaving a drawing -------------------------------------------- */
         //
         // Guarded the same way as leaving a project on the REPL: write the
         // buffer to the vault first, then let the commit dialog decide whether
         // the drawing's uncommitted changes should be dealt with before going.
+        // Swapping to another drawing and the link to the Python editor both
+        // pass through it.
 
         /**
-         * @returns {Promise<boolean>} True when it is safe to leave the page.
+         * @returns {Promise<boolean>} True when it is safe to leave.
          */
         async function confirmLeave() {
             if (currentFileName === null) {
@@ -985,8 +1256,27 @@ t.isvisible()      # Is turtle visible?</pre>
                 // honest option is to ask before dropping the edits.
                 return checkUnsaved();
             }
+
+            const hadUnsavedEdits = dirty;
             if (!(await flush())) {
                 return false;
+            }
+
+            // Signed out: there is no repository to commit to, so the only
+            // question is whether anything would be lost. The flush has just
+            // put it on this device, so only mention it when the student typed
+            // something since the last save.
+            if (!sync.workspace) {
+                if (!hadUnsavedEdits) {
+                    return true;
+                }
+                return confirmAction({
+                    title: 'Leave this drawing?',
+                    message:
+                        'Your latest changes are saved on this device, so nothing is lost. ' +
+                        'They are not in GitHub, because you are not signed in.',
+                    confirmLabel: 'Leave',
+                });
             }
 
             let uncommitted = uncommittedNow;
@@ -1012,7 +1302,21 @@ t.isvisible()      # Is turtle visible?</pre>
             if (!(await confirmLeave())) {
                 return;
             }
+            // The uncommitted question has just been answered, so do not ask it
+            // a second time in the browser's own leaving warning.
+            uncommittedNow = false;
             window.location.assign('/');
+        });
+
+        // A tab close is not the moment to explain a commit dialog. Ask the
+        // browser for its own generic warning, and only while the drawing has
+        // something uncommitted.
+        window.addEventListener('beforeunload', (event) => {
+            if (!uncommittedNow) {
+                return;
+            }
+            event.preventDefault();
+            event.returnValue = '';
         });
 
         /* ---- GitHub sync -------------------------------------------------- */
