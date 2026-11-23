@@ -313,7 +313,14 @@ print("Hello, World!")</textarea>
         import { confirmAction, notify, promptText } from './js/ui/dialog.js';
         import { mountLibraries } from './js/ui/libraries.js';
         import { createExplainer } from './js/explainer.js';
-        import { addPackage, parseRequirements, removePackage } from './js/packages.js';
+        import {
+            CATALOGUE,
+            OFFERED,
+            addPackage,
+            parseRequirements,
+            removePackage,
+            splitDeclared,
+        } from './js/packages.js';
         import { importLegacyProjects } from './js/vault/legacy.js';
         import { normalizeProjectName } from './js/vault/paths.js';
 
@@ -1754,7 +1761,27 @@ print("Hello, World!")</textarea>
                     : '',
             );
 
-            worker.postMessage({ type: 'run', code, files, packages: declared });
+            // Only the offered libraries are loaded. `requirements.txt` is a text
+            // file a student can edit, so the list has to be enforced here rather
+            // than only in the picker.
+            const { allowed, refused } = splitDeclared(declared);
+            if (refused.length > 0) {
+                log(
+                    'Not loaded: ' +
+                        refused.join(', ') +
+                        '. pydle only offers ' +
+                        CATALOGUE.map((entry) => entry.id).join(', ') +
+                        '.',
+                );
+            }
+
+            worker.postMessage({
+                type: 'run',
+                code,
+                files,
+                packages: allowed,
+                offered: [...OFFERED],
+            });
         }
 
         function stopCode() {

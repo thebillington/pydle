@@ -321,6 +321,26 @@ package uninstalled and turning a missing download into a confusing `ImportError
 later. The worker also checks `loadedPackages` after loading and reports a plain
 message when a package did not arrive.
 
+### The list is enforced, not advisory
+
+`requirements.txt` is an ordinary text file in the project, so a student can write
+any name into it. The loader therefore checks the declared names against
+`OFFERED` (the catalogue in `js/packages.js`) before installing anything, in the
+page *and* again in the worker. The worker fails closed: a caller that sends no
+list gets no packages.
+
+`micropip` is refused by name even if a list offers it. It installs whatever is on
+PyPI at the time, so permitting it would turn a four-library list back into the
+whole internet in two lines:
+
+```python
+import micropip
+await micropip.install("anything")
+```
+
+Refused names are named in the console rather than ignored silently, so a student
+who hand-edits the file is told what happened and what is offered.
+
 ### What is not in the catalogue
 
 matplotlib and pygame are not offered. Both need somewhere to draw: a figure or a

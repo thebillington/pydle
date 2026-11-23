@@ -140,16 +140,47 @@ async function loadOne(name, seen = new Set()) {
 }
 
 /**
+ * Names refused whatever the list says.
+ *
+ * `micropip` installs anything from PyPI on demand, so permitting it would make
+ * every other restriction meaningless.
+ *
+ * @type {Set<string>}
+ */
+const ALWAYS_REFUSED = new Set(['micropip']);
+
+/**
  * Install the libraries the project declares in `requirements.txt`.
  *
+ * Only names on the offered list are loaded. The page filters the list before
+ * sending it, but it is enforced here as well: the file being read is a text
+ * file in the project, and a check that only exists in the interface is advice
+ * rather than a boundary. Failing closed means a caller that forgets the list
+ * gets no packages rather than all of them.
+ *
  * @param {string[]} packages
+ * @param {string[]} offered
  */
-async function loadPackages(packages) {
+async function loadPackages(packages, offered) {
     const list = Array.isArray(packages) ? packages : [];
+    const permitted = new Set(
+        (Array.isArray(offered) ? offered : []).map((name) => String(name).toLowerCase()),
+    );
+
     for (const name of list) {
         if (typeof name !== 'string' || name === '') {
             continue;
         }
+
+        const key = name.trim().toLowerCase();
+        if (ALWAYS_REFUSED.has(key) || !permitted.has(key)) {
+            self.postMessage({
+                type: 'status',
+                text: name + ' is not one of the libraries pydle offers, so it was not loaded.',
+            });
+            continue;
+        }
+
         if (pyodide.loadedPackages && pyodide.loadedPackages[name]) {
             continue;
         }
@@ -215,7 +246,7 @@ importlib.invalidate_caches()
 `);
 }
 
-async function runCode(code, files, packages) {
+async function runCode(code, files, packages, offered) {
     if (running) return;
     running = true;
 
@@ -223,7 +254,7 @@ async function runCode(code, files, packages) {
 
     try {
         prepareFiles(files);
-        await loadPackages(packages);
+        await loadPackages(packages, offered);
         await pyodide.runPythonAsync(code);
     } catch (err) {
         if (err.message !== 'Execution stopped') {
@@ -301,7 +332,7 @@ self.onmessage = async function (e) {
             await init();
             break;
         case 'run':
-            await runCode(e.data.code, e.data.files, e.data.packages);
+            await runCode(e.data.code, e.data.files, e.data.packages, e.data.offered);
             break;
         case 'stop':
             stopCode();

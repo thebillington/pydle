@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
     CATALOGUE,
+    OFFERED,
+    splitDeclared,
     addPackage,
     hasPackage,
     parseRequirements,
@@ -126,4 +128,35 @@ test('hasPackage matches case-insensitively and ignores a version pin', () => {
 test('add then remove returns the same text for a file with comments', () => {
     const text = '# what this project needs\nnumpy\n';
     assert.equal(removePackage(addPackage(text, 'scipy'), 'scipy'), text);
+});
+
+test('only catalogue names are loaded, whatever requirements.txt says', () => {
+    const { allowed, refused } = splitDeclared(['numpy', 'scipy', 'scikit-learn', 'micropip']);
+    assert.deepEqual(allowed, ['numpy', 'scipy']);
+    assert.deepEqual(refused, ['scikit-learn', 'micropip']);
+});
+
+test('names are matched regardless of case, as pip does', () => {
+    const { allowed, refused } = splitDeclared(['NumPy', 'PANDAS']);
+    assert.deepEqual(allowed, ['NumPy', 'PANDAS']);
+    assert.deepEqual(refused, []);
+});
+
+test('micropip is refused even when a list offers it', () => {
+    const offered = new Set(['numpy', 'micropip']);
+    const { allowed, refused } = splitDeclared(['numpy', 'micropip'], offered);
+    assert.deepEqual(allowed, ['numpy']);
+    assert.deepEqual(refused, ['micropip']);
+});
+
+test('the offered list is the catalogue', () => {
+    assert.deepEqual([...OFFERED].sort(), CATALOGUE.map((entry) => entry.id).sort());
+});
+
+test('blank entries are ignored rather than refused', () => {
+    assert.deepEqual(splitDeclared(['', '  ', 'numpy']), { allowed: ['numpy'], refused: [] });
+});
+
+test('nothing is allowed when nothing is offered, so a missing list fails closed', () => {
+    assert.deepEqual(splitDeclared(['numpy'], new Set()), { allowed: [], refused: ['numpy'] });
 });

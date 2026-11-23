@@ -214,3 +214,56 @@ export function hasPackage(text, name) {
     const { entries } = readRequirements(text);
     return entries.some((entry) => entry.key === target);
 }
+
+/**
+ * The names pydle will actually load.
+ *
+ * This is the catalogue and nothing else. `requirements.txt` is editable, so a
+ * student can type any of Pyodide's 310 packages into it; the picker offering a
+ * short list while the loader accepted everything would make the list advisory
+ * rather than real.
+ *
+ * @type {Set<string>}
+ */
+export const OFFERED = new Set(CATALOGUE.map((entry) => entry.id.toLowerCase()));
+
+/**
+ * Names refused even if a list says otherwise.
+ *
+ * `micropip` installs whatever is on PyPI at the time, which turns any allowlist
+ * into "the whole internet" in two lines. It is refused by name so that adding
+ * it to the catalogue, or to a deployment's list, cannot reintroduce that.
+ *
+ * @type {Set<string>}
+ */
+const ALWAYS_REFUSED = new Set(['micropip']);
+
+/**
+ * Split declared names into what will be loaded and what will be refused.
+ *
+ * Names are compared case-insensitively, because `requirements.txt` accepts
+ * `NumPy` and pip treats it as `numpy`. The names returned are the ones from
+ * the file, so the caller can quote what the student actually wrote.
+ *
+ * @param {string[]} names
+ * @param {Set<string>} [offered] Override for a deployment that offers more.
+ * @returns {{ allowed: string[], refused: string[] }}
+ */
+export function splitDeclared(names, offered = OFFERED) {
+    const allowed = [];
+    const refused = [];
+
+    for (const name of Array.isArray(names) ? names : []) {
+        if (typeof name !== 'string' || name.trim() === '') {
+            continue;
+        }
+        const key = name.trim().toLowerCase();
+        if (ALWAYS_REFUSED.has(key) || !offered.has(key)) {
+            refused.push(name);
+        } else {
+            allowed.push(name);
+        }
+    }
+
+    return { allowed, refused };
+}
