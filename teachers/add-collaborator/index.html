@@ -285,6 +285,8 @@
             <p class="error" id="picker-error" hidden></p>
         </form>
 
+        <p class="small" id="caveat">Students need to have connected pydle to GitHub and created their repository first. Until then there is nothing to add you to.</p>
+
         <div id="sheet-body" hidden>
         <div class="who">
             <p>Add this GitHub account as a collaborator: <span class="name" id="who-name">your teacher</span></p>
@@ -337,9 +339,11 @@
             var pageTitle = document.getElementById('page-title');
             var printBtn = document.getElementById('print-btn');
             var sheetBody = document.getElementById('sheet-body');
+            var caveat = document.getElementById('caveat');
 
             function apply(value) {
                 sheetBody.hidden = false;
+                caveat.hidden = true;
                 printBtn.hidden = false;
                 whoName.textContent = '@' + value;
                 stepTeacher.textContent = '@' + value;
