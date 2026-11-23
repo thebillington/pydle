@@ -24,6 +24,69 @@ import { normalizeProjectName, safeJoin } from './vault/paths.js';
 import { planMerge } from './reconcile.js';
 
 /**
+ * The hash half of a stored snapshot entry.
+ *
+ * A snapshot used to record a bare hash per file. It now records the content as
+ * well, so the commit dialog can show a diff without needing the network, but
+ * snapshots written by the earlier shape still exist on devices and must keep
+ * working.
+ *
+ * @param {string | { hash?: string } | null | undefined} entry
+ * @returns {string | null}
+ */
+function snapshotHash(entry) {
+    if (typeof entry === 'string') {
+        return entry;
+    }
+    if (entry && typeof entry === 'object' && typeof entry.hash === 'string') {
+        return entry.hash;
+    }
+    return null;
+}
+
+/**
+ * The content half of a snapshot entry, when it was recorded.
+ *
+ * @param {string | { content?: string } | null | undefined} entry
+ * @returns {string | null}
+ */
+function snapshotContent(entry) {
+    if (entry && typeof entry === 'object' && typeof entry.content === 'string') {
+        return entry.content;
+    }
+    return null;
+}
+
+/**
+ * A snapshot's files exactly as stored, whatever shape they are in.
+ *
+ * @param {{ files?: Record<string, unknown> } | null} snapshot
+ * @returns {Record<string, unknown>}
+ */
+function snapshotHashEntries(snapshot) {
+    return snapshot && snapshot.files ? snapshot.files : {};
+}
+
+/**
+ * A snapshot's files as `{ path: hash }`, which is what the merge planner wants.
+ *
+ * @param {{ files?: Record<string, unknown> } | null} snapshot
+ * @returns {Record<string, string>}
+ */
+function snapshotHashes(snapshot) {
+    /** @type {Record<string, string>} */
+    const hashes = {};
+    const files = snapshot && snapshot.files ? snapshot.files : {};
+    for (const [path, entry] of Object.entries(files)) {
+        const hash = snapshotHash(entry);
+        if (hash !== null) {
+            hashes[path] = hash;
+        }
+    }
+    return hashes;
+}
+
+/**
  * Validate a stored project name without rewriting it.
  *
  * Names arrive from `listProjects`, or from the Home dialogue, which has already
@@ -858,7 +921,7 @@ export function createSync({ onChange } = {}) {
             }
 
             const snapshot = await vault.readCommitSnapshot(project, { kind });
-            const base = snapshot && snapshot.files ? snapshot.files : {};
+            const base = snapshotHashes(snapshot);
             const remote = await remoteProjectHashes(project, head.sha, kind);
 
             const localFiles = await readProject(project, kind);
@@ -930,7 +993,7 @@ export function createSync({ onChange } = {}) {
      * added, which is the honest answer.
      *
      * @param {string} name
-     * @returns {Promise<{ paths: Array<{ path: string, status: 'added' | 'modified' | 'deleted' }>, count: number, lastCommit: string | null }>}
+     * @returns {Promise<{ paths: Array<{ path: string, status: 'added' | 'modified' | 'deleted', before: string | null, after: string | null }>, count: number, lastCommit: string | null }>}
      */
     async function dirty(name, kind = 'work') {
         let project;
@@ -942,7 +1005,7 @@ export function createSync({ onChange } = {}) {
 
         const files = await readProject(project, kind);
         const snapshot = await vault.readCommitSnapshot(project, { kind });
-        const committed = snapshot && snapshot.files ? snapshot.files : {};
+        const committed = snapshotHashEntries(snapshot);
 
         const paths = [];
         const onDisk = new Set(Object.keys(files));
@@ -950,14 +1013,24 @@ export function createSync({ onChange } = {}) {
         for (const [path, content] of Object.entries(files)) {
             const hash = await gitBlobHash(content);
             if (!Object.prototype.hasOwnProperty.call(committed, path)) {
-                paths.push({ path, status: 'added' });
-            } else if (committed[path] !== hash) {
-                paths.push({ path, status: 'modified' });
+                paths.push({ path, status: 'added', before: null, after: content });
+            } else if (snapshotHash(committed[path]) !== hash) {
+                paths.push({
+                    path,
+                    status: 'modified',
+                    before: snapshotContent(committed[path]),
+                    after: content,
+                });
             }
         }
-        for (const path of Object.keys(committed)) {
+        for (const [path, entry] of Object.entries(committed)) {
             if (!onDisk.has(path)) {
-                paths.push({ path, status: 'deleted' });
+                paths.push({
+                    path,
+                    status: 'deleted',
+                    before: snapshotContent(entry),
+                    after: null,
+                });
             }
         }
 
@@ -1058,7 +1131,10 @@ export function createSync({ onChange } = {}) {
             const nextFiles = { ...committed };
             for (const path of selected) {
                 if (Object.prototype.hasOwnProperty.call(files, path)) {
-                    nextFiles[path] = await gitBlobHash(files[path]);
+                    nextFiles[path] = {
+                        hash: await gitBlobHash(files[path]),
+                        content: files[path],
+                    };
                 } else {
                     delete nextFiles[path];
                 }

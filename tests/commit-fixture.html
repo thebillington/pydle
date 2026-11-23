@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>commit dialog fixture</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../css/sync.css">
+<link rel="stylesheet" href="../css/conflict.css">
+<link rel="stylesheet" href="../css/commit.css">
+<style>
+    /* The real page is full height behind the overlay; mimic that so the
+       backdrop and the window are measured against the same viewport. */
+    html, body { height: 100%; }
+</style>
+<script>
+    (function () {
+        var mode = 'auto';
+        try {
+            var stored = localStorage.getItem('pydle_theme');
+            if (stored === 'light' || stored === 'dark') mode = stored;
+        } catch (error) {}
+        var query = new URLSearchParams(location.search).get('theme');
+        if (query === 'light' || query === 'dark') mode = query;
+        var dark = mode === 'dark' ||
+            (mode === 'auto' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+</script>
+</head>
+<body>
+<!--
+    Visual fixture for the commit dialog. It mounts the real component against a
+    stubbed sync, so the diff pane, the file list, the message bar and every
+    state can be looked at without touching the vault or GitHub.
+
+        tests/commit-fixture.html?state=changes|many|clean|loading|load-error|conflict|commit-error
+                                &theme=light|dark
+                                &leaving=1
+                                &submit=1
+                                &file=main.py
+
+    `changes` is the default: one added file, one modified file with two
+    separated edits, and one deleted file. `many` adds enough files for the
+    select-all control. `conflict` makes the first commit fail with a conflict,
+    and `commit-error` with a network error; add `submit=1` to press Save
+    automatically so the error banner and the conflict dialog can be seen.
+-->
+<div id="commit-root"></div>
+
+<script type="module">
+    import { mountCommit } from '../js/ui/commit.js';
+
+    const query = new URLSearchParams(location.search);
+    const state = query.get('state') || 'changes';
+    const leaving = query.get('leaving') === '1';
+    const autoSubmit = query.get('submit') === '1';
+
+    const MAIN_BEFORE = [
+        '# A tiny number game.',
+        '',
+        'import random',
+        '',
+        'score = 0',
+        'rounds = 0',
+        '',
+        '',
+        'def roll():',
+        '    return random.randint(1, 6)',
+        '',
+        '',
+        'def play():',
+        '    global score, rounds',
+        '    print("Guess the number between 1 and 6.")',
+        '    answer = roll()',
+        '    guess = int(input("Your guess: "))',
+        '    rounds = rounds + 1',
+        '    if guess == answer:',
+        '        print("Right!")',
+        '        score = score + 1',
+        '    else:',
+        '        print("It was", answer)',
+        '',
+        '',
+        'def show_result():',
+        '    print("You scored", score, "out of", rounds)',
+        '',
+        '',
+        'if __name__ == "__main__":',
+        '    play()',
+        '    show_result()',
+        '',
+    ].join('\n');
+
+    const MAIN_AFTER = [
+        '# A tiny number game.',
+        '',
+        'import random',
+        '',
+        '# Scores are kept for the whole session, so a player can see progress.',
+        'score = 0',
+        'rounds = 0',
+        '',
+        '',
+        'def roll():',
+        '    return random.randint(1, 6)',
+        '',
+        '',
+        'def play():',
+        '    global score, rounds',
+        '    print("Guess the number between 1 and 6.")',
+        '    answer = roll()',
+        '    guess = int(input("Your guess: "))',
+        '    rounds = rounds + 1',
+        '    if guess == answer:',
+        '        print("Right!")',
+        '        score = score + 1',
+        '    else:',
+        '        print("It was", answer)',
+        '',
+        '',
+        'def show_result():',
+        '    print("You scored", score, "out of", rounds)',
+        '    if rounds > 0:',
+        '        average = score / rounds',
+        '        print("That is", round(average * 100), "percent.")',
+        '',
+        '',
+        'if __name__ == "__main__":',
+        '    play()',
+        '    show_result()',
+        '',
+    ].join('\n');
+
+    const GREETING = [
+        '# A first program, for the front of the project.',
+        'name = input("What is your name? ")',
+        'print("Hello,", name)',
+        '',
+    ].join('\n');
+
+    const OLD_HELPERS = [
+        'def double(number):',
+        '    return number * 2',
+        '',
+        '',
+        'def halve(number):',
+        '    return number / 2',
+        '',
+    ].join('\n');
+
+    const CHANGES = [
+        {
+            path: 'greeting.py',
+            status: 'added',
+            before: null,
+            after: GREETING,
+        },
+        {
+            path: 'main.py',
+            status: 'modified',
+            before: MAIN_BEFORE,
+            after: MAIN_AFTER,
+        },
+        {
+            path: 'old_helpers.py',
+            status: 'deleted',
+            before: OLD_HELPERS,
+            after: null,
+        },
+    ];
+
+    const MANY = [
+        ...CHANGES,
+        {
+            path: 'notes.txt',
+            status: 'modified',
+            before: 'Ideas for the quiz\nAsk about fractions\n',
+            after: 'Ideas for the quiz\nAsk about fractions\nAdd a timer\n',
+        },
+        {
+            path: 'scores.py',
+            status: 'added',
+            before: null,
+            after: 'score = 0\n',
+        },
+        {
+            path: 'old_readme.md',
+            status: 'deleted',
+            before: '# Old notes\n',
+            after: null,
+        },
+    ];
+
+    /**
+     * A snapshot written before pydle kept file contents. `before` is null on a
+     * modified file, which is the honest "diff unavailable" case.
+     */
+    const STALE = [
+        {
+            path: 'main.py',
+            status: 'modified',
+            before: null,
+            after: MAIN_AFTER,
+        },
+        CHANGES[0],
+    ];
+
+    /**
+     * @returns {Promise<{ paths: Array<object>, count: number, lastCommit: string | null }>}
+     */
+    function dirty() {
+        if (state === 'loading') {
+            return new Promise(() => {});
+        }
+        if (state === 'clean') {
+            return Promise.resolve({ paths: [], count: 0, lastCommit: 'abc1234' });
+        }
+        if (state === 'load-error') {
+            return Promise.reject(new Error('The changes could not be read from this device.'));
+        }
+        const paths = state === 'many' ? MANY : state === 'stale' ? STALE : CHANGES;
+        return Promise.resolve({ paths, count: paths.length, lastCommit: 'abc1234' });
+    }
+
+    const sync = {
+        dirty,
+
+        async commit({ message, paths }) {
+            if (state === 'commit-error') {
+                const error = new Error('Could not reach GitHub. Your work is saved on this device.');
+                error.kind = 'network';
+                throw error;
+            }
+            if (state === 'conflict') {
+                const error = new Error(
+                    'Some files were changed on another device as well. Choose which version to keep.',
+                );
+                error.kind = 'conflict';
+                error.conflicts = [{ path: 'main.py', kind: 'both-changed', remoteHash: 'remote1' }];
+                throw error;
+            }
+            return { sha: '9f2c1d4', message, paths };
+        },
+    };
+
+    const dialog = mountCommit(document.getElementById('commit-root'), sync, {});
+    void dialog.open('spiral', { leaving });
+
+    /**
+     * Wait for the rendered dialog, then add the fixture's own finishing
+     * touches: a realistic message and the interesting file selected. This is a
+     * harness convenience, not part of the component.
+     */
+    function whenRendered(callback) {
+        let tries = 0;
+        const tick = () => {
+            tries += 1;
+            if (document.querySelector('.commit-file')) {
+                callback();
+                document.documentElement.dataset.ready = 'true';
+                return;
+            }
+            if (tries > 240) {
+                document.documentElement.dataset.ready = 'true';
+                return;
+            }
+            requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    }
+
+    if (state !== 'clean' && state !== 'loading' && state !== 'load-error') {
+        whenRendered(() => {
+            const message = document.querySelector('.commit-message');
+            if (message instanceof HTMLTextAreaElement) {
+                message.value = 'Add a score counter and tidy the loop';
+                message.dispatchEvent(new Event('input'));
+            }
+
+            const wanted = query.get('file') || 'main.py';
+            const row = document.querySelector(`.commit-file[data-path="${wanted}"]`);
+            if (row instanceof HTMLElement) {
+                row.click();
+            }
+
+            if (autoSubmit) {
+                const save = document.querySelector('.commit-footer .sync-btn-primary');
+                if (save instanceof HTMLElement) {
+                    save.click();
+                }
+            }
+        });
+    } else {
+        document.documentElement.dataset.ready = 'true';
+    }
+</script>
+</body>
+</html>

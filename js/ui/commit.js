@@ -1,10 +1,17 @@
 /**
- * The commit dialog: choose the files, write the message, commit.
+ * The commit dialog: choose the files, read the diff, write the message, commit.
  *
  * This is the only route from the editor to GitHub, and it stays deliberately
  * manual. It knows nothing about git: `sync.dirty()` says what has changed and
- * `sync.commit()` does the work, so the view is just a list, a message field and
- * one primary action.
+ * `sync.commit()` does the work, so the view is a file list, the diff for the
+ * selected file, a message field and one primary action.
+ *
+ * The window is deliberately large: a commit is something to look at before it
+ * happens, and a small modal showing only filenames hides the thing being
+ * approved. The left column holds the changed files, the right pane the unified
+ * diff for whichever file is selected. Ticking a file does not select it, and
+ * selecting a file does not tick it: one decides what goes into the commit, the
+ * other decides what is on screen.
  *
  * There is one dialog per page, mounted once. `open(project)` returns a promise
  * that resolves when the dialog closes:
@@ -20,6 +27,7 @@
  * `textContent`, never `innerHTML`.
  */
 
+import { diffLines, diffStats } from '../diff.js';
 import { mountConflict } from './conflict.js';
 
 /** Above this many files the list earns a select-all control. */
@@ -93,11 +101,108 @@ function statusLabel(value) {
 }
 
 /**
- * @param {unknown} entry
- * @returns {entry is { path: string, status: string }}
+ * A change from `sync.dirty()`, with its editable content kept. Snapshot entries
+ * written before content was stored have no `before`, which is why a diff can be
+ * unavailable for a perfectly ordinary modification.
+ *
+ * @typedef {{
+ *   path: string,
+ *   status: 'added' | 'modified' | 'deleted' | 'changed',
+ *   before: string | null,
+ *   after: string | null,
+ * }} Change
  */
-function isChange(entry) {
-    return Boolean(entry) && typeof entry === 'object' && typeof entry.path === 'string' && entry.path !== '';
+
+/**
+ * @param {unknown} entry
+ * @returns {Change | null}
+ */
+function normaliseChange(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const value = /** @type {{ path?: unknown, status?: unknown, before?: unknown, after?: unknown }} */ (entry);
+    if (typeof value.path !== 'string' || value.path === '') {
+        return null;
+    }
+    return {
+        path: value.path,
+        status: statusLabel(value.status),
+        before: typeof value.before === 'string' ? value.before : null,
+        after: typeof value.after === 'string' ? value.after : null,
+    };
+}
+
+/**
+ * The diff for one change, or the reason it cannot be shown.
+ *
+ * @typedef {{
+ *   available: boolean,
+ *   reason: 'before-missing' | 'after-missing' | '',
+ *   lines: import('../diff.js').DiffLine[],
+ *   added: number,
+ *   removed: number,
+ *   current: string | null,
+ * }} ChangeDiff
+ */
+
+/**
+ * Build the diff once per changed file.
+ *
+ * An added file diffs from nothing and a deleted file diffs to nothing, which
+ * are both genuine. A modified file whose earlier copy was never stored is not:
+ * pretending it was empty would paint the whole file as new, which is a lie
+ * about what the commit contains. That case is reported instead.
+ *
+ * @param {Change} change
+ * @returns {ChangeDiff}
+ */
+function buildDiff(change) {
+    if (change.status === 'added') {
+        const lines = diffLines(null, change.after);
+        const stats = diffStats(lines);
+        return {
+            available: true,
+            reason: '',
+            lines,
+            added: stats.added,
+            removed: stats.removed,
+            current: null,
+        };
+    }
+
+    if (change.before === null) {
+        return {
+            available: false,
+            reason: 'before-missing',
+            lines: [],
+            added: 0,
+            removed: 0,
+            current: change.status === 'deleted' ? null : change.after,
+        };
+    }
+
+    if (change.status !== 'deleted' && change.after === null) {
+        return {
+            available: false,
+            reason: 'after-missing',
+            lines: [],
+            added: 0,
+            removed: 0,
+            current: null,
+        };
+    }
+
+    const lines = diffLines(change.before, change.status === 'deleted' ? null : change.after);
+    const stats = diffStats(lines);
+    return {
+        available: true,
+        reason: '',
+        lines,
+        added: stats.added,
+        removed: stats.removed,
+        current: null,
+    };
 }
 
 /**
@@ -145,6 +250,8 @@ export function mountCommit(root, sync, handlers = {}) {
     const projectId = `${id}-project`;
     const messageId = `${id}-message`;
     const filesLabelId = `${id}-files`;
+    const diffLabelId = `${id}-diff-label`;
+    const countId = `${id}-count`;
 
     /* Shell ------------------------------------------------------------- */
 
@@ -158,7 +265,7 @@ export function mountCommit(root, sync, handlers = {}) {
     content.setAttribute('aria-describedby', projectId);
     content.tabIndex = -1;
 
-    const header = el('div', 'overlay-header');
+    const header = el('div', 'overlay-header commit-header');
     const heading = el('div', 'commit-heading');
     const title = el('h2', '', 'Save to GitHub');
     title.id = titleId;
@@ -185,10 +292,15 @@ export function mountCommit(root, sync, handlers = {}) {
         /** @type {'idle' | 'loading' | 'ready' | 'clean' | 'load-error'} */
         phase: 'idle',
         leaving: false,
-        /** @type {Array<{ path: string, status: string }>} */
+        /** @type {Change[]} */
         paths: [],
+        /** @type {Map<string, ChangeDiff>} */
+        diffs: new Map(),
+        /** Files that will go into the commit. */
         /** @type {Set<string>} */
         selected: new Set(),
+        /** The file whose diff is on screen. */
+        active: /** @type {string | null} */ (null),
         message: '',
         busy: false,
         /** @type {(Error & { kind?: string }) | null} */
@@ -222,6 +334,12 @@ export function mountCommit(root, sync, handlers = {}) {
     let messageInput = null;
     /** @type {Map<string, HTMLInputElement>} */
     let checkboxes = new Map();
+    /** @type {Map<string, HTMLElement>} */
+    let rows = new Map();
+    /** @type {HTMLElement | null} */
+    let diffPanel = null;
+    /** @type {HTMLElement | null} */
+    let countLive = null;
 
     /* Helpers ----------------------------------------------------------- */
 
@@ -238,9 +356,17 @@ export function mountCommit(root, sync, handlers = {}) {
     }
 
     /**
-     * Keep the primary button, the select-all state and the disabled controls
-     * honest without rebuilding the DOM, so typing and ticking never move the
-     * caret.
+     * @param {string} path
+     * @returns {Change | null}
+     */
+    function changeFor(path) {
+        return state.paths.find((entry) => entry.path === path) || null;
+    }
+
+    /**
+     * Keep the primary button, the select-all state, the live count and the
+     * disabled controls honest without rebuilding the DOM, so typing and
+     * ticking never move the caret.
      */
     function updateControls() {
         const count = state.selected.size;
@@ -253,10 +379,19 @@ export function mountCommit(root, sync, handlers = {}) {
         if (selectAllInput) {
             selectAllInput.checked = count > 0 && count === state.paths.length;
             selectAllInput.indeterminate = count > 0 && count < state.paths.length;
+            selectAllInput.disabled = state.busy;
         }
 
         if (messageInput) {
             messageInput.disabled = state.busy;
+        }
+
+        if (countLive) {
+            const total = state.paths.length;
+            countLive.textContent =
+                total === 0
+                    ? ''
+                    : `${count} of ${total} ${total === 1 ? 'file' : 'files'} ticked for this commit.`;
         }
     }
 
@@ -266,7 +401,9 @@ export function mountCommit(root, sync, handlers = {}) {
      * @returns {HTMLElement[]}
      */
     function focusables() {
-        const nodes = content.querySelectorAll('button, textarea, input, a[href]');
+        const nodes = content.querySelectorAll(
+            'button, textarea, input, a[href], [tabindex]:not([tabindex="-1"])',
+        );
         return [...nodes].filter((node) => {
             if (!(node instanceof HTMLElement)) {
                 return false;
@@ -283,10 +420,6 @@ export function mountCommit(root, sync, handlers = {}) {
     /**
      * The project name, presented so it cannot be mistaken for a word in the
      * sentence: quoted, and in monospace.
-     *
-     * A student names a project after their own work, so the text in this slot is
-     * arbitrary. Quoting it is the difference between "“house” has changes…" and a
-     * reader wondering whether a house is a thing the app knows about.
      *
      * @returns {HTMLElement}
      */
@@ -314,12 +447,25 @@ export function mountCommit(root, sync, handlers = {}) {
         return fragment;
     }
 
+    /**
+     * Footer buttons live in their own group so the message field can take the
+     * rest of the bar.
+     *
+     * @param {HTMLElement[]} nodes
+     * @returns {HTMLElement}
+     */
+    function actions(...nodes) {
+        const group = el('div', 'commit-actions');
+        group.append(...nodes);
+        return group;
+    }
+
     function renderLoading() {
         const note = el('p', 'commit-loading');
         note.append(aroundProjectName('Checking ', ' for changes\u2026'));
         note.setAttribute('aria-live', 'polite');
         body.append(note);
-        footer.append(button('Cancel', 'quiet', () => finish('cancelled')));
+        footer.append(actions(button('Cancel', 'quiet', () => finish('cancelled'))));
     }
 
     function renderLoadError() {
@@ -339,10 +485,12 @@ export function mountCommit(root, sync, handlers = {}) {
         body.append(section);
 
         footer.append(
-            button('Cancel', 'quiet', () => finish('cancelled')),
-            button('Try again', 'primary', () => {
-                void load(state.project);
-            }),
+            actions(
+                button('Cancel', 'quiet', () => finish('cancelled')),
+                button('Try again', 'primary', () => {
+                    void load(state.project);
+                }),
+            ),
         );
     }
 
@@ -357,79 +505,358 @@ export function mountCommit(root, sync, handlers = {}) {
             })(),
         );
         body.append(section);
-        footer.append(button('Close', 'quiet', () => finish('cancelled')));
+        footer.append(actions(button('Close', 'quiet', () => finish('cancelled'))));
+    }
+
+    /* Diff pane --------------------------------------------------------- */
+
+    /**
+     * One line of unified output: line numbers from both sides in a narrow
+     * gutter, then the marker and the text. The text never wraps; the pane
+     * scrolls sideways instead.
+     *
+     * @param {import('../diff.js').DiffLine} line
+     * @param {'diff' | 'current'} mode
+     * @returns {HTMLElement}
+     */
+    function renderDiffLine(line, mode = 'diff') {
+        const type = mode === 'current' ? 'context' : line.type;
+        const row = el('div', `commit-diff-line commit-diff-line-${type}`);
+
+        const beforeNumber = line.before === null ? '' : String(line.before);
+        const afterNumber = line.after === null ? '' : String(line.after);
+
+        const before = el('span', 'commit-diff-num', beforeNumber);
+        before.setAttribute('aria-hidden', 'true');
+        const after = el('span', 'commit-diff-num', afterNumber);
+        after.setAttribute('aria-hidden', 'true');
+
+        let mark = ' ';
+        if (type === 'added') {
+            mark = '+';
+        } else if (type === 'removed') {
+            mark = '\u2212';
+        }
+        const marker = el('span', 'commit-diff-mark', mark);
+        marker.setAttribute('aria-hidden', 'true');
+
+        // Tabs are expanded so a Python file's indentation is visible rather
+        // than a variable-width gap. `textContent` keeps the line inert.
+        const text = el('span', 'commit-diff-text', line.text.replace(/\t/g, '    '));
+        row.append(before, after, marker, text);
+        return row;
     }
 
     /**
-     * @param {{ path: string, status: string }} entry
-     * @returns {HTMLLabelElement}
+     * @param {import('../diff.js').DiffLine[]} lines
+     * @param {'diff' | 'current'} mode
+     * @returns {HTMLElement}
+     */
+    function renderDiffLines(lines, mode) {
+        const block = el(
+            'div',
+            mode === 'current' ? 'commit-diff-lines commit-diff-lines-current' : 'commit-diff-lines',
+        );
+        for (const line of lines) {
+            block.append(renderDiffLine(line, mode));
+        }
+        return block;
+    }
+
+    /**
+     * A full-width explanatory line inside the diff pane.
+     *
+     * @param {string} message
+     * @returns {HTMLElement}
+     */
+    function diffNote(message) {
+        return el('p', 'commit-diff-note', message);
+    }
+
+    /**
+     * Paint the right-hand pane for the selected file.
+     *
+     * Only the selected file is diffed, and only on demand: the cached result
+     * built at load time is used here, never recomputed while a caret moves.
+     */
+    function paintDiff() {
+        if (!diffPanel) {
+            return;
+        }
+
+        diffPanel.replaceChildren();
+        diffPanel.removeAttribute('aria-labelledby');
+
+        const entry = state.active ? changeFor(state.active) : null;
+        if (!entry) {
+            diffPanel.append(el('p', 'commit-diff-empty', 'Select a file to see what will be saved.'));
+            return;
+        }
+
+        const diff = state.diffs.get(entry.path) || buildDiff(entry);
+
+        const headNode = el('div', 'commit-diff-head');
+        const headMain = el('div', 'commit-diff-head-main');
+        const path = el('code', 'commit-diff-path', entry.path);
+        path.id = diffLabelId;
+        path.title = entry.path;
+        diffPanel.setAttribute('aria-labelledby', diffLabelId);
+
+        const meta = el('div', 'commit-diff-meta');
+        const status = el(
+            'span',
+            `commit-diff-status commit-diff-status-${entry.status}`,
+            entry.status,
+        );
+        meta.append(status);
+
+        const counts = el('div', 'commit-diff-counts');
+        if (diff.available) {
+            counts.append(
+                el('span', 'commit-diff-added', `+${diff.added}`),
+                el('span', 'commit-diff-removed', `\u2212${diff.removed}`),
+            );
+            counts.setAttribute(
+                'aria-label',
+                `${diff.added} ${diff.added === 1 ? 'line' : 'lines'} added, ` +
+                    `${diff.removed} ${diff.removed === 1 ? 'line' : 'lines'} removed`,
+            );
+        } else {
+            counts.append(
+                el(
+                    'span',
+                    'commit-diff-unavailable',
+                    diff.reason === 'before-missing' ? 'No earlier copy' : 'No current copy',
+                ),
+            );
+        }
+
+        headMain.append(path, meta);
+        headNode.append(headMain, counts);
+
+        const scroll = el('div', 'commit-diff-scroll');
+
+        if (!diff.available) {
+            const reason =
+                diff.reason === 'before-missing'
+                    ? 'The earlier copy of this file was saved before pydle kept file contents, ' +
+                      'so there is nothing to compare it with.' +
+                      (entry.status === 'deleted'
+                          ? ' It will still be deleted when you save.'
+                          : ' The version below is what will be saved.')
+                    : 'The current copy of this file could not be read, so there is no diff to show.';
+            scroll.append(diffNote(reason));
+
+            if (typeof diff.current === 'string') {
+                scroll.append(el('p', 'commit-diff-subhead', 'Current version'));
+                const currentLines = diffLines(null, diff.current).map((line) => ({
+                    ...line,
+                    type: /** @type {const} */ ('context'),
+                }));
+                if (currentLines.length === 0) {
+                    scroll.append(diffNote('This file is empty.'));
+                } else {
+                    scroll.append(renderDiffLines(currentLines, 'current'));
+                }
+            }
+        } else if (diff.lines.length === 0) {
+            scroll.append(diffNote('This file has no text lines to show.'));
+        } else {
+            scroll.append(renderDiffLines(diff.lines, 'diff'));
+        }
+
+        diffPanel.append(headNode, scroll);
+    }
+
+    /* File list --------------------------------------------------------- */
+
+    /**
+     * @param {Change} entry
+     * @returns {HTMLElement}
      */
     function renderFileRow(entry) {
-        const label = /** @type {HTMLLabelElement} */ (el('label', 'commit-file'));
+        const diff = state.diffs.get(entry.path) || buildDiff(entry);
+        const ticked = state.selected.has(entry.path);
+        const active = state.active === entry.path;
+
+        const row = el('div', 'commit-file');
+        row.dataset.path = entry.path;
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', active ? 'true' : 'false');
+        row.setAttribute('aria-disabled', state.busy ? 'true' : 'false');
+        if (active) {
+            row.classList.add('is-active');
+        }
+        row.tabIndex = active && !state.busy ? 0 : -1;
+
         const checkbox = /** @type {HTMLInputElement} */ (el('input', 'commit-file-check'));
         checkbox.type = 'checkbox';
-        checkbox.checked = state.selected.has(entry.path);
+        checkbox.checked = ticked;
         checkbox.disabled = state.busy;
-
-        const path = el('span', 'commit-file-path', entry.path);
-        path.title = entry.path;
-
-        const status = statusLabel(entry.status);
-        const badge = el('span', `commit-file-status commit-file-status-${status}`, status);
-        badge.setAttribute('aria-label', `Status: ${status}`);
-
+        checkbox.setAttribute(
+            'aria-label',
+            `${ticked ? 'Leave out' : 'Include'} ${entry.path} in this save`,
+        );
         checkbox.addEventListener('change', () => {
             if (checkbox.checked) {
                 state.selected.add(entry.path);
             } else {
                 state.selected.delete(entry.path);
             }
+            checkbox.setAttribute(
+                'aria-label',
+                `${checkbox.checked ? 'Leave out' : 'Include'} ${entry.path} in this save`,
+            );
             updateControls();
         });
 
+        const main = el('div', 'commit-file-main');
+        const path = el('span', 'commit-file-path', entry.path);
+        path.title = entry.path;
+
+        const meta = el('div', 'commit-file-meta');
+        const status = el('span', `commit-file-status commit-file-status-${entry.status}`, entry.status);
+        meta.append(status);
+
+        if (diff.available) {
+            const stats = el('span', 'commit-file-stats');
+            stats.append(
+                el('span', 'commit-file-added', `+${diff.added}`),
+                document.createTextNode(' '),
+                el('span', 'commit-file-removed', `\u2212${diff.removed}`),
+            );
+            stats.setAttribute(
+                'aria-label',
+                `${diff.added} added, ${diff.removed} removed`,
+            );
+            meta.append(stats);
+        } else {
+            const stats = el('span', 'commit-file-stats commit-file-stats-none', 'no diff');
+            stats.title =
+                diff.reason === 'before-missing'
+                    ? 'The earlier copy was saved before pydle kept file contents.'
+                    : 'The current copy could not be read.';
+            meta.append(stats);
+        }
+
+        main.append(path, meta);
+        row.append(checkbox, main);
+
+        row.addEventListener('click', () => {
+            select(entry.path);
+        });
+
+        row.addEventListener('keydown', (event) => {
+            if (event.target instanceof HTMLInputElement) {
+                return;
+            }
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                select(entry.path);
+                return;
+            }
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+                return;
+            }
+            event.preventDefault();
+            const index = state.paths.findIndex((item) => item.path === entry.path);
+            const step = event.key === 'ArrowDown' ? 1 : -1;
+            const next = state.paths[index + step];
+            if (!next) {
+                return;
+            }
+            select(next.path);
+            const nextRow = rows.get(next.path);
+            if (nextRow) {
+                nextRow.focus({ preventScroll: true });
+                nextRow.scrollIntoView({ block: 'nearest' });
+            }
+        });
+
         checkboxes.set(entry.path, checkbox);
-        label.append(checkbox, path, badge);
-        return label;
+        rows.set(entry.path, row);
+        return row;
+    }
+
+    /**
+     * Select a file for the diff pane. Ticking is a separate decision, so this
+     * never touches `state.selected`.
+     *
+     * @param {string} path
+     */
+    function select(path) {
+        if (state.busy || !state.open || state.active === path || !changeFor(path)) {
+            return;
+        }
+        state.active = path;
+
+        for (const [rowPath, row] of rows) {
+            const isActive = rowPath === path;
+            row.classList.toggle('is-active', isActive);
+            row.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            row.tabIndex = isActive && !state.busy ? 0 : -1;
+        }
+
+        paintDiff();
+    }
+
+    /* Ready state ------------------------------------------------------- */
+
+    function renderGuard() {
+        // The escape hatch is inline rather than a red footer button: leaving
+        // without committing deletes nothing, so it should not be styled as a
+        // destructive action.
+        const guard = el('p', 'commit-guard');
+        guard.append(
+            aroundProjectName('', ' has changes that are not in GitHub yet. Save them before you go, or '),
+        );
+        const leave = el('button', 'commit-guard-link', 'leave without committing');
+        leave.type = 'button';
+        leave.disabled = Boolean(state.busy);
+        leave.title = 'Your files stay on this device. Nothing is deleted.';
+        leave.setAttribute(
+            'aria-label',
+            'Leave without committing. Your files stay saved on this device.',
+        );
+        leave.addEventListener('click', () => finish('discarded'));
+        guard.append(leave, document.createTextNode(' and carry on.'));
+        body.append(guard);
+    }
+
+    function renderCommitError() {
+        if (!state.error) {
+            return;
+        }
+        const banner = el('section', 'commit-alert');
+        const note = el('p', 'sync-note sync-note-error', state.error.message);
+        note.setAttribute('role', 'alert');
+        banner.append(note);
+
+        const hint = recoveryHint(state.error);
+        if (hint) {
+            banner.append(el('p', 'sync-meta', hint));
+        }
+        body.append(banner);
     }
 
     function renderReady() {
         if (state.leaving) {
-            // The escape hatch is inline rather than a red footer button: leaving
-            // without committing deletes nothing, so it should not be styled as a
-            // destructive action.
-            const guard = el('p', 'commit-guard');
-            guard.append(aroundProjectName('', ' has changes that are not in GitHub yet. Save them before you go, or '));
-            const leave = el('button', 'commit-guard-link', 'leave without committing');
-            leave.type = 'button';
-            leave.disabled = Boolean(state.busy);
-            leave.title = 'Your files stay on this device. Nothing is deleted.';
-            leave.setAttribute(
-                'aria-label',
-                'Leave without committing. Your files stay saved on this device.',
-            );
-            leave.addEventListener('click', () => finish('discarded'));
-            guard.append(leave, document.createTextNode(' and carry on.'));
-            body.append(guard);
+            renderGuard();
+        }
+        renderCommitError();
+
+        if (!state.active || !changeFor(state.active)) {
+            state.active = state.paths.length > 0 ? state.paths[0].path : null;
         }
 
-        if (state.error) {
-            const section = el('section', 'commit-section commit-section-error');
-            const note = el('p', 'sync-note sync-note-error', state.error.message);
-            note.setAttribute('role', 'alert');
-            section.append(note);
+        const main = el('div', 'commit-main');
 
-            const hint = recoveryHint(state.error);
-            if (hint) {
-                section.append(el('p', 'sync-meta', hint));
-            }
-            body.append(section);
-        }
-
-        const filesSection = el('section', 'commit-section commit-section-files');
-        const head = el('div', 'commit-section-head');
-        const filesLabel = el('h3', 'sync-section-label', 'Files');
+        /* Left column: the changed files. */
+        const filesPanel = el('section', 'commit-files-panel');
+        const filesHead = el('div', 'commit-panel-head');
+        const filesLabel = el('h3', 'sync-section-label commit-files-label', 'Files');
         filesLabel.id = filesLabelId;
-        head.append(filesLabel);
+        filesHead.append(filesLabel);
 
         if (state.paths.length > SELECT_ALL_THRESHOLD) {
             const selectAllLabel = el('label', 'commit-select-all');
@@ -438,60 +865,82 @@ export function mountCommit(root, sync, handlers = {}) {
             selectAllInput.disabled = state.busy;
             selectAllInput.addEventListener('change', () => {
                 state.selected = new Set(
-                    selectAllInput && selectAllInput.checked ? state.paths.map((entry) => entry.path) : [],
+                    selectAllInput && selectAllInput.checked
+                        ? state.paths.map((entry) => entry.path)
+                        : [],
                 );
                 for (const [path, box] of checkboxes) {
                     box.checked = state.selected.has(path);
+                    box.setAttribute(
+                        'aria-label',
+                        `${box.checked ? 'Leave out' : 'Include'} ${path} in this save`,
+                    );
                 }
                 updateControls();
             });
             selectAllLabel.append(selectAllInput, document.createTextNode('Select all'));
-            head.append(selectAllLabel);
+            filesHead.append(selectAllLabel);
         }
 
-        filesSection.append(head);
-
         const list = el('div', 'commit-file-list');
-        list.setAttribute('role', 'group');
+        list.setAttribute('role', 'listbox');
         list.setAttribute('aria-labelledby', filesLabelId);
+        list.setAttribute('aria-multiselectable', 'true');
         for (const entry of state.paths) {
             list.append(renderFileRow(entry));
         }
-        filesSection.append(list);
-        body.append(filesSection);
 
-        const messageSection = el('section', 'commit-section commit-section-message');
+        countLive = el('p', 'commit-live');
+        countLive.id = countId;
+        countLive.setAttribute('aria-live', 'polite');
+        countLive.setAttribute('aria-atomic', 'true');
+
+        filesPanel.append(filesHead, list, countLive);
+
+        /* Right pane: the selected file's diff. */
+        diffPanel = el('section', 'commit-diff-panel');
+        diffPanel.setAttribute('role', 'region');
+
+        main.append(filesPanel, diffPanel);
+        body.append(main);
+
+        /* Bottom bar: the message, then the actions. */
+        const messageField = el('div', 'commit-message-field');
         const messageLabel = el('label', 'sync-section-label commit-message-label', 'Message');
         messageLabel.setAttribute('for', messageId);
 
         messageInput = /** @type {HTMLTextAreaElement} */ (el('textarea', 'commit-message'));
         messageInput.id = messageId;
-        messageInput.rows = 3;
+        messageInput.rows = 2;
         messageInput.value = state.message;
         messageInput.disabled = state.busy;
         messageInput.setAttribute('aria-required', 'true');
+        messageInput.placeholder = 'What changed, and why?';
         messageInput.addEventListener('input', () => {
             state.message = messageInput ? messageInput.value : '';
             updateControls();
         });
 
-        messageSection.append(
+        messageField.append(
             messageLabel,
             messageInput,
-            el('p', 'commit-hint', 'A short note about what changed, and why. This becomes one commit in your repository.'),
+            el(
+                'p',
+                'commit-hint',
+                'A short note about what changed, and why. This becomes one commit in your repository.',
+            ),
         );
-        body.append(messageSection);
+
+        submitBtn = button(submitLabel(state.selected.size), 'primary', () => {
+            void submit();
+        });
 
         footer.append(
-            button('Cancel', 'quiet', () => finish('cancelled'), { disabled: state.busy }),
-            (() => {
-                submitBtn = button(submitLabel(state.selected.size), 'primary', () => {
-                    void submit();
-                });
-                return submitBtn;
-            })(),
+            messageField,
+            actions(button('Cancel', 'quiet', () => finish('cancelled'), { disabled: state.busy }), submitBtn),
         );
 
+        paintDiff();
         updateControls();
     }
 
@@ -499,13 +948,18 @@ export function mountCommit(root, sync, handlers = {}) {
         projectLine.textContent = state.project || 'This project';
         content.setAttribute('aria-busy', state.busy ? 'true' : 'false');
         closeBtn.disabled = state.busy;
+        // A working window needs the room; a single sentence does not.
+        content.classList.toggle('is-compact', state.phase !== 'ready');
 
         body.replaceChildren();
         footer.replaceChildren();
         messageInput = null;
         selectAllInput = null;
         submitBtn = null;
+        countLive = null;
+        diffPanel = null;
         checkboxes = new Map();
+        rows = new Map();
 
         if (state.phase === 'loading') {
             renderLoading();
@@ -579,6 +1033,11 @@ export function mountCommit(root, sync, handlers = {}) {
     /**
      * Read what has changed and build the list.
      *
+     * The diff for a changed file is built here, once, so selecting a file is
+     * instant and opening the dialog does not run the comparison repeatedly.
+     * Unchanged files never reach this point: `dirty()` has already filtered
+     * them out.
+     *
      * @param {string} project
      */
     async function load(project) {
@@ -587,7 +1046,9 @@ export function mountCommit(root, sync, handlers = {}) {
         state.phase = 'loading';
         state.error = null;
         state.paths = [];
+        state.diffs = new Map();
         state.selected = new Set();
+        state.active = null;
         render();
         content.focus({ preventScroll: true });
 
@@ -609,12 +1070,17 @@ export function mountCommit(root, sync, handlers = {}) {
             return;
         }
 
-        const entries = Array.isArray(report && report.paths) ? report.paths.filter(isChange) : [];
-        state.paths = entries.map((entry) => ({
-            path: entry.path,
-            status: statusLabel(entry.status),
-        }));
+        const entries = Array.isArray(report && report.paths)
+            ? report.paths.map(normaliseChange).filter(Boolean)
+            : [];
+
+        state.paths = /** @type {Change[]} */ (entries);
+        state.diffs = new Map();
+        for (const entry of state.paths) {
+            state.diffs.set(entry.path, buildDiff(entry));
+        }
         state.selected = new Set(state.paths.map((entry) => entry.path));
+        state.active = state.paths.length > 0 ? state.paths[0].path : null;
         state.phase = state.paths.length === 0 ? 'clean' : 'ready';
         render();
 
@@ -821,7 +1287,8 @@ export function mountCommit(root, sync, handlers = {}) {
      *
      * @param {string} project
      * @param {{ leaving?: boolean }} [options] `leaving` adds the guard mode:
-     *   a note and a Discard action, for when the dialog is holding up a switch.
+     *   a note and a way to leave without committing, for when the dialog is
+     *   holding up a switch.
      * @returns {Promise<'committed' | 'discarded' | 'cancelled'>}
      */
     function open(project, options = {}) {
@@ -841,7 +1308,9 @@ export function mountCommit(root, sync, handlers = {}) {
         state.busy = false;
         state.error = null;
         state.paths = [];
+        state.diffs = new Map();
         state.selected = new Set();
+        state.active = null;
         returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
         overlay.classList.remove('hidden');
