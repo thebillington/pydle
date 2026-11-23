@@ -71,9 +71,21 @@ else:
     })
 `),
                 );
-            } catch {
+            } catch (extractFailure) {
+                // If this fires, the page has no line or column to work with.
+                console.warn('[pydle] worker: could not read sys.last_exc', extractFailure);
                 structured = null;
             }
+
+            console.info('[pydle] worker: error', {
+                summary,
+                structuredType: structured ? structured.type : null,
+                line: structured ? structured.line : null,
+                column: structured ? structured.column : null,
+                endColumn: structured ? structured.endColumn : null,
+                hasSource: Boolean(structured && structured.source),
+                notes: structured ? structured.notes : null,
+            });
 
             self.postMessage({ type: 'error', summary, detail: text.trim(), structured });
         }
