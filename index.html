@@ -302,12 +302,12 @@ print("Hello, World!")</textarea>
         import { buildErrorBlock, indentOf, normaliseSource } from './js/error-block.js';
         import { createSync } from './js/sync.js';
         import { mountConnect } from './js/ui/connect.js';
-        import { mountHome } from './js/ui/home.js';
+        import { RESERVED_PROJECT_NAMES, mountHome } from './js/ui/home.js';
         import { getResolvedTheme, mountThemeToggle } from './js/ui/theme.js';
         import { defaultFilePath, mountFileRail, validateFileName } from './js/ui/files.js';
         import { mountCommit } from './js/ui/commit.js';
         import { mountHistory } from './js/ui/history.js';
-        import { notify, promptText } from './js/ui/dialog.js';
+        import { confirmAction, notify, promptText } from './js/ui/dialog.js';
         import { importLegacyProjects } from './js/vault/legacy.js';
         import { normalizeProjectName } from './js/vault/paths.js';
 
@@ -2016,7 +2016,13 @@ print("Hello, World!")</textarea>
         }
 
         initWorker();
-        void boot();
+        void boot().catch((error) => {
+            // Never leave the app half-started and silent: report it, and still
+            // start sync so a signed-in student is not logged out by a failed
+            // migration.
+            console.error('[pydle] boot failed', error);
+            void startSync();
+        });
     </script>
     <footer>
         <a href="https://github.com/thebillington/pydle" target="_blank" rel="noopener noreferrer"><span class="repo">pydle</span></a> is an <a href="https://github.com/thebillington/pydle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT-licensed</a> project built and maintained by <a href="https://github.com/thebillington" target="_blank" rel="noopener noreferrer">thebillington</a> &middot; <a href="https://github.com/sponsors/thebillington" target="_blank" rel="noopener noreferrer" class="sponsor">Sponsor this project</a>

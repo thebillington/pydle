@@ -152,3 +152,30 @@ test('no module calls its own exports without defining them', async () => {
         );
     }
 });
+
+test('the page imports every module export it uses', async () => {
+    // The inline module in index.html is outside `js/`, so the per-file scan above
+    // never looks at it. A missing import there is the same bug: `boot()` threw
+    // `RESERVED_PROJECT_NAMES is not defined`, which aborted startup and left a
+    // signed-in student looking logged out.
+    const html = await readFile('index.html', 'utf8');
+    const inline = /<script type="module">([\s\S]*?)<\/script>/.exec(html);
+    assert.ok(inline, 'no inline module found in index.html');
+
+    const source = stripComments(inline[1]);
+    const known = new Set([...importedNames(source), ...declaredNames(source), ...GLOBALS]);
+
+    const missing = new Set();
+    for (const name of exported.keys()) {
+        if (known.has(name)) {
+            continue;
+        }
+        // Used as a bare identifier: not preceded by a dot, not a property key.
+        const pattern = new RegExp(`(?<![.\\w$])${name}(?![\\w$])(?!\\s*:)`);
+        if (pattern.test(source)) {
+            missing.add(name);
+        }
+    }
+
+    assert.deepEqual([...missing].sort(), [], `index.html uses without importing: ${[...missing].join(', ')}`);
+});
