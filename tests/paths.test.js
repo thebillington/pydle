@@ -53,29 +53,52 @@ test('safeJoin error names the offending input', () => {
     assert.throws(() => safeJoin('/etc/passwd'), /\/etc\/passwd/);
 });
 
-test('normalizeProjectName slugifies display names', () => {
-    assert.equal(normalizeProjectName('My Project'), 'my-project');
+test('normalizeProjectName produces snake_case names', () => {
+    assert.equal(normalizeProjectName('My Project'), 'my_project');
     assert.equal(normalizeProjectName('  __hello__  '), 'hello');
     assert.equal(normalizeProjectName('ÜBER'), 'ber');
-    assert.equal(normalizeProjectName('a b__c'), 'a-b-c');
+    assert.equal(normalizeProjectName('a b__c'), 'a_b_c');
     assert.equal(normalizeProjectName('--x--'), 'x');
+});
+
+test('normalizeProjectName turns hyphens into underscores', () => {
+    // The old rule produced a hyphenated folder for a snake_case name. A name
+    // stored that way is migrated by startup, and storage itself is snake_case.
+    assert.equal(normalizeProjectName('my-first-project'), 'my_first_project');
+    assert.equal(normalizeProjectName('my--first---project'), 'my_first_project');
+    assert.equal(normalizeProjectName('my - first project'), 'my_first_project');
+    assert.equal(normalizeProjectName('my_first_project'), 'my_first_project');
+});
+
+test('normalizeProjectName keeps only lowercase letters, digits and underscores', () => {
+    assert.equal(normalizeProjectName('Names.py'), 'namespy');
+    assert.equal(normalizeProjectName('café 2'), 'caf_2');
+    assert.equal(normalizeProjectName('a_b_c_1'), 'a_b_c_1');
+});
+
+test('normalizeProjectName does not invent a leading letter', () => {
+    // The Home validator requires a letter first; storage must not silently
+    // prefix a name it is asked to hold, or the stored name would differ from
+    // the one it was given.
+    assert.equal(normalizeProjectName('1st_project'), '1st_project');
 });
 
 test('normalizeProjectName throws when nothing usable remains', () => {
     assert.throws(() => normalizeProjectName('!!!'), TypeError);
     assert.throws(() => normalizeProjectName(''), TypeError);
     assert.throws(() => normalizeProjectName('   '), TypeError);
+    assert.throws(() => normalizeProjectName('---'), TypeError);
 });
 
-test('normalizeProjectName caps the slug at 64 characters', () => {
+test('normalizeProjectName caps the name at 40 characters', () => {
     const slug = normalizeProjectName('a'.repeat(100));
-    assert.equal(slug.length, 64);
-    assert.equal(slug, 'a'.repeat(64));
+    assert.equal(slug.length, 40);
+    assert.equal(slug, 'a'.repeat(40));
 
-    // A hyphen left dangling by the cut is trimmed, so the cap still holds.
-    const trimmed = normalizeProjectName('b'.repeat(63) + ' x');
-    assert.equal(trimmed, 'b'.repeat(63));
-    assert.ok(trimmed.length <= 64);
+    // An underscore left dangling by the cut is trimmed, so the cap still holds.
+    const trimmed = normalizeProjectName('b'.repeat(39) + ' x');
+    assert.equal(trimmed, 'b'.repeat(39));
+    assert.ok(trimmed.length <= 40);
 });
 
 test('isReservedPath recognises the reserved roots', () => {

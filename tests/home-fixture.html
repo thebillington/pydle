@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>home screen fixture</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../css/home.css">
+<style>
+    body { margin: 0; }
+    main { display: flex; height: 100vh; }
+</style>
+<script>
+    (function () {
+        // Mirrors the real page: the stored choice wins, then the system.
+        var mode = 'auto';
+        try {
+            var stored = localStorage.getItem('pydle_theme');
+            if (stored === 'light' || stored === 'dark') mode = stored;
+        } catch (error) {}
+        var query = new URLSearchParams(location.search).get('theme');
+        if (query === 'light' || query === 'dark') mode = query;
+        var dark = mode === 'dark' ||
+            (mode === 'auto' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+</script>
+</head>
+<body>
+<!--
+    Visual fixture for the home screen. It mounts the real component with a
+    stubbed project list, so the empty state, a filtered search and a long list
+    can be looked at without touching the vault.
+
+        tests/home-fixture.html?state=many|empty|filtered|loading
+                                &theme=light|dark
+-->
+<main class="is-home">
+    <section id="home-root" class="home-screen" hidden></section>
+</main>
+
+<script type="module">
+    import { mountHome } from '../js/ui/home.js';
+
+    const DAY = 86400000;
+    const now = Date.now();
+
+    const ALL = [
+        { name: 'turtle_house', updatedAt: now - 2 * 3600000 },
+        { name: 'times_tables_quiz', updatedAt: now - DAY },
+        { name: 'maze_game', updatedAt: now - 2 * DAY },
+        { name: 'word_counter', updatedAt: now - 4 * DAY },
+        { name: 'birthday_cake', updatedAt: now - 9 * DAY },
+        { name: 'turtle_spiral', updatedAt: now - 12 * DAY },
+        { name: 'shopping_list', updatedAt: now - 20 * DAY },
+        { name: 'guess_the_number', updatedAt: now - 33 * DAY },
+        { name: 'weather_chart', updatedAt: now - 47 * DAY },
+        { name: 'rock_paper_scissors', updatedAt: now - 62 * DAY },
+        { name: 'dice_roller', updatedAt: now - 80 * DAY },
+        { name: 'name_badge', updatedAt: now - 101 * DAY },
+        { name: 'quiz_scores', updatedAt: now - 133 * DAY },
+        { name: 'pixel_art', updatedAt: now - 180 * DAY },
+    ];
+
+    const state = new URLSearchParams(location.search).get('state') || 'many';
+
+    const sync = {
+        status: 'connected',
+        identity: { login: 'p0142' },
+        workspace: { owner: 'p0142', repo: 'pydle-workspace' },
+        onStatus() { return () => {}; },
+    };
+
+    const home = mountHome(document.getElementById('home-root'), {
+        listProjects: () => {
+            if (state === 'empty') return Promise.resolve([]);
+            if (state === 'loading') return new Promise(() => {});
+            return Promise.resolve(ALL);
+        },
+        onOpen: async () => {},
+        onCreate: async () => {},
+        sync,
+        github: true,
+    });
+
+    document.getElementById('home-root').hidden = false;
+    home.update().then(() => {
+        if (state === 'filtered') {
+            const search = document.querySelector('.home-search-input');
+            search.value = 'turtle';
+            search.dispatchEvent(new Event('input'));
+            search.focus();
+        } else {
+            home.focus();
+        }
+        document.documentElement.dataset.ready = 'true';
+    });
+</script>
+</body>
+</html>

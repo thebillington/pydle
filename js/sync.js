@@ -19,6 +19,7 @@ import { bootstrapRepo } from './github/scaffold.js';
 import { ConflictError, commitFiles } from './github/commit.js';
 import { clearTokens, loadTokens, saveTokens } from './vault/tokens.js';
 import * as vault from './vault/fs.js';
+import { LEGACY_PREFIX } from './vault/legacy.js';
 import { normalizeProjectName, safeJoin } from './vault/paths.js';
 import { planMerge } from './reconcile.js';
 
@@ -37,6 +38,9 @@ const WORKSPACE_MARKER = 'pydle.json';
 
 /** Directory inside the repo that holds program projects. */
 const WORK_ROOT = 'work';
+
+/** Key the page uses to remember the last project opened on this device. */
+const LAST_PROJECT_KEY = 'pydle_last_project';
 
 /**
  * Repository root per kind.
@@ -1264,7 +1268,108 @@ export function createSync({ onChange } = {}) {
         }
 
         await vault.deleteProject(project, { kind });
+
+        // Per-project keys from before the vault existed mirror work that has
+        // now been deleted. Left behind, the startup importer would read them as
+        // projects the vault has never held and bring the deleted work back.
+        // Keys are matched by their canonical name as well, because an old key
+        // may still be spelled `my-project`.
+        if (kind === 'work') {
+            try {
+                const stale = [];
+                for (let index = 0; index < localStorage.length; index += 1) {
+                    const key = localStorage.key(index);
+                    if (!key || !key.startsWith(LEGACY_PREFIX)) {
+                        continue;
+                    }
+                    let name;
+                    try {
+                        name = normalizeProjectName(key.slice(LEGACY_PREFIX.length));
+                    } catch {
+                        continue;
+                    }
+                    if (name === project) {
+                        stale.push(key);
+                    }
+                }
+                for (const key of stale) {
+                    localStorage.removeItem(key);
+                }
+            } catch {
+                // A blocked storage partition only leaves stale debris behind.
+            }
+        }
+
         emit();
+    }
+
+    /**
+     * Rename a project on this device.
+     *
+     * A rename is local only, whether or not a workspace is connected. On
+     * GitHub a rename is a delete and an add, which the next save of the
+     * project expresses naturally; pretending otherwise would put a rename in
+     * the history and a delete where the old name used to be.
+     *
+     * The vault directory and the commit snapshot move together, so the
+     * project's history does not appear to vanish. `from` is the name the
+     * project is stored under, exactly: startup uses this to bring a
+     * hyphenated project onto the snake_case rule.
+     *
+     * Never throws. A failed rename leaves the project under its old name,
+     * which is why the return value says whether it happened.
+     *
+     * @param {string} from The stored name.
+     * @param {string} to The new name.
+     * @param {string} [kind]
+     * @returns {Promise<boolean>} True when the project now lives under `to`.
+     */
+    async function renameProject(from, to, kind = 'work') {
+        let target;
+        try {
+            target = normalizeProjectName(to);
+        } catch (error) {
+            console.warn('[pydle] rename', from, to, error);
+            return false;
+        }
+
+        if (typeof from !== 'string' || from === '') {
+            console.warn('[pydle] rename', from, to);
+            return false;
+        }
+        if (from === target) {
+            return true;
+        }
+
+        try {
+            await vault.renameProject(from, target, { kind });
+        } catch (error) {
+            console.warn('[pydle] rename', from, target, error);
+            return false;
+        }
+
+        try {
+            await vault.renameCommitSnapshot(from, target, { kind });
+        } catch (error) {
+            // The files moved; only the record of what was last committed is
+            // still under the old name. That costs a dirty check, not the work.
+            console.warn('[pydle] rename', from, target, error);
+        }
+
+        // The page reopens the last project on the next visit, so it must not
+        // keep pointing at the name that no longer exists.
+        if (kind === 'work') {
+            try {
+                if (localStorage.getItem(LAST_PROJECT_KEY) === from) {
+                    localStorage.setItem(LAST_PROJECT_KEY, target);
+                }
+            } catch {
+                // A blocked storage partition only costs the reopen.
+            }
+        }
+
+        emit();
+        return true;
     }
 
     return {
@@ -1295,6 +1400,7 @@ export function createSync({ onChange } = {}) {
         writeFiles,
         deleteFile,
         deleteProject,
+        renameProject,
         dirty,
         preflight,
         commit,

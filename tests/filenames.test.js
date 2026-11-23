@@ -97,7 +97,8 @@ test('defaultFilePath answers null for an empty project', () => {
 });
 
 test('projectSlug normalises a name typed at the save prompt', () => {
-    assert.equal(projectSlug('My Project'), 'my-project');
+    assert.equal(projectSlug('My Project'), 'my_project');
+    assert.equal(projectSlug('my-project'), 'my_project');
     assert.equal(projectSlug('  spiral  '), 'spiral');
     assert.equal(projectSlug('!!!'), null);
     assert.equal(projectSlug(''), null);

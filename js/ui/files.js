@@ -257,6 +257,7 @@ function storeCollapsed(collapsed) {
  *   onCreate?: (name: string) => void | Promise<void>,
  *   onRename?: (from: string, to: string) => void | Promise<void>,
  *   onDelete?: (path: string) => void | Promise<void>,
+ *   onHome?: () => void,
  * }} [handlers]
  */
 export function mountFileRail(root, handlers = {}) {
@@ -265,6 +266,8 @@ export function mountFileRail(root, handlers = {}) {
         files: [],
         current: null,
         collapsed: readCollapsed(),
+        libraries: [],
+        hasRequirements: false,
     };
 
     root.classList.add('file-rail');
@@ -273,7 +276,13 @@ export function mountFileRail(root, handlers = {}) {
     /* Header ------------------------------------------------------------- */
 
     const head = el('div', 'file-rail-head');
-    const projectLabel = el('span', 'file-rail-project', 'no project');
+    const projectLabel = el('button', 'file-rail-project', 'no project');
+    projectLabel.type = 'button';
+    projectLabel.addEventListener('click', () => {
+        if (state.project !== null && typeof handlers.onHome === 'function') {
+            handlers.onHome();
+        }
+    });
     const collapseBtn = el('button', 'file-rail-collapse');
     collapseBtn.type = 'button';
     collapseBtn.setAttribute('aria-controls', 'file-rail-body');
@@ -287,6 +296,20 @@ export function mountFileRail(root, handlers = {}) {
     const list = el('ul', 'file-rail-list');
     list.setAttribute('aria-label', 'Files in this project');
     body.appendChild(list);
+
+    /* Libraries ---------------------------------------------------------- */
+    //
+    // Read-only: the rail shows what requirements.txt declares so the project's
+    // dependencies are visible beside its files. Installed packages are not
+    // tracked yet, so there is deliberately nothing to tick or install here.
+
+    const libraries = el('section', 'file-rail-libraries');
+    const librariesHead = el('h2', 'file-rail-section', 'Libraries');
+    const librariesList = el('ul', 'file-rail-library-list');
+    librariesList.setAttribute('aria-label', 'Libraries in this project');
+    const librariesEmpty = el('p', 'file-rail-library-empty', 'No libraries in this project');
+    const librariesNote = el('p', 'file-rail-library-note', 'Libraries are added when a project needs them.');
+    libraries.append(librariesHead, librariesList, librariesEmpty, librariesNote);
 
     const notice = el('p', 'file-rail-notice');
     notice.setAttribute('role', 'status');
@@ -304,7 +327,7 @@ export function mountFileRail(root, handlers = {}) {
     );
     foot.appendChild(newBtn);
 
-    root.append(head, body, notice, foot);
+    root.append(head, body, libraries, notice, foot);
 
     /* Overflow menu ------------------------------------------------------ */
 
@@ -518,7 +541,12 @@ export function mountFileRail(root, handlers = {}) {
 
     function render() {
         projectLabel.textContent = state.project || 'no project';
-        projectLabel.title = state.project || 'No project open';
+        projectLabel.disabled = state.project === null;
+        projectLabel.title = state.project ? 'Back to your work' : 'No project open';
+        projectLabel.setAttribute(
+            'aria-label',
+            state.project ? 'Back to your work. Close ' + state.project + '.' : 'No project open',
+        );
 
         list.textContent = '';
         for (const path of state.files) {
@@ -564,14 +592,27 @@ export function mountFileRail(root, handlers = {}) {
             const empty = el('li', 'file-rail-empty');
             empty.textContent = state.project
                 ? 'No files yet.'
-                : 'Save your program to start a project.';
+                : 'No project open. Pick one from the list to start writing Python.';
             list.appendChild(empty);
         }
 
         newBtn.disabled = state.project === null;
         newBtn.title = state.project
             ? 'New file in this project'
-            : 'Save your program first, then add files';
+            : 'Open a project to add files';
+
+        libraries.hidden = state.project === null;
+        librariesList.textContent = '';
+        for (const library of state.libraries) {
+            librariesList.appendChild(el('li', 'file-rail-library', library));
+        }
+        const declared = state.libraries.length > 0;
+        librariesList.hidden = !declared;
+        librariesEmpty.hidden = !state.project || declared;
+        librariesEmpty.textContent = state.hasRequirements
+            ? 'No libraries declared yet'
+            : 'No libraries in this project';
+        librariesNote.hidden = !state.project || declared;
 
         renderCollapsed();
     }
@@ -613,9 +654,15 @@ export function mountFileRail(root, handlers = {}) {
     /**
      * Replace what the rail shows.
      *
-     * @param {{ project?: string | null, files?: string[], current?: string | null }} next
+     * @param {{
+     *   project?: string | null,
+     *   files?: string[],
+     *   current?: string | null,
+     *   libraries?: string[],
+     *   hasRequirements?: boolean,
+     * }} next
      */
-    function setState({ project, files, current } = {}) {
+    function setState({ project, files, current, libraries: nextLibraries, hasRequirements } = {}) {
         if (project !== undefined) {
             state.project = project;
         }
@@ -624,6 +671,12 @@ export function mountFileRail(root, handlers = {}) {
         }
         if (current !== undefined) {
             state.current = current;
+        }
+        if (nextLibraries !== undefined) {
+            state.libraries = Array.isArray(nextLibraries) ? nextLibraries.slice() : [];
+        }
+        if (hasRequirements !== undefined) {
+            state.hasRequirements = Boolean(hasRequirements);
         }
         setNotice('');
         render();

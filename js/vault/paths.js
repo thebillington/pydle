@@ -13,8 +13,13 @@ const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 /** First path segments reserved for the deferred teacher-owned layer. */
 const RESERVED_ROOTS = new Set(['assignments', 'feedback']);
 
-/** Project slugs are capped so a directory name stays reasonable. */
-const MAX_PROJECT_NAME = 64;
+/**
+ * The longest project name storage will keep.
+ *
+ * The same number bounds the Home dialogue, so what a student can type is what
+ * the vault can hold.
+ */
+export const MAX_PROJECT_NAME = 40;
 
 /**
  * Describe a value for an error message without letting it blow up.
@@ -113,15 +118,24 @@ export function isReservedPath(path) {
 }
 
 /**
- * Turn a display name into a safe project slug.
+ * Turn a name into the canonical snake_case project name.
  *
- * Lowercases, maps spaces and underscores to `-`, drops anything outside
- * `[a-z0-9-]`, collapses repeated hyphens, trims hyphens at both ends and
- * caps the result at 64 characters.
+ * This is the single naming rule: the name a student types is the name stored
+ * in the vault, shown on Home and committed to GitHub. Negotiating a second
+ * spelling anywhere is what let a project called `names.py` appear to contain
+ * `main.py`, so there is deliberately no other form.
+ *
+ * Lowercases, turns spaces and hyphens (and runs of either) into a single `_`,
+ * keeps `[a-z0-9_]` only, collapses repeated underscores, trims underscores at
+ * both ends and caps the result at 40 characters.
+ *
+ * A leading letter is *not* required here: the Home validator enforces that for
+ * new names, but storage must not silently invent a prefix for a name it is
+ * asked to hold (a legacy import, for instance).
  *
  * @param {string} name Human-readable project name.
- * @returns {string} A slug usable as a directory name.
- * @throws {TypeError} If the name is not a string or yields an empty slug.
+ * @returns {string} A snake_case name usable as a directory name.
+ * @throws {TypeError} If the name is not a string or yields an empty name.
  */
 export function normalizeProjectName(name) {
     if (typeof name !== 'string') {
@@ -132,12 +146,12 @@ export function normalizeProjectName(name) {
 
     const slug = name
         .toLowerCase()
-        .replace(/[\s_]+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-+/g, '-')
-        .replace(/^-+|-+$/g, '')
+        .replace(/[\s-]+/g, '_')
+        .replace(/[^a-z0-9_]/g, '')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
         .slice(0, MAX_PROJECT_NAME)
-        .replace(/-+$/g, '');
+        .replace(/_+$/g, '');
 
     if (slug === '') {
         throw new TypeError(

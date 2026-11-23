@@ -141,6 +141,7 @@
     <link rel="stylesheet" href="css/codemirror-light.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="css/sync.css">
+    <link rel="stylesheet" href="css/home.css">
     <link rel="stylesheet" href="css/commit.css">
     <link rel="stylesheet" href="css/conflict.css">
     <link rel="stylesheet" href="css/editor-extras.css">
@@ -152,10 +153,10 @@
     <header>
         <h1>pydle <span class="subtitle">python in your browser</span></h1>
         <div class="controls">
-            <span id="sync-status" class="sync-status"></span>
-            <button id="sync-btn" class="btn btn-sync" title="Your work: your GitHub repository and the projects on this device" aria-haspopup="dialog" aria-controls="sync-overlay" aria-label="Your work">
+            <button id="sync-btn" class="btn btn-sync" title="GitHub: connect your account and repository" aria-haspopup="dialog" aria-controls="sync-overlay" aria-label="GitHub">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                Your work
+                <span class="sync-btn-dot" aria-hidden="true"></span>
+                <span>GitHub</span>
             </button>
             <span id="theme-toggle" class="theme-toggle-slot"></span>
             <a id="turtle-btn" class="btn btn-turtle" href="/turtle/" title="Switch to the turtle editor">Switch to turtle</a>
@@ -168,6 +169,8 @@
     </header>
 
     <main>
+        <section id="home-root" class="home-screen" hidden aria-label="Your work"></section>
+
         <section class="editor-panel">
             <div class="editor-toolbar">
                 <span class="panel-label-inline">editor</span>
@@ -175,9 +178,6 @@
                     <span id="file-indicator" class="file-indicator" title="Saved in browser only">untitled</span>
                     <button id="save-btn" class="toolbar-btn" title="Save (Ctrl+S)">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                    </button>
-                    <button id="load-btn" class="toolbar-btn" title="Load saved file">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                     </button>
                     <button id="download-btn" class="toolbar-btn" title="Download as .py file">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -228,7 +228,9 @@ print("Hello, World!")</textarea>
                 <pre>print("Hello, World!")</pre>
 
                 <h3>Projects and files</h3>
-                <p>A project is a folder for one piece of work, and it can hold several files. The rail down the left side lists the files in the open project. Use it to add a file, rename one or delete one.</p>
+                <p>When no project is open, the home screen lists every project on this device. Choose one to carry on, or create a new one and give it a name and a first file.</p>
+                <p>A project is a folder for one piece of work, and it can hold several files. The rail down the left side lists the files in the open project, and the project name at the top of the rail takes you back to the home screen. Use the rail to add a file, rename one or delete one.</p>
+                <p>The rail also lists any libraries that the project's <strong>requirements.txt</strong> declares. This is a read-only reminder for now.</p>
                 <p><strong>Save</strong> keeps the file you are working on safe on this device.</p>
 
                 <h3>Saving your work</h3>
@@ -236,7 +238,7 @@ print("Hello, World!")</textarea>
                 <p>If you are signed in to GitHub, saving also asks for a short message and gives you a list of the files that changed. Press commit and a copy goes into your own GitHub repository. That copy is what follows you to another computer.</p>
                 <p>If you are not signed in, saving only keeps the work on this device. The save button shows a small dot until your work is in GitHub, and the button in the header connects you.</p>
                 <h3>Your GitHub copy</h3>
-                <p>To commit, sign in from the <strong>Your work</strong> button in the header. pydle stores your projects in a repository that belongs to your account, and you can change your mind and stop at any time.</p>
+                <p>To commit, sign in from the <strong>GitHub</strong> button in the header. pydle stores your projects in a repository that belongs to your account, and you can change your mind and stop at any time.</p>
                 <p>Nothing is shared with anyone else. The repository is yours: you can look at it, change it or delete it whenever you like.</p>
 
                 <h3>History</h3>
@@ -262,35 +264,20 @@ print("Hello, World!")</textarea>
         </div>
     </div>
 
-    <div id="load-overlay" class="overlay hidden">
-        <div class="overlay-backdrop"></div>
-        <div class="overlay-content">
-            <div class="overlay-header">
-                <h2>Load File <span class="file-note">(browser storage only)</span></h2>
-                <button id="close-load" class="btn btn-close">&times;</button>
-            </div>
-            <div id="load-body" class="file-list"></div>
-        </div>
-    </div>
-
     <div id="history-overlay" class="overlay history-overlay hidden"></div>
 
     <div id="sync-overlay" class="overlay sync-overlay hidden">
         <div class="overlay-backdrop"></div>
         <div class="overlay-content" role="dialog" aria-modal="true" aria-labelledby="sync-title">
             <div class="overlay-header">
-                <h2 id="sync-title">Your work</h2>
-                <button id="close-sync" class="btn btn-close" aria-label="Close Your work">&times;</button>
+                <h2 id="sync-title">GitHub</h2>
+                <button id="close-sync" class="btn btn-close" aria-label="Close GitHub">&times;</button>
             </div>
             <div class="sync-body">
                 <p id="sync-pull-note" class="sync-pull-note" role="status" aria-live="polite" hidden></p>
                 <section class="sync-section" aria-labelledby="sync-github-heading">
                     <h3 class="sync-section-label" id="sync-github-heading">In your GitHub repository</h3>
                     <div id="connect-panel"></div>
-                </section>
-                <section class="sync-section" aria-labelledby="sync-local-heading">
-                    <h3 class="sync-section-label" id="sync-local-heading">On this device</h3>
-                    <div id="project-list"></div>
                 </section>
             </div>
         </div>
@@ -315,13 +302,14 @@ print("Hello, World!")</textarea>
         import { buildErrorBlock, indentOf, normaliseSource } from './js/error-block.js';
         import { createSync } from './js/sync.js';
         import { mountConnect } from './js/ui/connect.js';
-        import { mountStatus } from './js/ui/status.js';
-        import { mountProjects } from './js/ui/projects.js';
+        import { mountHome } from './js/ui/home.js';
         import { getResolvedTheme, mountThemeToggle } from './js/ui/theme.js';
-        import { defaultFilePath, mountFileRail, projectSlug } from './js/ui/files.js';
+        import { defaultFilePath, mountFileRail, validateFileName } from './js/ui/files.js';
         import { mountCommit } from './js/ui/commit.js';
         import { mountHistory } from './js/ui/history.js';
-        import { confirmAction, notify, promptText } from './js/ui/dialog.js';
+        import { notify, promptText } from './js/ui/dialog.js';
+        import { importLegacyProjects } from './js/vault/legacy.js';
+        import { normalizeProjectName } from './js/vault/paths.js';
 
         const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
             mode: 'python',
@@ -334,6 +322,7 @@ print("Hello, World!")</textarea>
             autoCloseBrackets: true,
             matchBrackets: true,
             styleActiveLine: true,
+            readOnly: true,
             extraKeys: {
                 'Ctrl-/': 'toggleComment',
                 'Cmd-/': 'toggleComment',
@@ -461,12 +450,13 @@ print("Hello, World!")</textarea>
         const consoleEl = document.getElementById('console');
         const fileIndicator = document.getElementById('file-indicator');
         const saveBtn = document.getElementById('save-btn');
-        const loadBtn = document.getElementById('load-btn');
         const downloadBtn = document.getElementById('download-btn');
         const historyBtn = document.getElementById('history-btn');
         const copyBtn = document.getElementById('copy-btn');
         const resizeHandle = document.getElementById('resize-handle');
         const consolePanel = document.querySelector('.console-panel');
+        const mainEl = document.querySelector('main');
+        const homeRoot = document.getElementById('home-root');
 
         let worker = null;
         let workerReady = false;
@@ -478,7 +468,31 @@ print("Hello, World!")</textarea>
         let projectFiles = {};
         let lastSavedCode = editor.getValue();
         let dirty = false;
+        let running = false;
+        /** Guards a late vault read from repainting the rail. */
+        let railToken = 0;
         const STORAGE_PREFIX = 'pydle_file_';
+
+        /** Remembers the project to reopen on the next visit. */
+        const LAST_PROJECT_KEY = 'pydle_last_project';
+        /** Prefix for the last file used inside one project. */
+        const LAST_FILE_PREFIX = 'pydle_last_file_';
+
+        /** The read-only sample shown while there is nothing to edit. */
+        const WELCOME_SAMPLE =
+            '# Welcome to pydle!\n' +
+            '# Open or create a project to start writing Python.\n\n' +
+            'print("Hello, World!")';
+
+        /** What the first file of a new project contains. */
+        const STARTER_CODE =
+            '# Welcome to pydle!\n' +
+            '# Change this code, then press Run (or Ctrl+Enter).\n\n' +
+            'print("Hello, World!")\n';
+
+        editor.setValue(WELCOME_SAMPLE);
+        lastSavedCode = WELCOME_SAMPLE;
+        dirty = false;
 
         // Commits are manual. The lead wires the commit prompt here (or leaves
         // it null, in which case saving only writes the vault copy).
@@ -526,7 +540,8 @@ print("Hello, World!")</textarea>
                 dirty = content !== lastSavedCode;
                 clearErrorLine();
                 updateFileIndicator();
-                refreshRail();
+                updateEditorControls();
+                void refreshRail();
                 history.close();
                 showStatus('Loaded an earlier version of ' + path + '. Save and commit it when ready.', 'ready');
             },
@@ -551,8 +566,9 @@ print("Hello, World!")</textarea>
             onCreate: (name) => createFile(name),
             onRename: (from, to) => renameFile(from, to),
             onDelete: (path) => removeFile(path),
+            onHome: () => { void goHome(); },
         });
-        refreshRail();
+        void refreshRail();
 
         let isResizing = false;
         resizeHandle.addEventListener('mousedown', (e) => {
@@ -578,7 +594,7 @@ print("Hello, World!")</textarea>
 
         function fileLabel() {
             if (currentFileName === null) {
-                return 'untitled';
+                return 'no project';
             }
             return currentPath ? currentFileName + '/' + currentPath : currentFileName;
         }
@@ -587,17 +603,114 @@ print("Hello, World!")</textarea>
             const name = fileLabel();
             fileIndicator.textContent = dirty ? name + ' •' : name;
             fileIndicator.title = currentFileName
-                ? 'Saved in this browser and your repository'
-                : 'Saved in browser only';
+                ? currentPath
+                    ? 'Saved in this browser and your repository'
+                    : 'This project has no files yet'
+                : 'No project open';
             refreshHistoryButton();
         }
 
-        /** Redraw the rail from the project's files and the open path. */
-        function refreshRail() {
+        /** True when the editor is showing a file that can actually be edited. */
+        function hasEditableFile() {
+            return currentFileName !== null && currentPath !== null;
+        }
+
+        /**
+         * Keep the editor and its controls honest about whether there is a file.
+         *
+         * Run is deliberately aria-disabled rather than disabled when nothing is
+         * open: it looks unavailable, but pressing it can still take the student
+         * to Home or offer a first file instead of doing nothing.
+         */
+        function updateEditorControls() {
+            const editable = hasEditableFile();
+            editor.setOption('readOnly', !editable);
+
+            const inactive = !editable || !workerReady;
+            runBtn.disabled = running;
+            runBtn.classList.toggle('is-inactive', !running && inactive);
+            runBtn.setAttribute('aria-disabled', String(!running && inactive));
+            stopBtn.disabled = !running;
+            downloadBtn.disabled = !editable;
+            copyBtn.disabled = !editable;
+
+            runBtn.title = editable
+                ? 'Run (Ctrl+Enter)'
+                : currentFileName === null
+                  ? 'Choose a project to run code'
+                  : 'Add a file to run code';
+            downloadBtn.title = editable ? 'Download as .py file' : 'Open a file to download it';
+            copyBtn.title = editable ? 'Copy to clipboard' : 'Open a file to copy it';
+            refreshHistoryButton();
+        }
+
+        /**
+         * The libraries a requirements.txt declares.
+         *
+         * Read-only by design: comments and blank lines are dropped, and each
+         * remaining line is shown exactly as written so a version pin stays
+         * visible.
+         *
+         * @param {unknown} source
+         * @returns {string[]}
+         */
+        function declaredLibraries(source) {
+            if (typeof source !== 'string') {
+                return [];
+            }
+            return source
+                .split(/\r?\n/)
+                .map((line) => line.replace(/#.*/, '').trim())
+                .filter((line) => line !== '');
+        }
+
+        /**
+         * Redraw the rail from the vault, not from the in-memory map.
+         *
+         * Reading the project back is what guarantees the rail and the commit
+         * dialog list the same files; a stale `projectFiles` key cannot linger
+         * on screen after a rename or delete.
+         */
+        async function refreshRail() {
+            const token = ++railToken;
+            const name = currentFileName;
+
+            if (name === null) {
+                fileRail.setState({
+                    project: null,
+                    files: [],
+                    current: null,
+                    libraries: [],
+                    hasRequirements: false,
+                });
+                return;
+            }
+
+            let files = {};
+            try {
+                files = (await sync.readProject(name)) || {};
+            } catch {
+                files = {};
+            }
+            if (token !== railToken || currentFileName !== name) {
+                return;
+            }
+
+            projectFiles = files;
+            const paths = Object.keys(files).sort();
+            if (currentPath !== null && !paths.includes(currentPath)) {
+                currentPath = null;
+                updateFileIndicator();
+                updateEditorControls();
+            }
+
+            const requirements = files['requirements.txt'];
             fileRail.setState({
-                project: currentFileName,
-                files: Object.keys(projectFiles).sort(),
+                project: name,
+                files: paths,
                 current: currentPath,
+                libraries: declaredLibraries(requirements),
+                hasRequirements: typeof requirements === 'string',
             });
         }
 
@@ -635,61 +748,76 @@ print("Hello, World!")</textarea>
             lastSavedCode = code;
             dirty = false;
             updateFileIndicator();
-            refreshRail();
+            void refreshRail();
             return true;
         }
 
-        async function saveFile() {
-            const code = editor.getValue();
+        /**
+         * Ask for a new file in the open project and create it.
+         *
+         * @param {string} [defaultName]
+         */
+        async function promptCreateFile(defaultName = 'helpers.py') {
             if (currentFileName === null) {
-                const entered = await promptText({
-                    title: 'Save your project',
-                    label: 'Project name',
-                    value: 'my_program',
-                    confirmLabel: 'Save',
-                    hint: 'Letters, numbers, spaces and hyphens. It is stored in lowercase with hyphens.',
-                    validate: (value) => {
-                        let slug = null;
-                        try {
-                            slug = projectSlug(value);
-                        } catch {
-                            slug = null;
-                        }
-                        if (slug === null) {
-                            return 'That name needs at least one letter or number.';
-                        }
-                        return null;
-                    },
-                });
-                if (entered === null) return;
-                const slug = projectSlug(entered);
-                if (slug === null) {
-                    showStatus('That name has no usable characters', 'error');
-                    return;
-                }
-                currentFileName = slug;
-                currentPath = 'main.py';
-            }
-            if (currentPath === null) {
-                currentPath = 'main.py';
-            }
-
-            projectFiles[currentPath] = code;
-            try {
-                localStorage.setItem(STORAGE_PREFIX + currentFileName, code);
-            } catch {
-                await notify({
-                    title: 'Could not save to this browser',
-                    message:
-                        'pydle could not save this project on this device. Your code is still in the editor, so you can copy it or download it before trying again.',
-                    variant: 'error',
-                });
+                showHome();
                 return;
             }
-            lastSavedCode = code;
-            dirty = false;
+            const existing = Object.keys(projectFiles);
+            const raw = await promptText({
+                title: 'New file',
+                label: 'File name',
+                value: defaultName,
+                confirmLabel: 'Create file',
+                hint: 'One file name, no slashes. A name without a dot gets .py.',
+                validate: (value) => {
+                    const check = validateFileName(value, existing);
+                    return check.ok ? null : check.error;
+                },
+            });
+            if (raw === null) {
+                return;
+            }
+            const check = validateFileName(raw, existing);
+            if (!check.ok) {
+                return;
+            }
+            await createFile(check.name);
+        }
+
+        /** Show Home, or ask for a file when a project is open but empty. */
+        async function promptStart() {
+            if (currentFileName === null) {
+                showHome();
+                return;
+            }
+            await promptCreateFile('main.py');
+        }
+
+        async function saveFile() {
+            // Naming a project never moves the editor off its file: it only
+            // happens when nothing is open at all.
+            if (currentFileName === null) {
+                showHome();
+                return;
+            }
+            if (currentPath === null) {
+                await promptCreateFile('main.py');
+                return;
+            }
+
+            const code = editor.getValue();
+            projectFiles[currentPath] = code;
+
+            if (!(await flushCurrent())) {
+                return;
+            }
+
+            // The vault is the only copy. Writing a second per-project
+            // localStorage mirror here is what made a deleted project come
+            // back on the next start (the legacy importer saw the leftover key
+            // and treated it as work the vault had never held).
             updateFileIndicator();
-            refreshRail();
+            void refreshRail();
 
             // Saving and committing were two buttons for one intention. When there
             // is a repository, saving asks for a message and commits; when there is
@@ -739,23 +867,96 @@ print("Hello, World!")</textarea>
             lastSavedCode = content;
             dirty = false;
             clearErrorLine();
+            rememberLastFile(currentFileName, path);
             updateFileIndicator();
-            refreshRail();
+            updateEditorControls();
+            void refreshRail();
             showStatus('Loaded: ' + currentFileName + '/' + path, 'ready');
             void refreshCommitState();
         }
 
+        function rememberProject(name) {
+            try {
+                localStorage.setItem(LAST_PROJECT_KEY, name);
+            } catch {
+                // A blocked storage partition just means Home opens next time.
+            }
+        }
+
+        function forgetProject() {
+            try {
+                localStorage.removeItem(LAST_PROJECT_KEY);
+            } catch {
+                // Nothing to undo.
+            }
+        }
+
+        function readLastProject() {
+            try {
+                return localStorage.getItem(LAST_PROJECT_KEY);
+            } catch {
+                return null;
+            }
+        }
+
+        /** True when the remembered project still exists, in the vault or legacy storage. */
+        function projectExists(name) {
+            if (vaultProjects.includes(name)) {
+                return true;
+            }
+            return readLegacyFile(name) !== null;
+        }
+
+        function rememberLastFile(name, path) {
+            try {
+                localStorage.setItem(LAST_FILE_PREFIX + name, path);
+            } catch {
+                // The file falls back to main.py next time.
+            }
+        }
+
+        function readLastFile(name) {
+            try {
+                return localStorage.getItem(LAST_FILE_PREFIX + name);
+            } catch {
+                return null;
+            }
+        }
+
         /**
-         * Open a project and select its entry file.
+         * Read a project saved before the vault existed.
          *
-         * `main.py` wins when present, because every project made before the
-         * file rail has one; otherwise the rail picks the first Python file.
+         * Those projects lived under one flat key per project. The stored name
+         * is the canonical snake_case name, so there is exactly one key to try;
+         * startup imports these into the vault before anything is listed, and
+         * this remains only as the fallback for a project that was not imported.
          *
          * @param {string} name
+         * @returns {string | null}
          */
-        async function loadFile(name) {
+        function readLegacyFile(name) {
+            try {
+                return localStorage.getItem(STORAGE_PREFIX + name);
+            } catch {
+                // Storage is unavailable; the vault remains the source of truth.
+                return null;
+            }
+        }
+
+        /**
+         * Open a project and select the file to show.
+         *
+         * The remembered file wins, then `main.py`, then the first Python file,
+         * then the first file of any kind. A project with no files still opens:
+         * the editor is read-only and the rail offers the first file.
+         *
+         * @param {string} name
+         * @param {string | null} [preferredPath] A file chosen by the caller.
+         * @returns {Promise<boolean>} False when leaving the old project was cancelled.
+         */
+        async function loadFile(name, preferredPath = null) {
             if (!(await readyToLeave())) {
-                return;
+                return false;
             }
 
             let files = {};
@@ -767,34 +968,55 @@ print("Hello, World!")</textarea>
             if (Object.keys(files).length === 0) {
                 // Projects saved before the vault existed only live in
                 // localStorage, under the project name.
-                const legacy = localStorage.getItem(STORAGE_PREFIX + name);
+                const legacy = readLegacyFile(name);
                 if (legacy !== null) {
                     files = { 'main.py': legacy };
                 }
             }
 
             const paths = Object.keys(files);
-            if (paths.length === 0) {
-                return;
-            }
-            const chosen = defaultFilePath(paths);
-            if (chosen === null) {
-                return;
-            }
-
             currentFileName = name;
             projectFiles = files;
+
+            let chosen = null;
+            if (preferredPath !== null && paths.includes(preferredPath)) {
+                chosen = preferredPath;
+            } else {
+                const remembered = readLastFile(name);
+                chosen =
+                    remembered !== null && paths.includes(remembered)
+                        ? remembered
+                        : defaultFilePath(paths);
+            }
             currentPath = chosen;
-            editor.setValue(files[chosen]);
-            lastSavedCode = files[chosen];
+
+            const content = chosen !== null ? files[chosen] : WELCOME_SAMPLE;
+            editor.setValue(content);
+            lastSavedCode = content;
             dirty = false;
             clearErrorLine();
             clearConsole();
-            showStatus('Loaded: ' + name + '/' + chosen, 'ready');
+
+            rememberProject(name);
+            if (chosen !== null) {
+                rememberLastFile(name, chosen);
+            }
+
+            hideHome();
+            // The editor is hidden while Home is on screen, so it is measured
+            // again on the way back; otherwise the first paint after opening a
+            // project can still show the welcome sample.
+            editor.refresh();
             updateFileIndicator();
-            refreshRail();
-            closeLoadOverlay();
+            updateEditorControls();
+            void refreshRail();
+            showStatus(
+                chosen !== null ? 'Loaded: ' + name + '/' + chosen : 'Opened ' + name,
+                'ready',
+            );
             void refreshCommitState();
+            editor.focus();
+            return true;
         }
 
         /** Add an empty file to the open project and switch to it. */
@@ -814,8 +1036,10 @@ print("Hello, World!")</textarea>
             lastSavedCode = '';
             dirty = false;
             clearErrorLine();
+            rememberLastFile(currentFileName, name);
             updateFileIndicator();
-            refreshRail();
+            updateEditorControls();
+            void refreshRail();
             editor.focus();
             showStatus('Added: ' + currentFileName + '/' + name, 'ready');
         }
@@ -842,9 +1066,10 @@ print("Hello, World!")</textarea>
             delete projectFiles[from];
             if (currentPath === from) {
                 currentPath = to;
+                rememberLastFile(currentFileName, to);
             }
             updateFileIndicator();
-            refreshRail();
+            void refreshRail();
             showStatus('Renamed ' + from + ' to ' + to, 'ready');
         }
 
@@ -870,112 +1095,94 @@ print("Hello, World!")</textarea>
 
             if (currentPath === path) {
                 currentPath = defaultFilePath(Object.keys(projectFiles));
-                const content = currentPath ? projectFiles[currentPath] || '' : '';
+                const content = currentPath ? projectFiles[currentPath] || '' : WELCOME_SAMPLE;
                 editor.setValue(content);
                 lastSavedCode = content;
                 dirty = false;
                 clearErrorLine();
+                if (currentPath !== null) {
+                    rememberLastFile(currentFileName, currentPath);
+                }
             }
             updateFileIndicator();
-            refreshRail();
+            updateEditorControls();
+            void refreshRail();
             showStatus('Deleted ' + path, 'ready');
         }
 
-        /** Forget the editor state for a project that no longer exists. */
-        function closeProjectIfOpen(name) {
-            if (currentFileName !== name) {
+        /* ---- Home -------------------------------------------------------- */
+        //
+        // Home is the resting state: no project is open, so there is nothing to
+        // edit and no project to show in the rail. It is a screen, not a dialog,
+        // and the editor beneath it is left mounted but read-only.
+
+        const home = mountHome(homeRoot, {
+            // The stored name is the name on screen: startup has already
+            // renamed any project saved under an older spelling and imported
+            // the legacy per-project copies, so the vault list is complete.
+            listProjects: () => sync.listProjects(),
+            onOpen: async (name) => {
+                const opened = await loadFile(name);
+                if (!opened) {
+                    throw new Error('That project was not opened.');
+                }
+            },
+            onCreate: async ({ project, file }) => {
+                try {
+                    await sync.writeFiles(project, file, STARTER_CODE);
+                } catch {
+                    await notify({
+                        title: 'Could not create that project',
+                        message:
+                            'pydle could not save the new project on this device. Nothing was changed, so you can try again.',
+                    });
+                    return;
+                }
+                await refreshVaultProjects();
+                await loadFile(project, file);
+            },
+            sync,
+            github: Boolean(CONFIG.clientId),
+        });
+
+        function showHome() {
+            mainEl.classList.add('is-home');
+            homeRoot.hidden = false;
+            updateEditorControls();
+            void home.update().then(() => home.focus());
+        }
+
+        function hideHome() {
+            homeRoot.hidden = true;
+            mainEl.classList.remove('is-home');
+        }
+
+        /**
+         * Return to Home from an open project.
+         *
+         * The same guard as any other switch: save the buffer and ask about
+         * uncommitted work before the project closes.
+         */
+        async function goHome() {
+            if (!(await readyToLeave())) {
                 return;
             }
+
             currentFileName = null;
             currentPath = null;
             projectFiles = {};
-            lastSavedCode = editor.getValue();
+            editor.setValue(WELCOME_SAMPLE);
+            lastSavedCode = WELCOME_SAMPLE;
             dirty = false;
+            clearErrorLine();
+            clearConsole();
+
+            forgetProject();
+            paintCommitState(0);
             updateFileIndicator();
-            refreshRail();
-            void refreshCommitState();
+            void refreshRail();
+            showHome();
         }
-
-        async function deleteFile(name) {
-            const ok = await confirmAction({
-                title: 'Delete this project?',
-                message: `“${name}” will be deleted from this device. Its history on GitHub is not removed.`,
-                confirmLabel: 'Delete project',
-                danger: true,
-            });
-            if (!ok) return;
-            localStorage.removeItem(STORAGE_PREFIX + name);
-            closeProjectIfOpen(name);
-            refreshLoadList();
-            void sync
-                .deleteProject(name)
-                .catch(() => {})
-                .then(() => refreshVaultProjects())
-                .then(() => refreshLoadList());
-        }
-
-        function getSavedFiles() {
-            const files = new Set(vaultProjects);
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith(STORAGE_PREFIX)) {
-                    files.add(key.slice(STORAGE_PREFIX.length));
-                }
-            }
-            return [...files].sort();
-        }
-
-        const loadOverlay = document.getElementById('load-overlay');
-        const closeLoadBtn = document.getElementById('close-load');
-        const loadBody = document.getElementById('load-body');
-
-        function refreshLoadList() {
-            loadBody.innerHTML = '';
-            const files = getSavedFiles();
-            if (files.length === 0) {
-                loadBody.textContent = 'No saved files yet. Use Save to store your code in your browser.';
-                return;
-            }
-            for (const name of files) {
-                const row = document.createElement('div');
-                row.className = 'file-item';
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'file-item-name';
-                nameSpan.textContent = name;
-                nameSpan.addEventListener('click', () => loadFile(name));
-                const delBtn = document.createElement('button');
-                delBtn.className = 'btn btn-file-delete';
-                delBtn.textContent = '✕';
-                delBtn.title = 'Delete';
-                delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteFile(name); });
-                row.appendChild(nameSpan);
-                row.appendChild(delBtn);
-                loadBody.appendChild(row);
-            }
-        }
-
-        function openLoadOverlay() {
-            refreshLoadList();
-            void refreshVaultProjects().then(refreshLoadList);
-            loadOverlay.classList.remove('hidden');
-        }
-
-        function closeLoadOverlay() {
-            loadOverlay.classList.add('hidden');
-        }
-
-        loadBtn.addEventListener('click', openLoadOverlay);
-        closeLoadBtn.addEventListener('click', closeLoadOverlay);
-        loadOverlay.addEventListener('click', (e) => {
-            if (e.target === loadOverlay || e.target.classList.contains('overlay-backdrop')) {
-                closeLoadOverlay();
-            }
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !loadOverlay.classList.contains('hidden')) {
-                closeLoadOverlay();
-            }
-        });
 
         saveBtn.addEventListener('click', saveFile);
 
@@ -1095,20 +1302,20 @@ print("Hello, World!")</textarea>
                     case 'ready':
                         workerReady = true;
                         showStatus('Ready', 'ready');
-                        runBtn.disabled = false;
+                        updateEditorControls();
                         break;
 
                     case 'running':
+                        running = true;
                         showStatus('Running...', 'running');
-                        runBtn.disabled = true;
-                        stopBtn.disabled = false;
+                        updateEditorControls();
                         clearConsole();
                         break;
 
                     case 'done':
+                        running = false;
                         showStatus('Finished', 'ready');
-                        runBtn.disabled = false;
-                        stopBtn.disabled = true;
+                        updateEditorControls();
                         break;
 
                     case 'error': {
@@ -1116,9 +1323,9 @@ print("Hello, World!")</textarea>
                         const detail = e.data.detail || '';
                         const notes = errorNotes({ structured: e.data.structured });
 
+                        running = false;
                         showStatus('Error', 'error');
-                        runBtn.disabled = false;
-                        stopBtn.disabled = true;
+                        updateEditorControls();
 
                         try {
                             const line = lineFromTraceback(detail + '\n' + summary);
@@ -1203,7 +1410,13 @@ print("Hello, World!")</textarea>
         }
 
         async function runCode() {
-            if (!workerReady) return;
+            // Nothing to run yet: send the student somewhere useful rather than
+            // letting the button do nothing at all.
+            if (!hasEditableFile()) {
+                await promptStart();
+                return;
+            }
+            if (!workerReady || running) return;
 
             // Running means "keep this". Save to the device only: opening the
             // commit dialog every time a student presses Run would be noise, and
@@ -1262,7 +1475,33 @@ print("Hello, World!")</textarea>
         const closeSyncBtn = document.getElementById('close-sync');
         const syncPullNote = document.getElementById('sync-pull-note');
 
-        mountStatus(document.getElementById('sync-status'), sync);
+        // The header control is the account-level front door. Its dot carries
+        // the connection state, so the label can stay simply "GitHub".
+        function paintSyncControl() {
+            const status = typeof sync.status === 'string' ? sync.status : 'signed-out';
+            const login = sync.identity && typeof sync.identity.login === 'string'
+                ? sync.identity.login
+                : '';
+            syncBtn.dataset.state = status;
+
+            let title = 'GitHub: not connected. Projects are kept on this device.';
+            if (status === 'connected') {
+                title = login
+                    ? 'GitHub: signed in as ' + login
+                    : 'GitHub: signed in';
+            } else if (status === 'connecting') {
+                title = 'GitHub: connecting';
+            } else if (status === 'offline') {
+                title = 'GitHub: offline. Your work is saved on this device.';
+            } else if (status === 'error') {
+                title = 'GitHub: not connected. Your work is safe on this device.';
+            }
+            syncBtn.title = title;
+            syncBtn.setAttribute('aria-label', title);
+        }
+
+        sync.subscribe(paintSyncControl);
+        paintSyncControl();
 
         /* ---- Commit dialog ----------------------------------------------- */
         //
@@ -1422,26 +1661,8 @@ print("Hello, World!")</textarea>
         // client id in js/config.js turns all of this on.
         if (CONFIG.clientId) {
             mountConnect(document.getElementById('connect-panel'), sync);
-            mountProjects(document.getElementById('project-list'), sync, {
-                onOpen: (name) => {
-                    closeSyncOverlay();
-                    void loadFile(name);
-                },
-                onDelete: async (name) => {
-                    localStorage.removeItem(STORAGE_PREFIX + name);
-                    closeProjectIfOpen(name);
-                    await sync.deleteProject(name);
-                    await refreshVaultProjects();
-                    refreshLoadList();
-                },
-                onStart: () => {
-                    closeSyncOverlay();
-                    editor.focus();
-                },
-            });
         } else {
             syncBtn.style.display = 'none';
-            document.getElementById('sync-status').style.display = 'none';
             historyBtn.style.display = 'none';
         }
 
@@ -1451,6 +1672,78 @@ print("Hello, World!")</textarea>
                 vaultProjects = projects.map((project) => project.name);
             } catch (e) {
                 vaultProjects = [];
+            }
+        }
+
+        /**
+         * Bring projects already on this device onto the snake_case rule.
+         *
+         * A project saved under the old rule is called `my-project` on disk.
+         * Its canonical name is `my_project`, and every lookup normalises, so
+         * without this it would simply stop being found. Only a name that
+         * differs and whose canonical form is free is renamed; a rename that
+         * fails leaves the project under its old name and is logged by
+         * `sync.renameProject`, never thrown from here.
+         *
+         * @returns {Promise<void>}
+         */
+        async function renameStoredProjects() {
+            for (const kind of ['work', 'drawings']) {
+                let projects;
+                try {
+                    projects = await sync.listProjects(kind);
+                } catch {
+                    continue;
+                }
+
+                const taken = new Set(projects.map((project) => project.name));
+                for (const project of projects) {
+                    let canonical;
+                    try {
+                        canonical = normalizeProjectName(project.name);
+                    } catch {
+                        continue;
+                    }
+                    if (canonical === project.name || taken.has(canonical)) {
+                        continue;
+                    }
+                    if (await sync.renameProject(project.name, canonical, kind)) {
+                        taken.delete(project.name);
+                        taken.add(canonical);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Move any pre-vault `localStorage` projects into the vault, once.
+         *
+         * This runs after the rename, so the names it writes are already
+         * canonical. The importer never overwrites a project the vault already
+         * holds and never rejects; a throw here must not stop startup, so even
+         * the call itself is guarded.
+         *
+         * @returns {Promise<void>}
+         */
+        async function importLegacyFiles() {
+            let result;
+            try {
+                result = await importLegacyProjects({
+                    storage: localStorage,
+                    writeFile: (name, path, content) => sync.writeFiles(name, path, content),
+                    listProjects: () => sync.listProjects(),
+                });
+            } catch (error) {
+                console.warn('[pydle] legacy import', error);
+                return;
+            }
+
+            if (result.imported.length > 0) {
+                console.log(`[pydle] imported ${result.imported.length} legacy projects`);
+                await refreshVaultProjects();
+            }
+            if (result.failed.length > 0) {
+                console.warn('[pydle] legacy import', result.failed);
             }
         }
 
@@ -1548,6 +1841,11 @@ print("Hello, World!")</textarea>
 
             if (applied > 0) {
                 await refreshVaultProjects();
+                if (!homeRoot.hidden) {
+                    void home.update();
+                } else {
+                    void refreshRail();
+                }
             }
 
             catchingUp = false;
@@ -1615,9 +1913,42 @@ print("Hello, World!")</textarea>
             }
         }
 
-        void startSync();
+        /**
+         * Open where the student left off, or show Home.
+         *
+         * A remembered name that no longer exists is forgotten quietly, never
+         * reported: Home is a perfectly good answer.
+         */
+        async function boot() {
+            // Both migrations run before the project list is read, so Home only
+            // ever shows canonical names: first the rename of anything stored
+            // under the old rule (the snapshot moves with it), then the one-time
+            // import of pre-vault copies.
+            // Home is the resting state, so it is painted before anything touches
+            // storage: the app should never show a blank editor while IndexedDB
+            // opens. Home has its own loading state for the list.
+            showHome();
+
+            await renameStoredProjects();
+            await importLegacyFiles();
+            await refreshVaultProjects();
+
+            const last = readLastProject();
+            if (last !== null && projectExists(last)) {
+                await loadFile(last);
+            } else if (last !== null) {
+                forgetProject();
+            }
+
+            if (currentFileName === null) {
+                showHome();
+            }
+
+            void startSync();
+        }
 
         initWorker();
+        void boot();
     </script>
     <footer>
         <a href="https://github.com/thebillington/pydle" target="_blank" rel="noopener noreferrer"><span class="repo">pydle</span></a> is an <a href="https://github.com/thebillington/pydle/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT-licensed</a> project built and maintained by <a href="https://github.com/thebillington" target="_blank" rel="noopener noreferrer">thebillington</a> &middot; <a href="https://github.com/sponsors/thebillington" target="_blank" rel="noopener noreferrer" class="sponsor">Sponsor this project</a>

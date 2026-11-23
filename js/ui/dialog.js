@@ -312,6 +312,11 @@ function createShell({
  * value is acceptable, or a short message to show inline. An invalid value
  * keeps the dialog open with the text exactly as typed.
  *
+ * `transform(value)` runs on every keystroke, which is how a name can be
+ * lowercased as it is typed rather than rejected on submit. The caret is kept
+ * at the end while the field is being appended to. `preview(value)` returns a
+ * short line shown under the field, so the resulting name is visible.
+ *
  * @param {{
  *   title: string,
  *   label: string,
@@ -319,6 +324,8 @@ function createShell({
  *   confirmLabel?: string,
  *   hint?: string,
  *   validate?: (value: string) => string | null,
+ *   transform?: (value: string) => string,
+ *   preview?: (value: string) => string,
  * }} options
  * @returns {Promise<string | null>}
  */
@@ -329,11 +336,64 @@ export function promptText({
     confirmLabel = 'Save',
     hint = '',
     validate,
+    transform,
+    preview,
 } = {}) {
     /** @type {HTMLInputElement} */
     let input;
     /** @type {HTMLElement} */
     let error;
+    /** @type {HTMLElement} */
+    let previewNode;
+
+    /**
+     * Apply the live transform and repaint the preview line.
+     *
+     * The value is changed in place so the dialog still resolves with exactly
+     * what is on screen. The caret goes to the end when the field was already
+     * at the end (typing), which is the normal case for a name.
+     */
+    function applyField() {
+        if (!input) {
+            return;
+        }
+
+        if (typeof transform === 'function') {
+            const before = input.value;
+            let next;
+            try {
+                next = transform(before);
+            } catch {
+                next = before;
+            }
+            if (typeof next === 'string' && next !== before) {
+                const start = input.selectionStart === null ? before.length : input.selectionStart;
+                const atEnd = start === before.length;
+                input.value = next;
+                const position = atEnd
+                    ? next.length
+                    : Math.max(0, Math.min(next.length, start - (before.length - next.length)));
+                try {
+                    input.setSelectionRange(position, position);
+                } catch {
+                    // Some input types do not support a selection; harmless.
+                }
+            }
+        }
+
+        if (previewNode) {
+            let text = '';
+            if (typeof preview === 'function') {
+                try {
+                    text = preview(input.value);
+                } catch {
+                    text = '';
+                }
+            }
+            previewNode.textContent = typeof text === 'string' ? text : '';
+            previewNode.hidden = previewNode.textContent === '';
+        }
+    }
 
     return enqueue(() =>
         createShell({
@@ -360,15 +420,21 @@ export function promptText({
                 error = el('p', 'dialog-error');
                 error.setAttribute('role', 'alert');
 
+                previewNode = el('p', 'dialog-preview');
+                previewNode.hidden = true;
+
                 body.append(labelNode, input);
                 if (typeof hint === 'string' && hint !== '') {
                     body.append(el('p', 'dialog-hint', hint));
                 }
-                body.append(error);
+                body.append(previewNode, error);
 
                 input.addEventListener('input', () => {
                     error.textContent = '';
+                    applyField();
                 });
+
+                applyField();
 
                 input.addEventListener('keydown', (event) => {
                     if (event.key !== 'Enter') {

@@ -223,6 +223,15 @@ header h1 .subtitle {
     background: color-mix(in srgb, var(--accent-cyan) 15%, transparent);
 }
 
+.toolbar-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.toolbar-btn:disabled:hover {
+    background: transparent;
+}
+
 .toolbar-btn:active {
     background: color-mix(in srgb, var(--accent-cyan) 25%, transparent);
 }

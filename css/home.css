@@ -1,0 +1,412 @@
+/*
+ * The home screen: the resting state when no project is open.
+ *
+ * Home is a full-width surface inside the app area rather than a dialog. It is
+ * deliberately spare: one title, one search, one primary action, and the list
+ * of projects. Every colour comes from the tokens in style.css, so light and
+ * dark are the same rules.
+ */
+
+/* The app area swaps between the editor and Home. Nothing is unmounted, so the
+   editor keeps its scroll position and worker while Home is on screen. */
+main.is-home > .editor-panel,
+main.is-home > .resize-handle,
+main.is-home > .console-panel {
+    display: none;
+}
+
+.home-screen {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    background: var(--bg-primary);
+}
+
+.home-screen[hidden] {
+    display: none;
+}
+
+.home-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    width: 100%;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: clamp(30px, 6vh, 64px) clamp(20px, 5vw, 40px) 56px;
+}
+
+/* Heading ------------------------------------------------------------------ */
+
+.home-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.home-title {
+    font-family: var(--font-sans);
+    font-size: clamp(26px, 3vw, 34px);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.home-lede {
+    max-width: 58ch;
+    font-family: var(--font-sans);
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+/* Toolbar ------------------------------------------------------------------ */
+
+.home-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+/* A `hidden` attribute loses to the display rules below, so make it explicit. */
+.home-toolbar[hidden],
+.home-toolbar .home-primary[hidden],
+.home-search[hidden],
+.home-github[hidden] {
+    display: none;
+}
+
+.home-search {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+
+/* A visible label is not needed on a single search field, but it is present for
+   screen readers and for the focus ring. */
+.home-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.home-search-input {
+    width: 100%;
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1;
+}
+
+.home-search-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.home-search-input:focus {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 1px;
+    border-color: var(--accent-green);
+}
+
+/* Buttons ------------------------------------------------------------------ */
+
+.home-primary,
+.home-quiet,
+.home-github-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    padding: 0 20px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, filter 0.15s;
+}
+
+.home-primary {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    color: var(--bg-primary);
+    white-space: nowrap;
+}
+
+.home-primary:hover:not(:disabled) {
+    filter: brightness(1.06);
+}
+
+.home-quiet {
+    height: 34px;
+    padding: 0 14px;
+    border-color: var(--border);
+    background: transparent;
+    color: var(--text-primary);
+}
+
+.home-quiet:hover {
+    background: var(--bg-tertiary);
+}
+
+.home-primary:focus-visible,
+.home-quiet:focus-visible,
+.home-github-btn:focus-visible,
+.home-project:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: 2px;
+}
+
+.home-project:focus-visible {
+    outline-offset: -2px;
+}
+
+.home-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Run with nothing open: it looks unavailable, but pressing it takes the
+   student to Home rather than doing nothing. */
+.btn.is-inactive {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Project panel ------------------------------------------------------------ */
+
+.home-panel {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+}
+
+.home-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.home-project {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 18px;
+    width: 100%;
+    padding: 15px 20px;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.home-item:last-child .home-project {
+    border-bottom: none;
+}
+
+.home-project:hover {
+    background: var(--bg-tertiary);
+}
+
+.home-project:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.home-project-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.home-project-meta {
+    flex-shrink: 0;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Empty and loading states ------------------------------------------------- */
+
+.home-panel-note {
+    padding: 28px 24px;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    color: var(--text-secondary);
+}
+
+.home-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 46px 28px 44px;
+    text-align: center;
+}
+
+.home-empty-title {
+    font-family: var(--font-sans);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.home-empty-text {
+    max-width: 46ch;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+.home-empty .home-primary {
+    margin-top: 8px;
+}
+
+.home-empty-search {
+    padding: 34px 24px;
+    gap: 12px;
+}
+
+/* GitHub row --------------------------------------------------------------- */
+
+.home-foot {
+    padding-top: 2px;
+}
+
+.home-github {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.home-github[hidden] {
+    display: none;
+}
+
+.home-github-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    background: var(--text-secondary);
+}
+
+.home-github-dot[data-state='signed-out'] {
+    background: transparent;
+    border-color: var(--text-secondary);
+}
+
+.home-github-dot[data-state='connecting'],
+.home-github-dot[data-state='offline'] {
+    background: var(--accent-yellow);
+}
+
+.home-github-dot[data-state='connected'] {
+    background: var(--accent-green);
+}
+
+.home-github-dot[data-state='error'] {
+    background: var(--accent-red);
+}
+
+.home-github-text {
+    min-width: 0;
+    flex: 1 1 260px;
+    margin: 0;
+}
+
+.home-github-btn {
+    height: 30px;
+    padding: 0 12px;
+    border-color: var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.home-github-btn:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+/* Header GitHub control ---------------------------------------------------- */
+
+/* The dot inside the header button, so the account-level state is visible
+   before the GitHub panel is opened. */
+.sync-btn-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    background: var(--text-secondary);
+}
+
+#sync-btn[data-state='signed-out'] .sync-btn-dot {
+    background: transparent;
+    border-color: var(--text-secondary);
+}
+
+#sync-btn[data-state='connecting'] .sync-btn-dot,
+#sync-btn[data-state='offline'] .sync-btn-dot {
+    background: var(--accent-yellow);
+}
+
+#sync-btn[data-state='connected'] .sync-btn-dot {
+    background: var(--accent-green);
+}
+
+#sync-btn[data-state='error'] .sync-btn-dot {
+    background: var(--accent-red);
+}
+
+/* Narrow windows ----------------------------------------------------------- */
+
+@media (max-width: 560px) {
+    .home-inner {
+        gap: 20px;
+        padding-top: 28px;
+    }
+
+    .home-primary,
+    .home-quiet {
+        width: 100%;
+    }
+
+    .home-project {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+        padding: 14px 16px;
+    }
+}

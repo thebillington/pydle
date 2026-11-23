@@ -268,6 +268,38 @@ function requireProject(project) {
 }
 
 /**
+ * Validate a project name exactly as it is stored, without normalising it.
+ *
+ * A project saved before the snake_case rule may be called `my-project`.
+ * Normalising that source would point at a directory that does not exist, so a
+ * rename takes the stored name as given and only proves it is a single safe
+ * segment. The target of a rename always goes through `requireProject`.
+ *
+ * @param {string} project
+ * @returns {string}
+ */
+function requireStoredName(project) {
+    if (typeof project !== 'string' || project === '') {
+        throw new TypeError(
+            `vault: project name must be a non-empty string, got ${typeof project}`,
+        );
+    }
+    if (project.includes('/') || project === '.' || project === '..') {
+        throw new TypeError(`vault: ${JSON.stringify(project)} is not a project name`);
+    }
+    let segment;
+    try {
+        segment = safeJoin(project);
+    } catch {
+        throw new TypeError(`vault: ${JSON.stringify(project)} is not a project name`);
+    }
+    if (segment !== project) {
+        throw new TypeError(`vault: ${JSON.stringify(project)} is not a single project name`);
+    }
+    return project;
+}
+
+/**
  * Validate a project-relative path and refuse reserved namespaces.
  *
  * @param {string} path
@@ -473,24 +505,33 @@ export async function listProjects(kind = 'work') {
     const projects = new Map();
 
     if (hasOpfs()) {
-        const root = await kindRoot(kind);
+        // Listing never creates the namespace: a request to see what exists
+        // should not leave an empty directory behind.
+        let root;
+        try {
+            root = await kindRoot(kind, false);
+        } catch (error) {
+            if (isMissing(error)) {
+                return [];
+            }
+            throw error;
+        }
         for await (const [name, handle] of root.entries()) {
             if (handle.kind !== 'directory') {
                 continue;
             }
-            // Every project we create is already a slug. Anything else (a stray
-            // directory made by hand) would be listed but never readable, since
-            // every other call normalises its argument, so skip it.
-            let slug;
+            // Every directory that names a project is listed under the name it
+            // is actually stored as. A project saved before the snake_case rule
+            // is still called `my-project` on disk; hiding it here would hide
+            // the work before startup gets a chance to rename it. A directory
+            // with no usable name at all can never be addressed, so it is not a
+            // project.
             try {
-                slug = normalizeProjectName(name);
+                normalizeProjectName(name);
             } catch {
                 continue;
             }
-            if (slug !== name) {
-                continue;
-            }
-            projects.set(slug, 0);
+            projects.set(name, 0);
         }
         // Fill in mtimes for anything the meta store has not seen.
         for (const [name, updatedAt] of projects) {
@@ -681,6 +722,40 @@ export async function clearCommitSnapshot(project, { kind = 'work' } = {}) {
         // Nothing recorded: nothing to forget.
     }
 }
+/**
+ * Move a project's commit snapshot from one stored name to another.
+ *
+ * A rename that moved only the files would make the next load look as though
+ * every file had changed (the base would be gone) or, worse, as though the
+ * project had never been committed. Both names are taken exactly as stored,
+ * because the source predates the snake_case rule and normalising it would
+ * point at a key that was never written.
+ *
+ * The write happens before the delete, so an interrupted rename leaves the
+ * snapshot under both names rather than losing it.
+ *
+ * @param {string} from The stored name to move from.
+ * @param {string} to The stored name to move to.
+ * @param {{ kind?: string }} [options]
+ * @returns {Promise<boolean>} True when a snapshot was moved.
+ */
+export async function renameCommitSnapshot(from, to, { kind = 'work' } = {}) {
+    const source = requireStoredName(from);
+    const target = requireStoredName(to);
+    if (source === target) {
+        return false;
+    }
+
+    const prefix = `${SNAPSHOT_PREFIX}${keyPrefix(kind)}`;
+    const snapshot = await idbGet(META_STORE, prefix + source);
+    if (!snapshot) {
+        return false;
+    }
+
+    await idbPut(META_STORE, snapshot, prefix + target);
+    await idbDelete(META_STORE, prefix + source);
+    return true;
+}
 export async function deleteProject(name, { kind = 'work' } = {}) {
     const project = requireProject(name);
 
@@ -700,8 +775,22 @@ export async function deleteProject(name, { kind = 'work' } = {}) {
     await idbDelete(META_STORE, keyPrefix(kind) + project);
     await clearCommitSnapshot(project, { kind });
 }
+/**
+ * Rename a project directory.
+ *
+ * `from` is the name the project is stored under, exactly. It may predate the
+ * snake_case rule (`my-project`), which is why it is not normalised here: the
+ * migration needs to move that directory to `my_project`, and normalising the
+ * source first would leave the old directory behind. `to` is normalised, so
+ * every project written after a rename is canonical.
+ *
+ * @param {string} from Stored project name.
+ * @param {string} to New project name.
+ * @param {{ kind?: string }} [options]
+ * @returns {Promise<void>}
+ */
 export async function renameProject(from, to, { kind = 'work' } = {}) {
-    const source = requireProject(from);
+    const source = requireStoredName(from);
     const target = requireProject(to);
     if (source === target) {
         return;
