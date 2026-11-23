@@ -42,6 +42,22 @@ export function normaliseSource(raw, location) {
 }
 
 /**
+ * How far a line is indented.
+ *
+ * Columns are handled in "trimmed" space throughout, because the console shows the
+ * line without its leading spaces. The editor keeps them, so anything marking a
+ * range in CodeMirror has to add this back, or the highlight lands a few characters
+ * to the right of the fault.
+ *
+ * @param {string} text
+ * @returns {number}
+ */
+export function indentOf(text) {
+    const line = typeof text === 'string' ? text : '';
+    return line.length - line.trimStart().length;
+}
+
+/**
  * Split a source line into the part before the fault, the fault itself, and the rest.
  *
  * Guards every way the offsets can be wrong: a negative column, a length past the

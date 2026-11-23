@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { splitAround, normaliseSource } from '../js/error-block.js';
+import { splitAround, normaliseSource, indentOf } from '../js/error-block.js';
 import { errorLocation } from '../js/error-report.js';
 
 const LINE = "print f`Hi {name}! You're invited to my birthday party!`";
@@ -64,4 +64,26 @@ test('a line with no indentation is unchanged', () => {
     assert.equal(sourceLine, 'print(1)');
     assert.equal(location.column, 0);
     assert.equal(location.length, 6);
+});
+
+test('a line given without a column falls back to the marker in the text', () => {
+    const detail = [
+        '  File "<exec>", line 6',
+        '    print f`Hi {name}! You\'re invited!`',
+        '                          ^',
+        'SyntaxError: unterminated string literal (detected at line 6)',
+    ].join('\n');
+    // Python reported the line but no offset: previously this became column 0.
+    const located = errorLocation({ structured: { line: 6, column: null, endColumn: null }, detail });
+    assert.ok(located);
+    assert.equal(located.column, 22);
+});
+
+test('the editor shift puts the highlight back where the indentation is', () => {
+    const raw = "    print f`Hi {name}! You're invited!`";
+    const located = errorLocation({ structured: { line: 6, column: 27, endColumn: 27 }, detail: '' });
+    const shown = normaliseSource(raw, located);
+    assert.equal(shown.location.column, 22, 'trimmed space, for the console');
+    assert.equal(shown.location.column + indentOf(raw), 26, 'editor space, indentation kept');
+    assert.equal(raw[shown.location.column + indentOf(raw)], "'");
 });

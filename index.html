@@ -312,7 +312,7 @@ print("Hello, World!")</textarea>
         import { CONFIG } from './js/config.js';
         import { lineFromTraceback } from './js/traceback.js';
         import { errorLocation, errorNotes } from './js/error-report.js';
-        import { buildErrorBlock, normaliseSource } from './js/error-block.js';
+        import { buildErrorBlock, indentOf, normaliseSource } from './js/error-block.js';
         import { createSync } from './js/sync.js';
         import { mountConnect } from './js/ui/connect.js';
         import { mountStatus } from './js/ui/status.js';
@@ -396,9 +396,12 @@ print("Hello, World!")</textarea>
                 span.column >= 0 &&
                 span.column < lineText.length;
 
-            const from = exact ? span.column : 0;
+            // Columns arrive measured against the trimmed line; the editor's line
+            // keeps its indentation.
+            const shift = indentOf(lineText);
+            const from = exact ? span.column + shift : 0;
             const to = exact
-                ? Math.min(lineText.length, span.column + Math.max(1, span.length || 1))
+                ? Math.min(lineText.length, span.column + shift + Math.max(1, span.length || 1))
                 : Math.max(1, lineText.length);
 
             errorTextMarker = editor.markText(

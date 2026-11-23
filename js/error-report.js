@@ -27,8 +27,17 @@ import { syntaxErrorSpan } from './error-span.js';
 export function errorLocation({ structured, detail } = {}) {
     const info = structured && typeof structured === 'object' ? structured : null;
 
-    if (info && Number.isInteger(info.line) && info.line >= 1) {
-        const start = Number.isFinite(info.column) ? info.column : 1;
+    // Only trust the structured span when Python actually gave a column. Some
+    // errors carry a line but no offset, and defaulting to column 0 pointed at the
+    // first character of the line instead of the fault.
+    if (
+        info &&
+        Number.isInteger(info.line) &&
+        info.line >= 1 &&
+        Number.isFinite(info.column) &&
+        info.column >= 1
+    ) {
+        const start = info.column;
         const end = Number.isFinite(info.endColumn) ? info.endColumn : start;
 
         // CPython reports 1-based columns, and end_offset is inclusive.

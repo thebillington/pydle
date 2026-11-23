@@ -46,11 +46,18 @@ test('treats a missing end_offset as one character', () => {
     assert.deepEqual(location, { line: 4, column: 9, length: 1 });
 });
 
-test('never reports a negative column', () => {
-    const location = errorLocation({ structured: { line: 1, column: 0, endColumn: 1 } });
-    assert.ok(location);
-    assert.equal(location.column, 0);
-    assert.equal(location.length, 2);
+test('treats a zero column as no column at all', () => {
+    // CPython columns are 1-based, so 0 is not a real position. It used to be
+    // clamped to the start of the line, which marked the wrong character.
+    assert.equal(
+        errorLocation({ structured: { line: 1, column: 0, endColumn: 1 }, detail: '' }),
+        null,
+    );
+});
+
+test('column 1 is the first character', () => {
+    const location = errorLocation({ structured: { line: 1, column: 1, endColumn: 2 } });
+    assert.deepEqual(location, { line: 1, column: 0, length: 2 });
 });
 
 test('falls back to the marker line when there is no structured detail', () => {
