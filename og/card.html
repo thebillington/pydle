@@ -2,10 +2,6 @@
 <style>
 @font-face { font-family:'Inter'; src:url('assets/fonts/Inter-Variable.ttf'); font-weight:100 900; }
 @font-face { font-family:'JBM'; src:url('assets/fonts/JetBrainsMono-Variable.ttf'); font-weight:100 800; }
-@font-face { font-family:'Serif4'; src:url('../assets/fonts/SourceSerif4-600.ttf'); font-weight:600; }
-@font-face { font-family:'Sans3'; src:url('../assets/fonts/SourceSans3-400.ttf'); font-weight:400; }
-@font-face { font-family:'Plex'; src:url('../assets/fonts/IBMPlexMono-Regular.ttf'); font-weight:400; }
-@font-face { font-family:'Plex'; src:url('../assets/fonts/IBMPlexMono-SemiBold.ttf'); font-weight:600; }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { width:1200px; height:630px; overflow:hidden; position:relative; }
 </style></head>
@@ -16,12 +12,11 @@ body { width:1200px; height:630px; overflow:hidden; position:relative; }
   </div>
   <div style="position:absolute;left:64px;top:140px;width:436px">
     <div style="font-family:'JBM';font-size:14px;letter-spacing:.2em;color:#50fa7b">
-      FREE &middot; OPEN SOURCE</div>
-    <div style="margin-top:18px;font-weight:800;font-size:45px;line-height:1.06;
-                color:#f8f8f2;letter-spacing:-.025em">Python REPL and<br>turtle editor</div>
+      {{EYEBROW}}</div>
+    <div style="margin-top:18px;font-weight:800;font-size:{{HEADLINE_SIZE}}px;line-height:1.06;
+                color:#f8f8f2;letter-spacing:-.025em">{{HEADLINE}}</div>
     <div style="margin-top:22px;font-size:19px;line-height:1.5;color:#b3bcd6;width:400px">
-      CPython in WebAssembly, so no server is involved. Programs save to browser
-      storage or download as a .py file.</div>
+      {{BODY}}</div>
     <div style="position:absolute;top:404px;left:0;font-family:'JBM';font-size:13px;
                 line-height:1.9;color:#6272a4">
       pydle.uk<br>github.com/thebillington/pydle</div>
