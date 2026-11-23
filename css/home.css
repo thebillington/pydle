@@ -292,8 +292,19 @@ main.is-home > .console-panel {
 
 /* GitHub row --------------------------------------------------------------- */
 
+/* Pinned to the bottom of the Home screen, so where you are signed in does not
+   depend on how many projects you have. With the footer in normal flow it sat
+   below the list and was simply off-screen. */
 .home-foot {
-    padding-top: 2px;
+    position: sticky;
+    bottom: 0;
+    padding: 12px 0 4px;
+    background: var(--bg-primary);
+    border-top: 1px solid transparent;
+}
+
+.home-screen:has(.home-foot) .home-inner {
+    padding-bottom: 12px;
 }
 
 .home-github {
