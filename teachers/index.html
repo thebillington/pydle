@@ -149,17 +149,14 @@
         <ol>
             <li><strong>Check the network</strong> on a student device. It needs <code>pydle.uk</code>, <code>cdn.jsdelivr.net</code>, <code>auth.pydle.uk</code> and <code>github.com</code>, plus <code>api.github.com</code> for GitHub.</li>
             <li><strong>Check the browser.</strong> A current Chrome, Edge, Firefox or Safari.</li>
-            <li><strong>Check the year group is 13+</strong> before printing anything that mentions GitHub.</li>
-            <li><strong>Print the sheet</strong>, one per student, and hand it out a week ahead.</li>
-            <li><strong>Run a clinic</strong> at lunch for the students who did not manage it.</li>
-            <li><strong>Take five minutes</strong> in the lesson for anyone who is connected. Make a project, run it, commit, show the repository.</li>
+            <li><strong>Print the <a href="/teachers/pydle-github-setup.pdf">setup sheet</a></strong> one per student and hand it out a week ahead.</li>
         </ol>
         <p>Students without GitHub work exactly as everyone else does.</p>
 
         <h2>What students get from GitHub</h2>
-        <p>A private repository called <code>pydle-workspace</code> in their own account. Each committed project is a folder, and every commit is kept. Work stays on the device until they commit, and any earlier version can be loaded back.</p>
-        <p>Commits are the reason to bother. The student writes a message, sees a diff of what changed, and can restore an earlier version. That is git without a client, and it is worth ten minutes on the board.</p>
-        <p>GitHub grants the app read and write access to all repositories. pydle only touches the one it created, and pydle's code enforces that, not GitHub.</p>
+        <p>A private repository called <code>pydle-workspace</code> in their own account and each pydle project is a folder. This teaches git basics early and will pay dividends in future.</p>
+        <p>pydle implements a lite version of git. Rather than teaching branching, merging etc it only exposes the simple commit by commit workflow to get students used to the idea of version control. This also means they have a permanent record of their work after leaving school and if they go on to A-Level, using git is a great way to manage their coursework.</p>
+        <p>When the student authorises GitHub it grants the app read and write access to all repositories. pydle only touches the one it created, and pydle's code enforces that, not GitHub. Auth itself goes via an external Cloudflare worker. Nothing is stored off device.</p>
 
         <h2>Collecting work</h2>
         <ul>
