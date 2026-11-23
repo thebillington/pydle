@@ -851,7 +851,9 @@ print("Hello, World!")</textarea>
             if (path === currentPath) {
                 return;
             }
-            if (!(await readyToLeave())) {
+            // A file switch stays inside the project, so it only needs the buffer
+            // saved. The commit question belongs to leaving the project.
+            if (!(await flushOnly())) {
                 return;
             }
 
@@ -1185,8 +1187,8 @@ print("Hello, World!")</textarea>
         /**
          * Return to Home from an open project.
          *
-         * The same guard as any other switch: save the buffer and ask about
-         * uncommitted work before the project closes.
+         * Leaving the project, so this is where the commit question belongs: the
+         * work stops being visible until the project is reopened.
          */
         async function goHome() {
             if (!(await readyToLeave())) {
@@ -1661,6 +1663,21 @@ print("Hello, World!")</textarea>
          *
          * @returns {Promise<boolean>} True when it is safe to go.
          */
+        /**
+         * Save the buffer and nothing else.
+         *
+         * For movement *inside* a project: switching file, renaming, adding one.
+         * Nothing can be lost by a file switch, so asking about a commit here is
+         * both unnecessary and actively unhelpful. Importing a helper file you have
+         * just written is impossible if you are asked to commit before you can
+         * click back to the file that imports it.
+         *
+         * @returns {Promise<boolean>} False when the buffer could not be written.
+         */
+        async function flushOnly() {
+            return flushCurrent();
+        }
+
         async function readyToLeave() {
             // Whether the buffer held anything not yet written to the device. That
             // is a different question from "is it in GitHub", and the leaving prompt
