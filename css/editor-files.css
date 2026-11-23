@@ -459,3 +459,45 @@
         justify-content: center;
     }
 }
+
+/* Footer: New file, and a commit offer that only appears when there is something
+   to commit. */
+.file-rail-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.file-rail-commit {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: none;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.file-rail-commit:hover {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+}
+
+.file-rail-commit:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+
+.file-rail-commit-count {
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--accent-green);
+    color: var(--bg-primary);
+    font-size: 10.5px;
+    font-weight: 700;
+}

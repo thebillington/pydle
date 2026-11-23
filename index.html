@@ -567,6 +567,16 @@ print("Hello, World!")</textarea>
             onRename: (from, to) => renameFile(from, to),
             onDelete: (path) => removeFile(path),
             onHome: () => { void goHome(); },
+            onCommit: () => {
+                if (currentFileName === null) {
+                    return;
+                }
+                void flushCurrent().then((saved) => {
+                    if (saved) {
+                        void commitDialog.open(currentFileName);
+                    }
+                });
+            },
         });
         void refreshRail();
 
@@ -831,19 +841,18 @@ print("Hello, World!")</textarea>
             // Saving and committing were two buttons for one intention. When there
             // is a repository, saving asks for a message and commits; when there is
             // not, it says plainly that the work is only on this device.
+            // Saving is local, always. Committing is a separate, deliberate act:
+            // offered in the rail while you work, and asked for when you leave the
+            // project. Ctrl+S must never put a dialog in front of someone who was
+            // only keeping their place.
             const connected = Boolean(sync.workspace);
-            if (connected && !document.querySelector('.commit-overlay:not(.hidden)')) {
-                commitSettled = false;
-                void commitDialog.open(currentFileName);
-                return;
-            }
-
             showStatus(
                 connected
                     ? 'Saved: ' + currentFileName + '/' + currentPath
                     : 'Saved on this device. Not in GitHub yet.',
                 'ready',
             );
+            void refreshCommitState();
         }
 
         /** Open one file of the current project. */
@@ -1551,11 +1560,13 @@ print("Hello, World!")</textarea>
             // A quiet marker on Save, so "not yet in GitHub" is visible without a
             // second button that has to be understood.
             saveBtn.classList.toggle('has-uncommitted', safe > 0 && Boolean(sync.workspace));
-            const base = sync.workspace ? 'Save and commit (Ctrl+S)' : 'Save (Ctrl+S)';
+            const base = 'Save (Ctrl+S)';
             saveBtn.title = safe > 0
                 ? base + ': ' + safe + (safe === 1 ? ' file' : ' files') + ' not in GitHub yet'
                 : base;
             saveBtn.setAttribute('aria-label', saveBtn.title);
+
+            fileRail.setState({ uncommitted: safe, canCommit: Boolean(sync.workspace) });
         }
 
         /**

@@ -268,6 +268,10 @@ export function mountFileRail(root, handlers = {}) {
         collapsed: readCollapsed(),
         libraries: [],
         hasRequirements: false,
+        /** Files changed since the last commit, for the footer action. */
+        uncommitted: 0,
+        /** False when there is no repository to commit to. */
+        canCommit: false,
     };
 
     root.classList.add('file-rail');
@@ -325,7 +329,20 @@ export function mountFileRail(root, handlers = {}) {
         el('span', 'file-rail-plus', '+'),
         el('span', 'file-rail-new-label', 'New file'),
     );
-    foot.appendChild(newBtn);
+    const commitBtn = el('button', 'file-rail-commit');
+    commitBtn.type = 'button';
+    commitBtn.title = 'Put this project\u2019s changes in GitHub';
+    commitBtn.append(
+        el('span', 'file-rail-commit-label', 'Commit'),
+        el('span', 'file-rail-commit-count'),
+    );
+    commitBtn.hidden = true;
+    commitBtn.addEventListener('click', () => {
+        if (typeof handlers.onCommit === 'function') {
+            run(() => handlers.onCommit());
+        }
+    });
+    foot.append(commitBtn, newBtn);
 
     root.append(head, body, libraries, notice, foot);
 
@@ -532,6 +549,26 @@ export function mountFileRail(root, handlers = {}) {
 
     /* Rendering ---------------------------------------------------------- */
 
+    /**
+     * The footer's commit action.
+     *
+     * Hidden when there is nothing to commit or nowhere to commit to, so it reads as
+     * an offer rather than a permanent button that does nothing.
+     */
+    function renderCommit() {
+        const count = state.uncommitted;
+        const show = state.canCommit && count > 0 && state.project !== null;
+        commitBtn.hidden = !show;
+        if (!show) {
+            return;
+        }
+
+        const label = `Commit ${count} ${count === 1 ? 'file' : 'files'} to GitHub`;
+        commitBtn.title = label;
+        commitBtn.setAttribute('aria-label', label);
+        commitBtn.querySelector('.file-rail-commit-count').textContent = String(count);
+    }
+
     function renderCollapsed() {
         root.classList.toggle('is-collapsed', state.collapsed);
         collapseBtn.title = state.collapsed ? 'Show files' : 'Hide files';
@@ -547,6 +584,8 @@ export function mountFileRail(root, handlers = {}) {
             'aria-label',
             state.project ? 'Back to your work. Close ' + state.project + '.' : 'No project open',
         );
+
+        renderCommit();
 
         list.textContent = '';
         for (const path of state.files) {
@@ -662,7 +701,15 @@ export function mountFileRail(root, handlers = {}) {
      *   hasRequirements?: boolean,
      * }} next
      */
-    function setState({ project, files, current, libraries: nextLibraries, hasRequirements } = {}) {
+    function setState({
+        project,
+        files,
+        current,
+        libraries: nextLibraries,
+        hasRequirements,
+        uncommitted,
+        canCommit,
+    } = {}) {
         if (project !== undefined) {
             state.project = project;
         }
@@ -671,6 +718,12 @@ export function mountFileRail(root, handlers = {}) {
         }
         if (current !== undefined) {
             state.current = current;
+        }
+        if (uncommitted !== undefined) {
+            state.uncommitted = Number.isFinite(uncommitted) ? Math.max(0, uncommitted) : 0;
+        }
+        if (canCommit !== undefined) {
+            state.canCommit = Boolean(canCommit);
         }
         if (nextLibraries !== undefined) {
             state.libraries = Array.isArray(nextLibraries) ? nextLibraries.slice() : [];
