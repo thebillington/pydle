@@ -24,5 +24,11 @@
 /*.svg
   Cache-Control: public, max-age=3600
 
+/*.ico
+  Cache-Control: public, max-age=3600
+
+/*.png
+  Cache-Control: public, max-age=3600
+
 /*.pdf
   Cache-Control: public, max-age=3600
