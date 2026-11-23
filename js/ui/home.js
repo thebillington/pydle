@@ -91,6 +91,12 @@ export function toSnakeCase(raw) {
  * @param {unknown} raw
  * @returns {{ ok: true, name: string } | { ok: false, error: string }}
  */
+/**
+ * Names that cannot be used, because a directory of that name already means
+ * something else inside the vault.
+ */
+const RESERVED_PROJECT_NAMES = new Set(['drawings', 'assignments', 'feedback']);
+
 export function validateProjectName(raw) {
     const name = String(raw ?? '').trim().toLowerCase();
 
@@ -104,6 +110,12 @@ export function validateProjectName(raw) {
         return {
             ok: false,
             error: 'Use lowercase letters, numbers and underscores only.',
+        };
+    }
+    if (RESERVED_PROJECT_NAMES.has(name)) {
+        return {
+            ok: false,
+            error: 'That name is used by pydle itself. Choose another.',
         };
     }
     if (name.includes('__')) {

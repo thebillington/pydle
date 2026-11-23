@@ -172,3 +172,16 @@ test('typing a file name does not eat the dot as you type', async () => {
     }
     assert.equal(typed, 'my_drawing.py');
 });
+
+test('names used by pydle itself are refused', async () => {
+    const { validateProjectName } = await import('../js/ui/home.js');
+
+    for (const reserved of ['drawings', 'assignments', 'feedback']) {
+        const check = validateProjectName(reserved);
+        assert.equal(check.ok, false, reserved + ' should be refused');
+        assert.match(check.error, /used by pydle itself/);
+    }
+
+    // A near miss is fine.
+    assert.equal(validateProjectName('drawings_2').ok, true);
+});

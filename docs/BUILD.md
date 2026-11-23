@@ -124,6 +124,13 @@ renameProject(from, to)
 isAvailable()                         // → 'opfs' | 'idb'
 ```
 
+`name`/`project` is the **stored** project name, used exactly: `listProjects`
+returns what is on disk, including a pre-snake_case spelling, and every other
+call must pass that spelling back. Only creation (`writeFile` with a new name)
+and the target of `renameProject` apply `normalizeProjectName`. A name that is
+not a single plain path segment throws `TypeError`; a valid name with nothing
+stored reads as empty.
+
 OPFS when `navigator.storage.getDirectory` exists, IndexedDB otherwise. Same call
 surface either way. Never throw on a missing file — return `null`.
 

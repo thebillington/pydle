@@ -24,6 +24,34 @@ import { normalizeProjectName, safeJoin } from './vault/paths.js';
 import { planMerge } from './reconcile.js';
 
 /**
+ * Validate a stored project name without rewriting it.
+ *
+ * Names arrive from `listProjects`, or from the Home dialogue, which has already
+ * normalised them on creation. Re-normalising here would map a pre-snake_case
+ * project such as `old-name` onto `old_name`, so reads, commits and deletes would
+ * hit a different project. The vault enforces the same rule.
+ *
+ * @param {string} name
+ * @returns {string}
+ * @throws {SyncError} When the name is not a plain project name.
+ */
+function storedProjectName(name) {
+    const bad =
+        typeof name !== 'string' ||
+        name === '' ||
+        name === '.' ||
+        name === '..' ||
+        name.includes('/') ||
+        name.includes('\\') ||
+        /[\u0000-\u001f]/.test(name);
+
+    if (bad) {
+        throw new SyncError('config', 'That project does not exist.');
+    }
+    return name;
+}
+
+/**
  * Repository name inside the user's own account. One workspace per person.
  *
  * Deliberately not `pydle`: a GitHub account is very likely to already contain a
@@ -798,7 +826,7 @@ export function createSync({ onChange } = {}) {
 
         let project;
         try {
-            project = normalizeProjectName(name);
+            project = storedProjectName(name);
         } catch {
             throw new SyncError('config', 'That project does not exist.');
         }
@@ -889,7 +917,7 @@ export function createSync({ onChange } = {}) {
     async function dirty(name, kind = 'work') {
         let project;
         try {
-            project = normalizeProjectName(name);
+            project = storedProjectName(name);
         } catch {
             return { paths: [], count: 0, lastCommit: null };
         }
@@ -942,7 +970,7 @@ export function createSync({ onChange } = {}) {
 
         let project;
         try {
-            project = normalizeProjectName(name);
+            project = storedProjectName(name);
         } catch {
             throw new SyncError('config', 'That project does not exist.');
         }
@@ -1046,7 +1074,7 @@ export function createSync({ onChange } = {}) {
         }
         let project;
         try {
-            project = normalizeProjectName(name);
+            project = storedProjectName(name);
         } catch {
             throw new SyncError('config', 'That project does not exist.');
         }
@@ -1236,7 +1264,7 @@ export function createSync({ onChange } = {}) {
     async function deleteProject(name, kind = 'work') {
         let project;
         try {
-            project = normalizeProjectName(name);
+            project = storedProjectName(name);
         } catch {
             return;
         }

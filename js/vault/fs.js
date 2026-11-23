@@ -7,7 +7,13 @@
  * can never leave its project. `updatedAt` bookkeeping lives in IndexedDB in
  * both backends (`meta` store), because OPFS does not expose a directory mtime.
  *
+ * Project names are *stored*, not computed. A name is normalised exactly once,
+ * when a project is created or renamed; every later read, write and delete uses
+ * the stored name verbatim. Re-normalising on access is what let a project
+ * called `old-name` read and overwrite its canonical twin `old_name`.
+ *
  * Missing files and projects are never an error: reads return `null` or `{}`.
+ * An unusable project name is an error, because it is not a missing project.
  */
 
 import { isReservedPath, normalizeProjectName, safeJoin } from './paths.js';
@@ -231,7 +237,7 @@ async function idbDeletePrefix(storeName, prefix) {
 /**
  * Record a project's update time.
  *
- * @param {string} project Normalised project slug.
+ * @param {string} project Stored project name.
  * @returns {Promise<void>}
  */
 async function touchProject(kind, project) {
@@ -241,7 +247,7 @@ async function touchProject(kind, project) {
 /**
  * Read a project's recorded update time.
  *
- * @param {string} project Normalised project slug.
+ * @param {string} project Stored project name.
  * @returns {Promise<number>} Milliseconds since the epoch, or 0.
  */
 async function projectUpdatedAt(kind, project) {
@@ -258,7 +264,12 @@ async function projectUpdatedAt(kind, project) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Normalise a project name, throwing on unusable input.
+ * Normalise a *new* project name, throwing on unusable input.
+ *
+ * Only creation (and the target of a rename) may do this. Reading or writing an
+ * existing project must use `requireStoredName`: the directory on disk may
+ * predate the snake_case rule, and rewriting its name here would silently point
+ * at a different project.
  *
  * @param {string} project
  * @returns {string}
@@ -270,10 +281,14 @@ function requireProject(project) {
 /**
  * Validate a project name exactly as it is stored, without normalising it.
  *
- * A project saved before the snake_case rule may be called `my-project`.
- * Normalising that source would point at a directory that does not exist, so a
- * rename takes the stored name as given and only proves it is a single safe
- * segment. The target of a rename always goes through `requireProject`.
+ * This is the access rule for every existing project: the name is used verbatim,
+ * because that is the directory (or key prefix) it lives under. A project saved
+ * before the snake_case rule may be called `my-project`; normalising that would
+ * point at `my_project`, which is either absent or a *different* project.
+ *
+ * Only proof required is that it is one safe path segment: a non-empty string
+ * with no separator, no `.`/`..`, no backslash, no control character, and no
+ * change when passed through `safeJoin`.
  *
  * @param {string} project
  * @returns {string}
@@ -375,7 +390,7 @@ async function vaultRoot(create = true) {
 /**
  * Get a project directory, optionally creating it.
  *
- * @param {string} project Normalised slug.
+ * @param {string} project Stored project name.
  * @param {boolean} [create]
  * @returns {Promise<FileSystemDirectoryHandle>}
  */
@@ -400,7 +415,7 @@ async function kindRoot(kind, create = true) {
  * Get a project directory, optionally creating it.
  *
  * @param {string} kind
- * @param {string} project Normalised slug.
+ * @param {string} project Stored project name.
  * @param {boolean} [create]
  * @returns {Promise<FileSystemDirectoryHandle>}
  */
@@ -463,7 +478,7 @@ async function removeTree(dir) {
 /**
  * Read one file from the IndexedDB store.
  *
- * @param {string} project Normalised slug.
+ * @param {string} project Stored project name.
  * @param {string} path Normalised relative path.
  * @returns {Promise<string | null>}
  */
@@ -475,7 +490,7 @@ async function idbReadFile(kind, project, path) {
 /**
  * All files of one project as `{ path: content }`.
  *
- * @param {string} project Normalised slug.
+ * @param {string} project Stored project name.
  * @returns {Promise<Record<string, string>>}
  */
 async function idbReadProject(kind, project) {
@@ -497,10 +512,19 @@ export function isAvailable() {
 /**
  * List projects, newest first.
  *
+ * Names are the stored directory names, never a computed form: a project saved
+ * before the snake_case rule comes back hyphenated, because that is what opening
+ * it must read.
+ *
  * @returns {Promise<Array<{ name: string, updatedAt: number }>>}
  */
 export async function listProjects(kind = 'work') {
     const prefix = keyPrefix(kind);
+    // Other namespaces are directories inside this one, so without this a turtle
+    // drawings folder would be offered to the student as a project.
+    const otherNamespaces = new Set(
+        Object.values(KIND_DIRS).filter((dir) => dir !== '' && dir !== kindDir(kind)),
+    );
     /** @type {Map<string, number>} */
     const projects = new Map();
 
@@ -529,6 +553,9 @@ export async function listProjects(kind = 'work') {
             try {
                 normalizeProjectName(name);
             } catch {
+                continue;
+            }
+            if (otherNamespaces.has(name)) {
                 continue;
             }
             projects.set(name, 0);
@@ -581,7 +608,26 @@ export async function listProjects(kind = 'work') {
             if (name === '' || name.includes('/') || projects.has(name)) {
                 continue;
             }
+            if (otherNamespaces.has(name)) {
+                continue;
+            }
             projects.set(name, value && Number.isFinite(value.updatedAt) ? value.updatedAt : 0);
+        }
+    }
+
+    // A stored name that is not canonical is still listed: it is readable under
+    // its own spelling, and hiding it would hide the work. But if its canonical
+    // twin also exists, two different directories now look the same to a human,
+    // so say so — nothing else in the app will ever notice.
+    for (const stored of projects.keys()) {
+        let canonical;
+        try {
+            canonical = normalizeProjectName(stored);
+        } catch {
+            continue;
+        }
+        if (canonical !== stored && projects.has(canonical)) {
+            console.warn('[pydle] vault: ambiguous project name', stored);
         }
     }
 
@@ -589,13 +635,17 @@ export async function listProjects(kind = 'work') {
         .map(([name, updatedAt]) => ({ name, updatedAt }))
         .sort((a, b) => b.updatedAt - a.updatedAt || a.name.localeCompare(b.name));
 }
+/**
+ * Read one project's files.
+ *
+ * `name` is the stored project name, used verbatim. An unusable name is a
+ * programming error and throws; a valid name with nothing stored reads `{}`.
+ *
+ * @param {string} name Stored project name.
+ * @returns {Promise<Record<string, string>>}
+ */
 export async function readProject(name, { kind = 'work' } = {}) {
-    let project;
-    try {
-        project = requireProject(name);
-    } catch {
-        return {};
-    }
+    const project = requireStoredName(name);
 
     if (hasOpfs()) {
         let dir;
@@ -617,8 +667,19 @@ export async function readProject(name, { kind = 'work' } = {}) {
 
     return idbReadProject(kind, project);
 }
+/**
+ * Write one file into a project, creating the project directory if needed.
+ *
+ * `project` is the stored name, used verbatim. A fresh canonical name therefore
+ * works unchanged: nothing is re-normalised, and missing directories are made.
+ *
+ * @param {string} project Stored project name.
+ * @param {string} path Path relative to the project.
+ * @param {string} content
+ * @returns {Promise<void>}
+ */
 export async function writeFile(project, path, content, { kind = 'work' } = {}) {
-    const name = requireProject(project);
+    const name = requireStoredName(project);
     const relative = requirePath(path);
     if (typeof content !== 'string') {
         throw new TypeError(
@@ -647,8 +708,15 @@ export async function writeFile(project, path, content, { kind = 'work' } = {}) 
 
     await touchProject(kind, name);
 }
+/**
+ * Delete one file from a project. The stored name is used verbatim.
+ *
+ * @param {string} project Stored project name.
+ * @param {string} path Path relative to the project.
+ * @returns {Promise<boolean>} True when something was removed.
+ */
 export async function deleteFile(project, path, { kind = 'work' } = {}) {
-    const name = requireProject(project);
+    const name = requireStoredName(project);
     const relative = requirePath(path);
 
     if (hasOpfs()) {
@@ -698,9 +766,19 @@ export async function deleteFile(project, path, { kind = 'work' } = {}) {
     await touchProject(kind, name);
     return true;
 }
+/**
+ * The local record of what was last committed for one project.
+ *
+ * The snapshot is keyed by the stored project name, verbatim: a project saved as
+ * `my-project` has its snapshot under that spelling, and asking for `my_project`
+ * must not see it.
+ *
+ * @param {string} project Stored project name.
+ * @returns {Promise<{ sha?: string, files: Record<string, string> } | null>}
+ */
 export async function readCommitSnapshot(project, { kind = 'work' } = {}) {
+    const slug = requireStoredName(project);
     try {
-        const slug = normalizeProjectName(project);
         const value = await idbGet(META_STORE, `${SNAPSHOT_PREFIX}${keyPrefix(kind)}${slug}`);
         if (value && typeof value === 'object' && value.files && typeof value.files === 'object') {
             return value;
@@ -710,13 +788,26 @@ export async function readCommitSnapshot(project, { kind = 'work' } = {}) {
         return null;
     }
 }
+/**
+ * Record what was last committed for one project, under its stored name.
+ *
+ * @param {string} project Stored project name.
+ * @param {{ sha?: string, files: Record<string, string> }} snapshot
+ * @returns {Promise<void>}
+ */
 export async function writeCommitSnapshot(project, snapshot, { kind = 'work' } = {}) {
-    const slug = normalizeProjectName(project);
+    const slug = requireStoredName(project);
     await idbPut(META_STORE, snapshot, `${SNAPSHOT_PREFIX}${keyPrefix(kind)}${slug}`);
 }
+/**
+ * Forget what was last committed for one project, under its stored name.
+ *
+ * @param {string} project Stored project name.
+ * @returns {Promise<void>}
+ */
 export async function clearCommitSnapshot(project, { kind = 'work' } = {}) {
+    const slug = requireStoredName(project);
     try {
-        const slug = normalizeProjectName(project);
         await idbDelete(META_STORE, `${SNAPSHOT_PREFIX}${keyPrefix(kind)}${slug}`);
     } catch {
         // Nothing recorded: nothing to forget.
@@ -756,8 +847,16 @@ export async function renameCommitSnapshot(from, to, { kind = 'work' } = {}) {
     await idbDelete(META_STORE, prefix + source);
     return true;
 }
+/**
+ * Delete a whole project, by its stored name.
+ *
+ * The name is used verbatim, so deleting `my-project` cannot delete `my_project`.
+ *
+ * @param {string} name Stored project name.
+ * @returns {Promise<void>}
+ */
 export async function deleteProject(name, { kind = 'work' } = {}) {
-    const project = requireProject(name);
+    const project = requireStoredName(name);
 
     if (hasOpfs()) {
         const root = await kindRoot(kind);

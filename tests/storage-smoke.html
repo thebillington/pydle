@@ -43,8 +43,13 @@ function check(name, condition, detail) {
     flush();
 }
 
+// A project saved before the snake_case rule is stored under its old spelling,
+// and every read and write must use that spelling exactly. `project` is
+// deliberately not canonical; `otherInput` is, so the rename target normalises
+// to itself.
 const project = 'smoke-project';
-const other = 'smoke-renamed';
+const otherInput = 'smoke renamed';
+const other = 'smoke_renamed';
 
 try {
     lines.push('backend: ' + fs.isAvailable());
@@ -92,8 +97,9 @@ try {
         afterDelete['main.py'] === 'print("hello")\n' && afterDelete['lib/helpers.py'] === undefined,
         JSON.stringify(afterDelete));
 
-    // Rename keeps the content.
-    await fs.renameProject(project, other, { kind: 'drawings' });
+    // Rename keeps the content. The target is a new name, so it is normalised;
+    // the stored source name is used as it is.
+    await fs.renameProject(project, otherInput, { kind: 'drawings' });
     const renamed = await fs.readProject(other, { kind: 'drawings' });
     check('rename keeps the content', renamed['main.py'] === 'print("hello")\n',
         JSON.stringify(renamed));
