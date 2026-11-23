@@ -239,6 +239,17 @@ th {
     text-transform: uppercase;
 }
 
+/* Wide comparison tables scroll rather than forcing the page sideways. */
+.table-scroll {
+    overflow-x: auto;
+    margin: 18px 0;
+}
+
+.table-scroll table {
+    margin: 0;
+    min-width: 540px;
+}
+
 .faq {
     margin-top: 18px;
 }
