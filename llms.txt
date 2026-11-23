@@ -10,6 +10,8 @@
 - Source code: https://github.com/thebillington/pydle
 - Author: Billy Rebecchi (https://thebillington.co.uk)
 - Cost: free, no paid tier
+- Licence: MIT; the site is static with no build step, so a school or individual can host their own copy
+- Self-hosting: publishing the repository on GitHub Pages or Cloudflare Pages is the whole deployment; GitHub sync needs your own OAuth app and CORS relay, set in js/config.js, and is the only optional part
 - Account required: no
 - Installation required: no
 - Runtime: CPython compiled to WebAssembly via Pyodide, executed in a Web Worker
