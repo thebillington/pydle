@@ -6,9 +6,14 @@
  * is only a view over that file, so the helpers here are pure text functions and
  * install nothing. Fetching a library for Pyodide is a separate concern.
  *
- * The catalogue is deliberately short. Every entry is a package Pyodide ships,
- * with a size a student would recognise as "this takes a moment to download",
- * and a summary of what it is for rather than a slogan.
+ * The catalogue is deliberately short, and every entry has to be usable inside
+ * pydle. That rules out anything whose whole point is a window, a canvas or a
+ * sound device: pygame needs a display surface, and there is none here. A
+ * package that installs and then cannot do its job is worse than one that is
+ * absent.
+ *
+ * Sizes are the real download sizes from the vendored lockfile, rounded, because
+ * the first run of a project really does wait for them.
  *
  * Names are matched case-insensitively but written lowercase. A line a student
  * added by hand is never dropped, even when it is not in the catalogue: the
@@ -32,25 +37,19 @@ export const CATALOGUE = [
         id: 'matplotlib',
         label: 'matplotlib',
         summary: 'Charts and plots',
-        size: '16 MB plus dependencies',
+        size: '16 MB, plus 10 MB of smaller pieces',
     },
     {
         id: 'pandas',
         label: 'pandas',
         summary: 'Tables of data, like a spreadsheet in code',
-        size: 'about 16 MB plus numpy',
+        size: '24 MB, plus numpy',
     },
     {
         id: 'scipy',
         label: 'scipy',
         summary: 'Scientific computing on top of numpy',
-        size: 'about 40 MB plus numpy',
-    },
-    {
-        id: 'pygame-ce',
-        label: 'pygame-ce',
-        summary: 'Graphics, sound and input for simple games',
-        size: '12 MB',
+        size: '47 MB, plus numpy and 6 MB of maths code',
     },
 ];
 

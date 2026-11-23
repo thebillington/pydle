@@ -18,7 +18,7 @@ import {
 test('the catalogue lists the packages a student may choose', () => {
     const ids = CATALOGUE.map((entry) => entry.id);
 
-    for (const id of ['numpy', 'sympy', 'matplotlib', 'pandas', 'scipy', 'pygame-ce']) {
+    for (const id of ['numpy', 'sympy', 'matplotlib', 'pandas', 'scipy']) {
         assert.ok(ids.includes(id), `catalogue is missing ${id}`);
     }
 
