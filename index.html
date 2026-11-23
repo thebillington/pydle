@@ -1939,7 +1939,20 @@ print("Hello, World!")</textarea>
                     ? await sync.previewCommit(name)
                     : await sync.dirty(name);
             } catch {
-                // Keep the last known state rather than guessing at the count.
+                // The repository could not be read, which usually means GitHub is
+                // rate limiting. The local changes are still real, so show those
+                // rather than nothing: a missing Commit button reads as "there is
+                // nothing to save", which is the opposite of the truth.
+                try {
+                    const local = await sync.dirty(name);
+                    if (token === commitStateToken && currentFileName === name) {
+                        paintCommitState(
+                            local && Number.isFinite(local.count) ? local.count : 0,
+                        );
+                    }
+                } catch {
+                    // Leave the last known state rather than guessing.
+                }
                 return;
             }
             if (token !== commitStateToken || currentFileName !== name) {

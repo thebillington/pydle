@@ -29,6 +29,7 @@ import * as vault from './vault/fs.js';
 import { LEGACY_PREFIX } from './vault/legacy.js';
 import { normalizeProjectName, safeJoin } from './vault/paths.js';
 import { planMerge } from './reconcile.js';
+import { missingFromSnapshot, snapshotContents, snapshotMatchesHead } from './preview.js';
 import { describeChange } from './commit-status.js';
 
 /**
@@ -1001,6 +1002,33 @@ export function createSync({ onChange } = {}) {
      *   made for previously reported conflicts.
      * @returns {Promise<{ applied: string[], conflicts: Array<{ path: string, kind: string, remoteHash: string | null }>, headSha: string | null }>}
      */
+    /**
+     * Where HEAD is, remembered for a few seconds.
+     *
+     * One save can ask the preview several times (the badge, the dialog, the
+     * commit), and each one began with the same ref lookup. The window is short
+     * enough that a commit from another device is still noticed, and `fresh`
+     * skips the cache entirely where staleness would matter.
+     *
+     * @param {{ fresh?: boolean }} [options]
+     * @returns {Promise<string | null>}
+     */
+    let headCache = { sha: null, at: 0, branch: null };
+
+    async function currentHead({ fresh = false } = {}) {
+        const branch = workspace ? workspace.branch : null;
+        const now = Date.now();
+        if (!fresh && headCache.branch === branch && now - headCache.at < 10000) {
+            return headCache.sha;
+        }
+
+        const head = await withToken((token) =>
+            getRef({ token, owner: workspace.owner, repo: workspace.repo, branch }),
+        );
+        headCache = { sha: head ? head.sha : null, at: Date.now(), branch };
+        return headCache.sha;
+    }
+
     async function preflight(name, resolutions = {}, kind = 'work') {
         if (!workspace) {
             throw new SyncError('auth', 'Sign in to GitHub first.');
@@ -1022,6 +1050,16 @@ export function createSync({ onChange } = {}) {
             }
 
             const snapshot = await vault.readCommitSnapshot(project, { kind });
+
+            // This read is fresh, so it is also the best thing to remember.
+            headCache = { sha: head.sha, at: Date.now(), branch: workspace.branch };
+
+            // HEAD has not moved since the last commit this device saw, so the
+            // snapshot already describes the repository: nothing to pull, nothing
+            // to compare, and no reason to read the tree.
+            if (snapshotMatchesHead(head.sha, snapshot)) {
+                return { applied: [], conflicts: [], headSha: head.sha };
+            }
             const base = snapshotHashes(snapshot);
             const remote = await remoteProjectHashes(project, head.sha, kind);
 
@@ -1252,6 +1290,7 @@ export function createSync({ onChange } = {}) {
                 }
             }
             await vault.writeCommitSnapshot(project, { sha: result.sha, files: nextFiles }, { kind });
+            headCache = { sha: result.sha, at: Date.now(), branch: workspace.branch };
 
             // Files that were already identical to the repository are not in the
             // commit list, so the snapshot has never recorded them. Re-reading the
@@ -1475,38 +1514,35 @@ export function createSync({ onChange } = {}) {
             return localOnly();
         }
 
-        let reconciled;
-        try {
-            reconciled = await preflight(project, resolutions, kind);
-        } catch (error) {
-            // A rate limit is not something to work around silently: the student
-            // needs to know why nothing can be read, and hammering the API while
-            // limited only extends it.
-            if (error && (error.rateLimited || error.kind === 'busy')) {
-                throw error;
-            }
+        // Where HEAD is, cached for a few seconds: one save can ask for this
+        // several times, and the answer is the same.
+        const headSha = await currentHead();
+        const snapshotBefore = await vault.readCommitSnapshot(project, { kind });
 
-            // Reconciling failed, but that does not mean the repository cannot be
-            // read. Ask it directly where HEAD is, so the diff is still measured
-            // against what GitHub holds rather than against this device's memory.
-            // Only if that fails too is the local copy the best available answer.
-            console.warn('[pydle] preview could not reconcile', error);
+        // If HEAD is still the commit this device last saw, the snapshot already
+        // describes the repository. There is nothing to reconcile and nothing to
+        // fetch, which is the ordinary case by a wide margin.
+        let reconciled = { applied: [], conflicts: [], headSha };
+        if (!snapshotMatchesHead(headSha, snapshotBefore)) {
             try {
-                const head = await withToken((token) =>
-                    getRef({
-                        token,
-                        owner: workspace.owner,
-                        repo: workspace.repo,
-                        branch: workspace.branch,
-                    }),
-                );
-                reconciled = { applied: [], conflicts: [], headSha: head ? head.sha : null };
-            } catch (headError) {
-                if (headError && (headError.rateLimited || headError.kind === 'busy')) {
-                    throw headError;
+                reconciled = await preflight(project, resolutions, kind);
+            } catch (error) {
+                // A rate limit is not something to work around silently: the student
+                // needs to know why nothing can be read, and hammering the API while
+                // limited only extends it.
+                if (error && (error.rateLimited || error.kind === 'busy')) {
+                    throw error;
                 }
-                console.warn('[pydle] preview could not read the repository', headError);
-                return localOnly();
+
+                // Reconciling failed, but that does not mean the repository cannot
+                // be read: HEAD was read a moment ago. Keep the diff measured
+                // against it, and only fall back to this device if even that is
+                // impossible.
+                console.warn('[pydle] preview could not reconcile', error);
+                if (!headSha) {
+                    return localOnly();
+                }
+                reconciled = { applied: [], conflicts: [], headSha };
             }
         }
 
@@ -1517,43 +1553,60 @@ export function createSync({ onChange } = {}) {
         // project into a couple of round trips.
         const canonical = new Map();
         if (workspace && reconciled.headSha) {
-            // Read the tree once, then the blobs it names, rather than asking the
-            // contents API for every file. The tree is cached by commit SHA and the
-            // blobs by blob SHA, both immutable, so a second preview of the same
-            // project costs no requests at all.
-            let remote = {};
-            try {
-                remote = await remoteProjectHashes(project, reconciled.headSha, kind);
-            } catch (error) {
-                if (error && (error.rateLimited || error.kind === 'busy')) {
-                    throw error;
+            const snapshot = snapshotBefore;
+
+            // When HEAD is still the commit this device last saw, the snapshot is
+            // the repository. That is the common case, and it costs no request
+            // beyond the ref lookup that said so.
+            if (snapshotMatchesHead(reconciled.headSha, snapshot)) {
+                for (const [path, content] of snapshotContents(snapshot)) {
+                    canonical.set(path, content);
                 }
-                remote = {};
             }
 
-            const present = list.paths.filter((entry) =>
-                Object.prototype.hasOwnProperty.call(remote, entry.path),
+            // Anything the snapshot cannot answer for has to come from the tree.
+            // Read it once, then the blobs it names: the tree is cached by commit
+            // SHA and the blobs by blob SHA, both immutable.
+            const wanted = missingFromSnapshot(
+                list.paths.map((entry) => entry.path),
+                canonical,
             );
 
-            const fetched = await mapLimit(present, 6, async (entry) => {
+            if (wanted.length > 0) {
+                let remote = {};
                 try {
-                    return await readBlobText(remote[entry.path]);
+                    remote = await remoteProjectHashes(project, reconciled.headSha, kind);
                 } catch (error) {
                     if (error && (error.rateLimited || error.kind === 'busy')) {
                         throw error;
                     }
-                    // Offline, or the file is gone upstream: the snapshot copy, if
-                    // any, is still better than nothing.
-                    return null;
+                    remote = {};
                 }
-            });
 
-            present.forEach((entry, index) => {
-                const content = fetched[index];
-                if (typeof content === 'string') {
-                    canonical.set(entry.path, content);
-                }
-            });
+                const present = wanted.filter((path) =>
+                    Object.prototype.hasOwnProperty.call(remote, path),
+                );
+
+                const fetched = await mapLimit(present, 6, async (path) => {
+                    try {
+                        return await readBlobText(remote[path]);
+                    } catch (error) {
+                        if (error && (error.rateLimited || error.kind === 'busy')) {
+                            throw error;
+                        }
+                        // Offline, or the file is gone upstream: the snapshot copy,
+                        // if any, is still better than nothing.
+                        return null;
+                    }
+                });
+
+                present.forEach((path, index) => {
+                    const content = fetched[index];
+                    if (typeof content === 'string') {
+                        canonical.set(path, content);
+                    }
+                });
+            }
         }
 
         // Status comes from the two versions, not from this device's memory of the
