@@ -311,6 +311,8 @@ print("Hello, World!")</textarea>
     <script type="module">
         import { CONFIG } from './js/config.js';
         import { lineFromTraceback } from './js/traceback.js';
+        import { syntaxErrorSpan } from './js/error-span.js';
+        import { hintFor } from './js/error-hints.js';
         import { createSync } from './js/sync.js';
         import { mountConnect } from './js/ui/connect.js';
         import { mountStatus } from './js/ui/status.js';
@@ -364,7 +366,7 @@ print("Hello, World!")</textarea>
             errorLineHandle = null;
         }
 
-        function markErrorLine(lineNumber, message) {
+        function markErrorLine(lineNumber, message, span) {
             clearErrorLine();
             if (!Number.isInteger(lineNumber)) return;
 
@@ -382,13 +384,26 @@ print("Hello, World!")</textarea>
             errorLineHandle = handle;
             editor.addLineClass(handle, 'background', 'pydle-error-line');
 
-            // Hovering the line shows the message. markText is the documented way
-            // to hang attributes on a range, and it clears with the gutter marker.
+            // When Python told us where it gave up, underline exactly those
+            // characters. Otherwise the whole line gets the tooltip.
+            const lineText = editor.getLine(line);
+            const exact =
+                span &&
+                span.line === lineNumber &&
+                Number.isInteger(span.column) &&
+                span.column >= 0 &&
+                span.column < lineText.length;
+
+            const from = exact ? span.column : 0;
+            const to = exact
+                ? Math.min(lineText.length, span.column + Math.max(1, span.length || 1))
+                : Math.max(1, lineText.length);
+
             errorTextMarker = editor.markText(
-                { line, ch: 0 },
-                { line, ch: Math.max(1, editor.getLine(line).length) },
+                { line, ch: from },
+                { line, ch: to },
                 {
-                    className: 'pydle-error-line-text',
+                    className: exact ? 'pydle-error-span' : 'pydle-error-line-text',
                     attributes: { title: text },
                 },
             );
@@ -986,12 +1001,16 @@ print("Hello, World!")</textarea>
          * @param {string} summary The last line Python printed, which is the useful one.
          * @param {string} detail The complete traceback, shown only when asked for.
          */
-        function showError(summary, detail) {
+        function showError(summary, detail, hint) {
             const wrapper = document.querySelector('.console-wrapper');
             const previous = document.getElementById('console-details');
             if (previous) previous.remove();
 
             log(summary);
+
+            if (typeof hint === 'string' && hint !== '') {
+                log('  ' + hint);
+            }
 
             if (!detail || !wrapper) {
                 return;
@@ -1063,13 +1082,16 @@ print("Hello, World!")</textarea>
                         // noise to a student.
                         const summary = e.data.summary || 'Python stopped on an error.';
                         const detail = e.data.detail || '';
-                        showError(summary, detail);
+                        const hint = hintFor(summary);
+                        showError(summary, detail, hint ? hint.hint : '');
                         showStatus('Error', 'error');
                         runBtn.disabled = false;
                         stopBtn.disabled = true;
                         try {
                             const line = lineFromTraceback(detail + '\n' + summary);
-                            if (line !== null) markErrorLine(line, summary);
+                            if (line !== null) {
+                                markErrorLine(line, summary, syntaxErrorSpan(detail));
+                            }
                         } catch (markFailure) {
                             // Marking is a convenience: never break the error path.
                         }
