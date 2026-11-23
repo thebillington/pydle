@@ -454,12 +454,27 @@ export function createSync({ onChange } = {}) {
             if (!tokens) {
                 tokens = await loadTokens();
             }
+
+            // One line per connect attempt. Distinguishes "this device has no saved
+            // sign-in" from "the saved sign-in was rejected", which look identical
+            // in the panel but have nothing in common.
+            console.info(
+                '[pydle] connect: ' +
+                    JSON.stringify({
+                        token: Boolean(tokens && tokens.accessToken),
+                        refresh: Boolean(tokens && tokens.refreshToken),
+                        expiresAt: tokens && tokens.expiresAt ? new Date(tokens.expiresAt).toISOString() : null,
+                        expired: tokenExpired(),
+                    }),
+            );
+
             if (!tokens || !tokens.accessToken) {
                 setStatus('signed-out');
                 return;
             }
 
             user = await withToken((token) => getUser({ token }));
+            console.info('[pydle] connect: signed in as', user.login);
 
             try {
                 const repo = await withToken((token) =>
@@ -505,6 +520,9 @@ export function createSync({ onChange } = {}) {
             setStatus('connected');
         } catch (error) {
             const syncError = asSyncError(error);
+            console.warn(
+                '[pydle] connect failed: ' + JSON.stringify({ kind: syncError.kind, message: syncError.message }),
+            );
             setStatus(syncError.kind === 'auth' ? 'signed-out' : 'error', syncError);
             if (syncError.kind === 'auth') {
                 throw syncError;
