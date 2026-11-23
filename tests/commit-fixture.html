@@ -283,6 +283,13 @@
                 row.click();
             }
 
+            if (query.get('help') === '1') {
+                const help = document.querySelector('.commit-help');
+                if (help instanceof HTMLDetailsElement) {
+                    help.open = true;
+                }
+            }
+
             if (autoSubmit) {
                 const save = document.querySelector('.commit-footer .sync-btn-primary');
                 if (save instanceof HTMLElement) {

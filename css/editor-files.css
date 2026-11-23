@@ -460,12 +460,12 @@
     }
 }
 
-/* Footer: New file, and a commit offer that only appears when there is something
-   to commit. */
+/* Footer: the commit offer and, beside it, the way to throw work away. Both only
+   appear when there is something that could be committed. */
 .file-rail-foot {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 6px;
 }
 
@@ -507,30 +507,25 @@
     margin: 2px 0 6px;
 }
 
-/* Explains the commit mechanism, beside the action it explains. */
-.file-rail-info {
-    width: 18px;
-    height: 18px;
-    margin-left: auto;
-    margin-right: 4px;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: 50%;
+/* Throwing work away: the counterpart to Commit, so it sits beside it. */
+.file-rail-discard {
+    padding: 3px 8px;
+    border: 1px solid transparent;
+    border-radius: 5px;
     background: none;
     color: var(--text-secondary);
     font-family: var(--font-sans);
-    font-size: 10.5px;
-    font-style: italic;
-    line-height: 1;
+    font-size: 11.5px;
+    line-height: 1.4;
     cursor: pointer;
 }
 
-.file-rail-info:hover {
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
+.file-rail-discard:hover {
+    border-color: var(--border);
+    color: var(--accent-red);
 }
 
-.file-rail-info:focus-visible {
-    outline: 2px solid var(--accent-cyan);
-    outline-offset: 2px;
+.file-rail-discard:focus-visible {
+    outline: 2px solid var(--accent-red);
+    outline-offset: 1px;
 }

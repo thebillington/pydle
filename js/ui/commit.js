@@ -985,6 +985,30 @@ export function mountCommit(root, sync, handlers = {}) {
         main.append(filesPanel, diffPanel);
         body.append(main);
 
+        /* What a commit is, as a disclosure rather than an icon. It answers the
+           question in the place where the question is asked. */
+        const help = el('details', 'commit-help');
+        const helpSummary = el('summary', 'commit-help-summary', 'What does committing do?');
+        const helpBody = el('div', 'commit-help-body');
+        helpBody.append(
+            el(
+                'p',
+                'commit-help-text',
+                'A commit copies the ticked files into your GitHub repository, with the message you write. It becomes a version you can return to later.',
+            ),
+            el(
+                'p',
+                'commit-help-text',
+                'Saving keeps your work on this device only, so nothing is lost if the connection drops. Committing is the separate step that puts a copy in GitHub.',
+            ),
+            el(
+                'p',
+                'commit-help-text',
+                'Unticked files stay on this device. You can commit again later for the rest.',
+            ),
+        );
+        help.append(helpSummary, helpBody);
+
         /* Bottom bar: the message, then the actions. */
         const messageField = el('div', 'commit-message-field');
         const messageLabel = el('label', 'sync-section-label commit-message-label', 'Message');
@@ -1016,10 +1040,12 @@ export function mountCommit(root, sync, handlers = {}) {
             void submit();
         });
 
-        footer.append(
+        const footerRow = el('div', 'commit-footer-main');
+        footerRow.append(
             messageField,
             actions(button('Cancel', 'quiet', () => finish('cancelled'), { disabled: state.busy }), submitBtn),
         );
+        footer.append(help, footerRow);
 
         paintDiff();
         updateControls();

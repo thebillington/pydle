@@ -238,6 +238,7 @@ print("Hello, World!")</textarea>
                 <p><strong>Committing</strong> is the separate step that puts a copy in your own GitHub repository, with a short message saying what changed. A commit is a saved version you can return to.</p>
                 <p>You do not have to remember to commit. pydle asks when you leave a project, and shows <strong>Commit</strong> under the file list while there is something to put in GitHub. Both only appear when GitHub is connected.</p>
                 <p>Before a commit, pydle shows exactly which files are going and what changed in each one, so nothing is saved by accident.</p>
+                <p><strong>Discard</strong>, beside Commit, is the opposite: it puts the changed files back to the version in GitHub, and deletes files GitHub does not have. That cannot be undone, because the work was never committed.</p>
                 <p>If you are not signed in, work stays on this device only. The button in the header connects GitHub, and nothing is shared with anyone else.</p>
                 <h3>Your GitHub copy</h3>
                 <p>To commit, sign in from the <strong>GitHub</strong> button in the header. pydle stores your projects in a repository that belongs to your account, and you can change your mind and stop at any time.</p>
@@ -735,12 +736,111 @@ print("Hello, World!")</textarea>
                 }
                 void librariesDialog.open();
             },
-            onCommitHelp: () => {
-                helpOverlay.classList.remove('hidden');
-                const section = document.getElementById('help-commit');
-                if (section) {
-                    section.scrollIntoView({ block: 'start' });
+            onDiscard: async () => {
+                if (currentFileName === null) {
+                    return;
                 }
+
+                const project = currentFileName;
+
+                // Save the editor first, so what is thrown away is what is on
+                // screen, not an older vault copy of it.
+                if (!(await flushCurrent())) {
+                    return;
+                }
+
+                let preview = null;
+                try {
+                    preview = sync.workspace && typeof sync.previewCommit === 'function'
+                        ? await sync.previewCommit(project)
+                        : await sync.dirty(project);
+                } catch {
+                    preview = null;
+                }
+
+                if (preview === null) {
+                    showStatus('Could not work out what would be discarded', 'error');
+                    return;
+                }
+
+                const all = Array.isArray(preview.paths) ? preview.paths.map((entry) => entry.path) : [];
+                const conflicts = Array.isArray(preview.conflicts)
+                    ? preview.conflicts.map((entry) => entry.path)
+                    : [];
+                const paths = all.filter((path) => !conflicts.includes(path));
+
+                if (paths.length === 0) {
+                    await notify({
+                        title: 'Nothing to discard',
+                        message:
+                            conflicts.length > 0
+                                ? 'The other copy is in GitHub and was changed there too. Open Save to GitHub and decide which copy to keep.'
+                                : 'This project already matches GitHub.',
+                        variant: 'info',
+                    });
+                    return;
+                }
+
+                const listed =
+                    paths.slice(0, 6).join(', ') + (paths.length > 6 ? ', and more' : '');
+                const leftAlone =
+                    conflicts.length > 0
+                        ? '\n\n' +
+                          conflicts.length +
+                          (conflicts.length === 1 ? ' file was' : ' files were') +
+                          ' also changed in GitHub, and is left alone.'
+                        : '';
+
+                const ok = await confirmAction({
+                    title: 'Discard ' + paths.length + (paths.length === 1 ? ' change' : ' changes') + '?',
+                    message:
+                        paths.length +
+                        (paths.length === 1 ? ' file goes back to' : ' files go back to') +
+                        ' the version in GitHub: ' +
+                        listed +
+                        '. This cannot be undone, because the work is not in any commit yet.' +
+                        leftAlone,
+                    confirmLabel: 'Discard',
+                    danger: true,
+                });
+                if (!ok) {
+                    return;
+                }
+
+                let result;
+                try {
+                    result = await sync.discard(project, { paths });
+                } catch (error) {
+                    showStatus('Could not discard those changes', 'error');
+                    return;
+                }
+
+                await refreshRail();
+
+                // The open file may be one of the ones that changed underneath.
+                if (currentPath !== null) {
+                    const filesNow = projectFiles || {};
+                    if (typeof filesNow[currentPath] === 'string') {
+                        editor.setValue(filesNow[currentPath]);
+                        lastSavedCode = filesNow[currentPath];
+                        dirty = false;
+                    } else if (result.removed.includes(currentPath)) {
+                        currentPath = null;
+                        editor.setValue('');
+                        lastSavedCode = '';
+                        dirty = false;
+                    }
+                    updateFileIndicator();
+                    updateEditorControls();
+                }
+
+                await refreshCommitState();
+
+                const count = result.restored.length + result.removed.length;
+                showStatus(
+                    'Discarded ' + count + (count === 1 ? ' change' : ' changes') + '.',
+                    'ready',
+                );
             },
             onCommit: () => {
                 if (currentFileName === null) {

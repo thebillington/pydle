@@ -374,16 +374,15 @@ export function mountFileRail(root, handlers = {}) {
     );
     commitBtn.hidden = true;
 
-    // Sits beside Commit, and only while Commit is showing: the explanation is
-    // about the action, so it has no business being visible when there is none.
-    const commitInfo = el('button', 'file-rail-info', 'i');
-    commitInfo.type = 'button';
-    commitInfo.hidden = true;
-    commitInfo.title = 'What does committing do?';
-    commitInfo.setAttribute('aria-label', 'What does committing do?');
-    commitInfo.addEventListener('click', () => {
-        if (typeof handlers.onCommitHelp === 'function') {
-            run(() => handlers.onCommitHelp());
+    // Beside Commit, and shown under the same conditions: throwing work away is
+    // only meaningful when there is work that could be committed.
+    const discardBtn = el('button', 'file-rail-discard', 'Discard');
+    discardBtn.type = 'button';
+    discardBtn.hidden = true;
+    discardBtn.title = 'Throw away changes that are not in GitHub';
+    discardBtn.addEventListener('click', () => {
+        if (typeof handlers.onDiscard === 'function') {
+            run(() => handlers.onDiscard());
         }
     });
     commitBtn.addEventListener('click', () => {
@@ -391,7 +390,7 @@ export function mountFileRail(root, handlers = {}) {
             run(() => handlers.onCommit());
         }
     });
-    foot.append(commitInfo, commitBtn);
+    foot.append(discardBtn, commitBtn);
 
     // Under the files it adds to, so the two read as one thing.
     body.appendChild(newBtn);
@@ -613,7 +612,7 @@ export function mountFileRail(root, handlers = {}) {
         // explanation of a button that is not there.
         const show = state.canCommit && count > 0 && state.project !== null;
         commitBtn.hidden = !show;
-        commitInfo.hidden = !show;
+        discardBtn.hidden = !show;
         if (!show) {
             return;
         }

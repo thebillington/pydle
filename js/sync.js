@@ -1397,6 +1397,70 @@ export function createSync({ onChange } = {}) {
     }
 
     /**
+     * Throw away this device's uncommitted changes, putting the project back to
+     * what the repository holds.
+     *
+     * This is the destructive counterpart to committing, so it reconciles first:
+     * anything only the repository changed is pulled in, and a file changed on both
+     * sides is *not* silently thrown away. The caller is told about those conflicts
+     * and can either settle them first or leave them alone.
+     *
+     * A file the repository does not have is deleted, because there is no earlier
+     * version to go back to.
+     *
+     * @param {string} name
+     * @param {{ paths?: string[] | null, kind?: string }} [options]
+     * @returns {Promise<{ restored: string[], removed: string[], conflicts: Array<{ path: string, kind: string, remoteHash: string | null }> }>}
+     */
+    async function discard(name, { paths = null, kind = 'work' } = {}) {
+        if (!workspace) {
+            throw new SyncError('auth', 'Sign in to GitHub first.');
+        }
+
+        const preview = await previewCommit(name, kind);
+        const project = storedProjectName(name);
+        const wanted = Array.isArray(paths) ? new Set(paths) : null;
+        const chosen = preview.paths.filter((entry) => wanted === null || wanted.has(entry.path));
+
+        const restored = [];
+        const removed = [];
+
+        for (const entry of chosen) {
+            if (typeof entry.before === 'string') {
+                await vault.writeFile(project, entry.path, entry.before, { kind });
+                restored.push(entry.path);
+            } else {
+                await vault.deleteFile(project, entry.path, { kind });
+                removed.push(entry.path);
+            }
+        }
+
+        // Record what the files now match, or the count on the save button would
+        // still describe them as changed.
+        const snapshot = await vault.readCommitSnapshot(project, { kind });
+        const sha = preview.headSha || (snapshot && snapshot.sha) || null;
+        if (sha) {
+            const files = { ...((snapshot && snapshot.files) || {}) };
+            for (const path of restored) {
+                const entry = chosen.find((item) => item.path === path);
+                files[path] = { hash: await gitBlobHash(entry.before), content: entry.before };
+            }
+            for (const path of removed) {
+                delete files[path];
+            }
+            await vault.writeCommitSnapshot(project, { sha, files }, { kind });
+        }
+
+        emit();
+
+        return {
+            restored,
+            removed,
+            conflicts: preview.conflicts,
+        };
+    }
+
+    /**
      * True when anything in a project is uncommitted. Used to decide whether to
      * warn before leaving.
      *
@@ -1643,6 +1707,7 @@ export function createSync({ onChange } = {}) {
         renameProject,
         dirty,
         previewCommit,
+        discard,
         preflight,
         commit,
         hasUncommitted,
