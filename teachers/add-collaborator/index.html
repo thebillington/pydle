@@ -268,17 +268,13 @@
 </head>
 <body>
     <main class="sheet">
-        <p class="screen-only no-print"><button type="button" class="print-btn" id="print-btn">Print or save as PDF</button></p>
+        <p class="screen-only no-print"><button type="button" class="print-btn" id="print-btn" hidden>Print or save as PDF</button></p>
 
         <header class="sheet-head">
             <p class="kicker">pydle · student sheet</p>
             <h1 id="page-title">Add your teacher to your repository</h1>
             <p id="page-subtitle">Your teacher needs to see your pydle work. It takes about a minute.</p>
         </header>
-
-        <div class="who">
-            <p>Add this GitHub account as a collaborator: <span class="name" id="who-name">your teacher</span></p>
-        </div>
 
         <form class="picker" id="picker" hidden>
             <label for="teacher">Enter your GitHub username to make a sheet you can share</label>
@@ -288,6 +284,12 @@
             </div>
             <p class="error" id="picker-error" hidden></p>
         </form>
+
+        <div id="sheet-body" hidden>
+        <div class="who">
+            <p>Add this GitHub account as a collaborator: <span class="name" id="who-name">your teacher</span></p>
+        </div>
+
 
         <ol class="steps">
             <li>Sign in to <strong>github.com</strong>.</li>
@@ -317,6 +319,7 @@
         </table>
 
         <p class="sheet-foot" id="foot">pydle.uk · Teachers' notes at pydle.uk/teachers/ · Your repository stays yours. Adding a collaborator gives them access to that one repository only.</p>
+        </div>
     </main>
 
     <script>
@@ -334,8 +337,11 @@
             var stepTeacher = document.getElementById('step-teacher');
             var pageTitle = document.getElementById('page-title');
             var printBtn = document.getElementById('print-btn');
+            var sheetBody = document.getElementById('sheet-body');
 
             function apply(value) {
+                sheetBody.hidden = false;
+                printBtn.hidden = false;
                 whoName.textContent = '@' + value;
                 stepTeacher.textContent = '@' + value;
                 pageTitle.textContent = 'Add @' + value + ' to your repository';
