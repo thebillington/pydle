@@ -104,10 +104,11 @@
             var meta = document.querySelector('meta[name="theme-color"]');
 
             /*
-             * Nothing below the splash is shown until boot decides between the
+             * The editor area stays hidden until boot decides between the
              * project page and an editor, and the decision has data behind it.
              * Without this the page painted Home, then the editor, then Home
-             * again, and the project list re-rendered as it loaded.
+             * again, and the project list re-rendered as it loaded. The header
+             * and footer are static, so they stay up throughout.
              */
             root.setAttribute('data-booting', '');
 
@@ -168,22 +169,40 @@
     <link rel="stylesheet" href="css/repl.css">
     <link rel="stylesheet" href="css/theme-switch.css">
     <style>
-        /* The splash is the only thing painted until boot is done. */
-        html[data-booting] body > :not(#boot-splash) {
+        /*
+         * Until boot has decided between the project page and an editor, only
+         * the area whose contents are not known yet is hidden. The header and
+         * footer are static and belong to both screens, so the page keeps its
+         * shape from the first paint instead of going blank.
+         */
+        html[data-booting] main {
             visibility: hidden;
         }
 
+        /*
+         * A wait short enough not to notice should not draw anything, so the
+         * loading line fades in only after 300ms. A reload that finishes
+         * sooner never shows it at all, rather than flashing a wordmark.
+         */
         #boot-splash {
             position: fixed;
             inset: 0;
             display: grid;
             place-items: center;
-            background: var(--bg-primary, #1e1e2e);
+            pointer-events: none;
             color: var(--text-secondary, #8b96c9);
             font-family: var(--font-sans, system-ui, sans-serif);
-            font-size: 15px;
+            font-size: 14px;
             letter-spacing: 0.02em;
             z-index: 100;
+            opacity: 0;
+            animation: boot-splash-in 180ms ease 300ms forwards;
+        }
+
+        @keyframes boot-splash-in {
+            to {
+                opacity: 1;
+            }
         }
 
         html:not([data-booting]) #boot-splash {
@@ -192,7 +211,7 @@
     </style>
 </head>
 <body>
-    <div id="boot-splash" aria-hidden="true"><span>pydle</span></div>
+    <div id="boot-splash" aria-hidden="true"><span>Loading…</span></div>
     <header>
         <h1>pydle <span class="subtitle">python in your browser</span></h1>
         <div class="controls">
@@ -2461,10 +2480,11 @@ print("Hello, World!")</textarea>
             // ever shows canonical names: first the rename of anything stored
             // under the old rule (the snapshot moves with it), then the one-time
             // import of pre-vault copies.
-            // Nothing is visible yet: the splash covers the shell from the first
-            // paint. Migrations run first so the project page is only ever shown
-            // with canonical names, and the list is loaded before it appears, so
-            // there is one screen rather than a loading state and then a list.
+            // The editor area is hidden until this returns, and the chrome is
+            // static. Migrations run first so the project page is only ever
+            // shown with canonical names, and the list is loaded before it
+            // appears, so there is one screen rather than a loading state and
+            // then a list.
             await renameStoredProjects();
             await importLegacyFiles();
             await refreshVaultProjects();
