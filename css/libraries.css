@@ -50,9 +50,8 @@
 
 /* Dialog ------------------------------------------------------------------ */
 
-.libraries-overlay[hidden] {
-    display: none;
-}
+/* `[hidden]` for the overlay is handled in css/dialog.css, which every page
+   loads before this component sheet. */
 
 .libraries-panel {
     max-width: 520px;

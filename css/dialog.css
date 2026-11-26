@@ -17,6 +17,19 @@
     padding: 16px;
 }
 
+/*
+ * The `hidden` attribute has to win over the display above. It is set in the
+ * markup of an overlay before that component's own stylesheet has necessarily
+ * loaded: the Libraries picker, for one, is built at start-up and its
+ * stylesheet arrives later. Without this rule the overlay is a live modal for
+ * as long as that request is in flight, which is a flash of a dialog nobody
+ * opened. Kept here, in a sheet every page loads, rather than in the
+ * component sheet that may still be on its way.
+ */
+.dialog-overlay[hidden] {
+    display: none;
+}
+
 .dialog-backdrop {
     position: absolute;
     inset: 0;
